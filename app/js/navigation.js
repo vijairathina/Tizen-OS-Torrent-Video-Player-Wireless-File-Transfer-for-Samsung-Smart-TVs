@@ -117,11 +117,14 @@ window.Navigation = (function() {
             }
         }
 
-        // 3. Otherwise, search within active view, or fallback to document
+        // 3. Otherwise, search within the top navigation header AND the active view!
+        const header = document.querySelector('.app-header');
         const activeView = document.querySelector('.app-view.active-view');
-        const container = activeView || document;
 
-        const candidates = Array.from(container.querySelectorAll('.focusable:not([disabled])'));
+        const headerCandidates = header ? Array.from(header.querySelectorAll('.focusable:not([disabled])')) : [];
+        const viewCandidates = activeView ? Array.from(activeView.querySelectorAll('.focusable:not([disabled])')) : [];
+        const candidates = headerCandidates.concat(viewCandidates);
+
         return candidates.filter(el => {
             const rect = el.getBoundingClientRect();
             const style = window.getComputedStyle(el);
@@ -227,6 +230,43 @@ window.Navigation = (function() {
             }
         }
 
+        // If current focus is on a header nav-tab, allow natural left/right navigation between tabs and down to view
+        const headerNav = document.querySelector('.app-nav');
+        if (headerNav && headerNav.contains(currentFocusedElement)) {
+            const tabs = Array.from(headerNav.querySelectorAll('.nav-tab.focusable:not([disabled])'));
+            const tabIdx = tabs.indexOf(currentFocusedElement);
+            if (tabIdx !== -1) {
+                if (direction === 'left' && tabIdx > 0) {
+                    setFocus(tabs[tabIdx - 1]);
+                    return;
+                } else if (direction === 'right' && tabIdx < tabs.length - 1) {
+                    setFocus(tabs[tabIdx + 1]);
+                    return;
+                } else if (direction === 'down') {
+                    // If current focused tab is not active, switch to it immediately
+                    if (!currentFocusedElement.classList.contains('active')) {
+                        currentFocusedElement.click();
+                        return;
+                    }
+                    // Navigate down into the first element of the active view
+                    const activeView = document.querySelector('.app-view.active-view');
+                    if (activeView) {
+                        const viewCandidates = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(el => {
+                            const rect = el.getBoundingClientRect();
+                            return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
+                        });
+                        if (viewCandidates.length > 0) {
+                            setFocus(viewCandidates[0]);
+                            return;
+                        }
+                    }
+                } else if (direction === 'up') {
+                    // Stay on current tab
+                    return;
+                }
+            }
+        }
+
         const currentRect = currentFocusedElement.getBoundingClientRect();
         const currentCenter = {
             x: currentRect.left + currentRect.width / 2,
@@ -267,6 +307,15 @@ window.Navigation = (function() {
 
         if (bestCandidate) {
             setFocus(bestCandidate);
+        } else if (direction === 'up') {
+            // If moving UP from anywhere at the top of the view, focus the active tab in header!
+            const activeView = document.querySelector('.app-view.active-view');
+            if (activeView && activeView.contains(currentFocusedElement)) {
+                const activeTab = document.querySelector('.nav-tab.active') || document.querySelector('.nav-tab');
+                if (activeTab) {
+                    setFocus(activeTab);
+                }
+            }
         }
     }
 

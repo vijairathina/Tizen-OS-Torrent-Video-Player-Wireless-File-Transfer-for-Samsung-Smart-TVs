@@ -49,6 +49,7 @@ window.VideoPlayer = (function() {
     let statsPollInterval = null;
     let currentTheme = 'night';
     let currentFontSize = 'normal';
+    let isUserInitiatedPlay = false;
 
     try {
         currentTheme = localStorage.getItem('tvhub_theme') || 'night';
@@ -219,6 +220,7 @@ window.VideoPlayer = (function() {
             const delBtn = card.querySelector(`#player-del-${item.id}`);
 
             const playAction = () => {
+                isUserInitiatedPlay = true;
                 window.FileReceiver.showToast(`Loading: ${item.cleanTitle}...`);
 
                 // If already has direct port 8080 streaming link, play immediately
@@ -358,6 +360,7 @@ window.VideoPlayer = (function() {
         closeUrlDialog();
 
         if (url.startsWith('magnet:')) {
+            isUserInitiatedPlay = true;
             window.FileReceiver.showToast('Connecting to magnet swarm...');
             if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
                 window.FileReceiver.sendSocketMessage({
@@ -367,7 +370,6 @@ window.VideoPlayer = (function() {
             }
             fetch(`http://192.168.0.13:8080/start_torrent?magnet=${encodeURIComponent(url)}`)
                 .catch(() => {});
-            setTimeout(() => toggleTorrentInfoHud(true), 300);
             return;
         }
 
@@ -385,6 +387,7 @@ window.VideoPlayer = (function() {
 
     function playPreset(index) {
         if (index >= 0 && index < SAMPLE_STREAMS.length) {
+            isUserInitiatedPlay = true;
             const preset = SAMPLE_STREAMS[index];
             closeUrlDialog();
             startTorrentStream(preset.title, 1720 * 1024 * 1024, preset.url);
@@ -426,6 +429,7 @@ window.VideoPlayer = (function() {
      * Starts BitTorrent Streaming Engine (streams while downloading)
      */
     function startTorrentStream(rawName, totalBytes, streamUrl) {
+        isUserInitiatedPlay = true;
         let cleanName = cleanTorrentTitle(rawName);
 
         torrentStats = {
@@ -444,7 +448,6 @@ window.VideoPlayer = (function() {
         if (isDirectVideo) {
             console.log('[VideoPlayer] Playing direct stream:', streamUrl);
             window.Player.openMedia(streamUrl, cleanName);
-            setTimeout(() => toggleTorrentInfoHud(true), 300);
             return;
         }
 
@@ -475,17 +478,11 @@ window.VideoPlayer = (function() {
                 console.warn('[VideoPlayer] start_torrent HTTP fetch error, using fallback stream URL:', err);
                 onTorrentStreamStarted(`http://192.168.0.13:8080/files/${encodeURIComponent(rawName)}`, cleanName);
             });
-
-        // Show Torrent HUD immediately with live buffer indicators
-        setTimeout(() => {
-            toggleTorrentInfoHud(true);
-        }, 200);
     }
 
     function onTorrentStreamStarted(streamUrl, title) {
         console.log('[VideoPlayer] BitTorrent sequential stream active:', streamUrl);
         const name = title || torrentStats.name;
-        window.FileReceiver.showToast(`Swarm Connected! Streaming ${name}...`);
 
         torrentStats.status = 'Sequential Downloading & Streaming Active';
         updateTorrentHudValues();
@@ -500,8 +497,12 @@ window.VideoPlayer = (function() {
             saveDownloads();
         }
 
-        // Feed live HTTP torrent stream directly into Samsung AVPlay hardware player
-        window.Player.openMedia(streamUrl, name);
+        // Feed live HTTP torrent stream directly into Samsung AVPlay hardware player ONLY if user initiated
+        if (isUserInitiatedPlay) {
+            isUserInitiatedPlay = false;
+            window.FileReceiver.showToast(`Swarm Connected! Streaming ${name}...`);
+            window.Player.openMedia(streamUrl, name);
+        }
     }
 
     function onTorrentStatsUpdate(stats) {
@@ -834,6 +835,7 @@ window.VideoPlayer = (function() {
         if (urlPlayBtn) urlPlayBtn.addEventListener('click', playEnteredUrl);
         if (urlCancelBtn) urlCancelBtn.addEventListener('click', closeUrlDialog);
         if (hudPlayBtn) hudPlayBtn.addEventListener('click', function() {
+            isUserInitiatedPlay = true;
             toggleTorrentInfoHud(false);
             let streamUrl = torrentStats.streamUrl;
             if (!streamUrl && activeDownloads.length > 0 && activeDownloads[0].streamUrl) {

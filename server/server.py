@@ -673,12 +673,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
         # Send welcome message
         send_ws_frame(sock, json.dumps({'type': 'connected', 'message': 'Samsung TV File Hub Bridge Online'}))
 
-        # If a live BitTorrent stream is currently running, notify the TV immediately
+        # If a live BitTorrent stream is currently running, notify the TV of stats (do not trigger auto-play on connect)
         if TORRENT_MANAGER.current_stream_url:
             send_ws_frame(sock, json.dumps({
-                'type': 'torrent_stream_started',
+                'type': 'torrent_stats_update',
                 'streamUrl': TORRENT_MANAGER.current_stream_url,
-                'title': TORRENT_MANAGER.current_title
+                'title': TORRENT_MANAGER.current_title,
+                'stats': TORRENT_MANAGER.stats
             }))
 
         # Read frames until disconnect
