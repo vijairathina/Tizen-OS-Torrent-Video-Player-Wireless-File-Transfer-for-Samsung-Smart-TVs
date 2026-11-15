@@ -306,6 +306,15 @@ window.VideoPlayer = (function() {
             const totalMBStr = (item.totalBytes && item.totalBytes > 50 * 1024 * 1024) ? window.TVFilesystem.formatBytes(item.totalBytes) : (item.totalMB || '1.73 GB');
             const completedMBStr = item.completedMB || `${progress}%`;
 
+            const isTorrent = item.name.toLowerCase().endsWith('.torrent') || (item.streamUrl && item.streamUrl.toLowerCase().endsWith('.torrent'));
+
+            if (item.episodes === undefined && isTorrent) {
+                checkTorrentEpisodes(item);
+            }
+
+            const hasEpisodes = item.episodes && item.episodes.length > 1;
+            const episodeBadgeText = hasEpisodes ? ` • <strong style="color:var(--primary-cyan);">📑 ${item.episodes.length} Episodes</strong>` : '';
+
             card.innerHTML = `
                 <div class="player-download-top amnis-download-top">
                     <span class="player-download-title amnis-download-title" title="${item.cleanTitle}">🎬 ${item.cleanTitle}</span>
@@ -315,7 +324,7 @@ window.VideoPlayer = (function() {
                     <div class="progress-fill" id="player-bar-${item.id}" style="width: ${Math.max(progress, 2)}%; background: linear-gradient(90deg, #10b981 0%, #00f2fe 100%);"></div>
                 </div>
                 <div class="player-download-meta amnis-download-meta">
-                    <span id="player-meta-${item.id}">Completed: <strong>${completedMBStr}</strong> / ${totalMBStr} • Speed: <strong style="color:var(--primary-cyan);">${speed}</strong> • <strong>${peers}</strong> peers</span>
+                    <span id="player-meta-${item.id}">Completed: <strong>${completedMBStr}</strong> / ${totalMBStr} • Speed: <strong style="color:var(--primary-cyan);">${speed}</strong> • <strong>${peers}</strong> peers${episodeBadgeText}</span>
                     <div class="player-download-actions amnis-download-actions">
                         <button class="action-btn-play focusable" id="player-play-${item.id}" tabindex="0" style="
                             background: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
@@ -327,6 +336,18 @@ window.VideoPlayer = (function() {
                             font-weight: 700;
                             cursor: pointer;
                         ">▶️ Play Stream</button>
+                        ${hasEpisodes ? `
+                        <button class="action-btn-episodes focusable" id="player-episodes-${item.id}" tabindex="0" title="View Episodes" style="
+                            background: linear-gradient(135deg, #0284c7 0%, #00f2fe 100%);
+                            color: #fff;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 6px 14px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        ">📑 Episodes (${item.episodes.length})</button>
+                        ` : ''}
                         <button class="action-btn-info focusable" id="player-info-${item.id}" tabindex="0" title="Torrent Details">ℹ️ Torrent Info</button>
                         <button class="action-btn-delete focusable" id="player-del-${item.id}" tabindex="0" title="Delete Torrent">🗑️ Delete</button>
                     </div>
@@ -334,12 +355,15 @@ window.VideoPlayer = (function() {
             `;
 
             const playBtn = card.querySelector('.action-btn-play');
+            const episodesBtn = card.querySelector('.action-btn-episodes');
             const infoBtn = card.querySelector('.action-btn-info');
             const delBtn = card.querySelector('.action-btn-delete');
 
-            const isTorrent = item.name.toLowerCase().endsWith('.torrent') || (item.streamUrl && item.streamUrl.toLowerCase().endsWith('.torrent'));
-
             const playAction = () => {
+                if (hasEpisodes && item.episodes && item.episodes.length > 1) {
+                    openEpisodesDialog(item);
+                    return;
+                }
                 isUserInitiatedPlay = true;
                 pendingPlayTarget = item.cleanTitle;
                 window.FileReceiver.showToast(`Loading: ${item.cleanTitle}...`);
@@ -379,6 +403,10 @@ window.VideoPlayer = (function() {
             if (playBtn) playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 playAction();
+            });
+            if (episodesBtn) episodesBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openEpisodesDialog(item);
             });
             if (infoBtn) infoBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -950,6 +978,177 @@ window.VideoPlayer = (function() {
             .catch(() => {});
     }
 
+    let currentlyPlayingSeriesItem = null;
+    let currentlyPlayingEpisode = null;
+    let hudOpenedTimestamp = 0;
+
+    function checkTorrentEpisodes(item) {
+        if (!item || item.episodesChecked) return;
+        item.episodesChecked = true;
+        fetch(`http://192.168.0.13:8080/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.episodes && data.episodes.length > 1) {
+                    item.episodes = data.episodes;
+                    saveDownloads();
+                    renderDownloadsList();
+                }
+            })
+            .catch(() => {});
+    }
+
+    function openEpisodesDialog(item) {
+        const dialog = document.getElementById('episodes-dialog-backdrop');
+        const listEl = document.getElementById('episodes-list-container');
+        const titleEl = document.getElementById('episodes-dialog-title');
+        const subEl = document.getElementById('episodes-dialog-subtitle');
+        if (!dialog || !listEl) return;
+
+        if (titleEl) titleEl.textContent = `📑 ${item.cleanTitle || 'Series Episodes'}`;
+        if (subEl) subEl.textContent = `Select an episode to stream or play (${(item.episodes && item.episodes.length) || 0} episodes available):`;
+
+        const renderEpisodes = (episodes) => {
+            listEl.innerHTML = '';
+            if (!episodes || episodes.length === 0) {
+                listEl.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center;">No multiple episodes found.</div>';
+                return;
+            }
+
+            episodes.forEach((ep, idx) => {
+                const epCard = document.createElement('div');
+                epCard.className = 'transfer-card focusable';
+                epCard.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 14px 18px;
+                    background: rgba(255, 255, 255, 0.07);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 10px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                `;
+                epCard.tabIndex = 0;
+                const statusBadge = ep.isDownloaded 
+                    ? '<span class="player-download-badge status-done">Downloaded 100%</span>'
+                    : '<span class="player-download-badge">Live Stream</span>';
+
+                epCard.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:4px; max-width:70%;">
+                        <span style="font-weight:700; font-size:16px; color:#fff;">🎬 Episode ${idx + 1}: ${ep.name}</span>
+                        <span style="font-size:13px; color:var(--text-muted);">Size: ${ep.sizeStr || window.TVFilesystem.formatBytes(ep.length)}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        ${statusBadge}
+                        <button class="action-btn-play" style="
+                            background: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
+                            color: #fff;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 8px 16px;
+                            font-size: 14px;
+                            font-weight: 700;
+                            pointer-events: none;
+                        ">▶️ Play</button>
+                    </div>
+                `;
+
+                epCard.addEventListener('click', function() {
+                    dialog.classList.remove('dialog-open');
+                    playSpecificEpisode(item, ep);
+                });
+
+                listEl.appendChild(epCard);
+            });
+
+            dialog.classList.add('dialog-open');
+            if (window.Navigation) {
+                const first = listEl.querySelector('.focusable');
+                if (first) window.Navigation.setFocus(first);
+            }
+        };
+
+        if (item.episodes && item.episodes.length > 0) {
+            renderEpisodes(item.episodes);
+        } else {
+            listEl.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center;">Loading episodes from server...</div>';
+            dialog.classList.add('dialog-open');
+            fetch(`http://192.168.0.13:8080/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.episodes && data.episodes.length > 0) {
+                        item.episodes = data.episodes;
+                        saveDownloads();
+                        renderEpisodes(data.episodes);
+                    } else {
+                        renderEpisodes([]);
+                    }
+                })
+                .catch(() => renderEpisodes([]));
+        }
+    }
+
+    function playSpecificEpisode(item, ep) {
+        isUserInitiatedPlay = true;
+        pendingPlayTarget = ep.name;
+        currentlyPlayingSeriesItem = item;
+        currentlyPlayingEpisode = ep;
+        window.FileReceiver.showToast(`Loading: ${ep.name}...`);
+
+        if (ep.isDownloaded && ep.streamUrl) {
+            isUserInitiatedPlay = false;
+            pendingPlayTarget = null;
+            window.Player.openMedia(ep.streamUrl, ep.name);
+            return;
+        }
+
+        fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(item.name)}&fileIdx=${ep.index}&episode=${encodeURIComponent(ep.name)}`)
+            .then(res => res.json())
+            .then(data => {
+                const finalUrl = (data && data.streamUrl) ? data.streamUrl : `http://192.168.0.13:8889/${ep.index}`;
+                isUserInitiatedPlay = false;
+                pendingPlayTarget = null;
+                window.Player.openMedia(finalUrl, ep.name);
+            })
+            .catch(err => {
+                console.warn('[VideoPlayer] start_torrent episode error:', err);
+                const fallbackUrl = `http://192.168.0.13:8889/${ep.index}`;
+                isUserInitiatedPlay = false;
+                pendingPlayTarget = null;
+                window.Player.openMedia(fallbackUrl, ep.name);
+            });
+    }
+
+    function openEpisodesDialogForCurrent() {
+        const curTitle = window.Player.getCurrentTitle();
+        let matchedItem = currentlyPlayingSeriesItem;
+        if (!matchedItem && curTitle) {
+            matchedItem = activeDownloads.find(d => {
+                if (d.cleanTitle && curTitle.toLowerCase().includes(d.cleanTitle.toLowerCase())) return true;
+                if (d.name && curTitle.toLowerCase().includes(d.name.toLowerCase())) return true;
+                if (d.episodes && d.episodes.some(ep => ep.name.toLowerCase() === curTitle.toLowerCase())) return true;
+                return false;
+            });
+        }
+        if (matchedItem) {
+            openEpisodesDialog(matchedItem);
+        } else if (curTitle) {
+            openEpisodesDialog({ cleanTitle: curTitle, name: curTitle });
+        }
+    }
+
+    function hasMultipleEpisodes(title) {
+        if (currentlyPlayingSeriesItem && currentlyPlayingSeriesItem.episodes && currentlyPlayingSeriesItem.episodes.length > 1) return true;
+        if (!title) return false;
+        const matched = activeDownloads.find(d => {
+            if (d.cleanTitle && title.toLowerCase().includes(d.cleanTitle.toLowerCase())) return true;
+            if (d.name && title.toLowerCase().includes(d.name.toLowerCase())) return true;
+            if (d.episodes && d.episodes.some(ep => ep.name.toLowerCase() === title.toLowerCase())) return true;
+            return false;
+        });
+        return Boolean(matched && matched.episodes && matched.episodes.length > 1);
+    }
+
     /* BitTorrent / Stream Information HUD */
     function toggleTorrentInfoHud(forceShow, targetFilenameOrTitle) {
         const backdrop = document.getElementById('player-hud-backdrop') || document.getElementById('amnis-hud-backdrop');
@@ -961,6 +1160,7 @@ window.VideoPlayer = (function() {
         const shouldShow = (typeof forceShow === 'boolean') ? forceShow : !isCurrentlyOpen;
 
         if (shouldShow) {
+            hudOpenedTimestamp = Date.now();
             lastFocusedBeforeHud = document.activeElement;
             currentHudTorrentTarget = targetFilenameOrTitle || torrentStats.name || '';
             if (targetFilenameOrTitle) {
@@ -988,14 +1188,13 @@ window.VideoPlayer = (function() {
                 fetchTorrentHudStats(currentHudTorrentTarget);
             }, 1000);
 
-            // Default focus strictly to Close button so user can immediately dismiss using remote OK/Enter
-            const closeBtn = document.getElementById('hud-close-btn');
-            if (closeBtn && window.Navigation) {
-                window.Navigation.setFocus(closeBtn);
-                setTimeout(() => {
+            // Delay focusing Close button slightly so the initial Enter key event does not trigger an immediate close!
+            setTimeout(() => {
+                const closeBtn = document.getElementById('hud-close-btn');
+                if (closeBtn && window.Navigation) {
                     window.Navigation.setFocus(closeBtn);
-                }, 60);
-            }
+                }
+            }, 150);
         } else {
             clearInterval(hudRefreshInterval);
             hudRefreshInterval = null;
@@ -1037,6 +1236,7 @@ window.VideoPlayer = (function() {
         const urlCancelBtn = document.getElementById('url-dialog-cancel-btn');
         const hudPlayBtn = document.getElementById('hud-play-btn');
         const hudCloseBtn = document.getElementById('hud-close-btn');
+        const episodesCloseBtn = document.getElementById('episodes-close-btn');
         const subsCloseBtn = document.getElementById('subtitles-close-btn');
         const settingsCloseBtn = document.getElementById('settings-close-btn');
 
@@ -1073,7 +1273,22 @@ window.VideoPlayer = (function() {
             }
             window.Player.openMedia(streamUrl, torrentStats.name);
         });
-        if (hudCloseBtn) hudCloseBtn.addEventListener('click', () => toggleTorrentInfoHud(false));
+        if (hudCloseBtn) {
+            hudCloseBtn.addEventListener('click', () => {
+                if (Date.now() - hudOpenedTimestamp < 350) {
+                    console.log('[VideoPlayer] Debounced rapid close on HUD');
+                    return;
+                }
+                toggleTorrentInfoHud(false);
+            });
+        }
+        if (episodesCloseBtn) {
+            episodesCloseBtn.addEventListener('click', () => {
+                const dialog = document.getElementById('episodes-dialog-backdrop');
+                if (dialog) dialog.classList.remove('dialog-open');
+                if (window.Navigation) window.Navigation.focusInitialElement();
+            });
+        }
         if (subsCloseBtn) subsCloseBtn.addEventListener('click', closeSubtitleSearchModal);
         if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', closeSettingsDialog);
 
@@ -1099,7 +1314,10 @@ window.VideoPlayer = (function() {
         isAutoTorrentDownloadEnabled: isAutoTorrentDownloadEnabled,
         setAutoTorrentDownload: setAutoTorrentDownload,
         cleanTorrentTitle: cleanTorrentTitle,
-        playPreset: playPreset
+        playPreset: playPreset,
+        openEpisodesDialog: openEpisodesDialog,
+        openEpisodesDialogForCurrent: openEpisodesDialogForCurrent,
+        hasMultipleEpisodes: hasMultipleEpisodes
     };
 })();
 

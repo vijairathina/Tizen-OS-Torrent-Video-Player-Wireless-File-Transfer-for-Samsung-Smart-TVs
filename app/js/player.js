@@ -299,6 +299,12 @@ window.Player = (function() {
 
         showOSD();
 
+        const episodesBtn = document.getElementById('osd-episodes-btn');
+        if (episodesBtn) {
+            const hasEpisodes = window.VideoPlayer && window.VideoPlayer.hasMultipleEpisodes && window.VideoPlayer.hasMultipleEpisodes(currentTitle);
+            episodesBtn.style.display = hasEpisodes ? 'inline-flex' : 'none';
+        }
+
         if (window.Navigation) {
             setTimeout(function() {
                 const playBtn = document.getElementById('osd-play-btn');
@@ -951,8 +957,176 @@ window.Player = (function() {
         return osd ? osd.classList.contains('osd-visible') : false;
     }
 
+    const ISO_LANG_MAP = {
+        'tam': 'Tamil', 'ta': 'Tamil',
+        'tel': 'Telugu', 'te': 'Telugu',
+        'hin': 'Hindi', 'hi': 'Hindi',
+        'mal': 'Malayalam', 'ml': 'Malayalam',
+        'kan': 'Kannada', 'kn': 'Kannada',
+        'eng': 'English', 'en': 'English',
+        'spa': 'Spanish', 'es': 'Spanish',
+        'fra': 'French', 'fre': 'French', 'fr': 'French',
+        'ger': 'German', 'deu': 'German', 'de': 'German',
+        'ita': 'Italian', 'it': 'Italian',
+        'ben': 'Bengali', 'bn': 'Bengali',
+        'mar': 'Marathi', 'mr': 'Marathi',
+        'guj': 'Gujarati', 'gu': 'Gujarati',
+        'pan': 'Punjabi', 'pa': 'Punjabi',
+        'kor': 'Korean', 'ko': 'Korean',
+        'jpn': 'Japanese', 'ja': 'Japanese',
+        'chi': 'Chinese', 'zho': 'Chinese', 'zh': 'Chinese'
+    };
+
+    let cachedAudioTracks = [];
+    let currentAudioTrackIndex = 0;
+
+    function openAudioSelectionDialog() {
+        const dialog = document.getElementById('audio-dialog-backdrop');
+        const listEl = document.getElementById('audio-tracks-list');
+        if (!dialog || !listEl) return;
+
+        listEl.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:12px;">Detecting audio tracks...</div>';
+        dialog.classList.add('dialog-open');
+
+        let tracks = [];
+        if (isAVPlay && typeof webapis !== 'undefined' && webapis.avplay) {
+            try {
+                const totalTracks = webapis.avplay.getTotalTrackInfo();
+                if (Array.isArray(totalTracks)) {
+                    totalTracks.forEach(t => {
+                        if (t.type === 'AUDIO') {
+                            let extra = {};
+                            if (typeof t.extra_info === 'string') {
+                                try { extra = JSON.parse(t.extra_info); } catch (e) { extra = {}; }
+                            } else if (t.extra_info && typeof t.extra_info === 'object') {
+                                extra = t.extra_info;
+                            }
+                            const code = (extra.language || extra.track_lang || extra.lang || '').toLowerCase().trim();
+                            const name = ISO_LANG_MAP[code] || (code ? code.toUpperCase() : `Audio Track ${t.index + 1}`);
+                            tracks.push({
+                                index: t.index,
+                                code: code,
+                                name: name
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('[Player] AVPlay getTotalTrackInfo:', e);
+            }
+
+            try {
+                const cur = webapis.avplay.getCurrentStreamInfo();
+                if (Array.isArray(cur)) {
+                    for (let i = 0; i < cur.length; i++) {
+                        if (cur[i].type === 'AUDIO') {
+                            currentAudioTrackIndex = cur[i].index;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        const renderTracksUI = (trackList) => {
+            cachedAudioTracks = trackList;
+            listEl.innerHTML = '';
+            if (!trackList || trackList.length === 0) {
+                listEl.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:16px;">Standard single audio track active (Default).</div>';
+                return;
+            }
+
+            trackList.forEach(tr => {
+                const btn = document.createElement('button');
+                const isActive = (tr.index === currentAudioTrackIndex);
+                btn.className = `focusable ${isActive ? 'active' : ''}`;
+                btn.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 12px 18px;
+                    border-radius: 10px;
+                    background: ${isActive ? 'linear-gradient(90deg, rgba(0, 242, 254, 0.25) 0%, rgba(123, 44, 191, 0.25) 100%)' : 'rgba(255, 255, 255, 0.08)'};
+                    border: 1px solid ${isActive ? 'var(--primary-cyan)' : 'rgba(255, 255, 255, 0.15)'};
+                    color: #fff;
+                    font-size: 16px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    width: 100%;
+                `;
+                btn.tabIndex = 0;
+                btn.innerHTML = `
+                    <span style="display:flex; align-items:center; gap:10px;">
+                        <span>🔊</span>
+                        <span>${tr.name}</span>
+                        ${tr.code ? `<span style="font-size:12px; opacity:0.6; text-transform:uppercase;">[${tr.code}]</span>` : ''}
+                    </span>
+                    <span style="color:${isActive ? 'var(--primary-cyan)' : 'transparent'}; font-weight:700;">
+                        ${isActive ? '✓ Active' : ''}
+                    </span>
+                `;
+
+                btn.addEventListener('click', function() {
+                    selectAudioTrack(tr.index, tr.name);
+                    closeAudioSelectionDialog();
+                });
+
+                listEl.appendChild(btn);
+            });
+
+            if (window.Navigation) {
+                const first = listEl.querySelector('.focusable.active') || listEl.querySelector('.focusable');
+                if (first) window.Navigation.setFocus(first);
+            }
+        };
+
+        if (tracks.length > 0) {
+            renderTracksUI(tracks);
+        } else {
+            // Fallback: query companion server /media_info?file=...
+            const queryName = currentTitle || currentMediaUrl || '';
+            fetch(`http://192.168.0.13:8080/media_info?file=${encodeURIComponent(queryName)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.audioTracks && data.audioTracks.length > 0) {
+                        renderTracksUI(data.audioTracks);
+                    } else {
+                        renderTracksUI([]);
+                    }
+                })
+                .catch(() => renderTracksUI([]));
+        }
+    }
+
+    function closeAudioSelectionDialog() {
+        const dialog = document.getElementById('audio-dialog-backdrop');
+        if (dialog) dialog.classList.remove('dialog-open');
+        const audioBtn = document.getElementById('osd-audio-btn');
+        if (audioBtn && window.Navigation) {
+            window.Navigation.setFocus(audioBtn);
+        }
+    }
+
+    function selectAudioTrack(index, name) {
+        currentAudioTrackIndex = index;
+        if (isAVPlay && typeof webapis !== 'undefined' && webapis.avplay) {
+            try {
+                webapis.avplay.setSelectTrack('AUDIO', index);
+                console.log(`[Player] Switched AVPlay audio track to index: ${index} (${name})`);
+            } catch (e) {
+                console.warn('[Player] setSelectTrack failed:', e);
+            }
+        }
+        if (window.FileReceiver && window.FileReceiver.showToast) {
+            window.FileReceiver.showToast(`🔊 Audio Language: ${name}`);
+        }
+    }
+
     function setupOsdEvents() {
         const playBtn = document.getElementById('osd-play-btn');
+        const episodesBtn = document.getElementById('osd-episodes-btn');
+        const audioBtn = document.getElementById('osd-audio-btn');
+        const audioCloseBtn = document.getElementById('audio-dialog-close-btn');
         const aspectBtn = document.getElementById('osd-aspect-btn');
         const infoBtn = document.getElementById('osd-info-btn');
         const subsBtn = document.getElementById('osd-subs-btn');
@@ -961,6 +1135,13 @@ window.Player = (function() {
         const scrubberTrack = document.querySelector('.osd-scrubber-track');
 
         if (playBtn) playBtn.addEventListener('click', togglePlayPause);
+        if (episodesBtn) episodesBtn.addEventListener('click', function() {
+            if (window.VideoPlayer && window.VideoPlayer.openEpisodesDialogForCurrent) {
+                window.VideoPlayer.openEpisodesDialogForCurrent();
+            }
+        });
+        if (audioBtn) audioBtn.addEventListener('click', openAudioSelectionDialog);
+        if (audioCloseBtn) audioCloseBtn.addEventListener('click', closeAudioSelectionDialog);
         if (aspectBtn) aspectBtn.addEventListener('click', toggleAspectRatio);
         if (infoBtn) infoBtn.addEventListener('click', function() {
             if (window.VideoPlayer && window.VideoPlayer.toggleTorrentInfoHud) {

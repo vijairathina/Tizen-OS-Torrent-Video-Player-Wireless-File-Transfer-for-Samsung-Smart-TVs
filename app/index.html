@@ -426,6 +426,14 @@
             <div class="osd-header">
                 <div class="video-title-text" id="video-title-display">Video Title</div>
                 <div class="osd-top-actions">
+                    <button class="osd-btn focusable" id="osd-episodes-btn" tabindex="0" style="display:none;" title="Episodes / Files">
+                        <span>📑</span>
+                        <span>Episodes</span>
+                    </button>
+                    <button class="osd-btn focusable" id="osd-audio-btn" tabindex="0" title="Audio Language">
+                        <span>🌐</span>
+                        <span>Audio Language</span>
+                    </button>
                     <button class="osd-btn focusable" id="osd-info-btn" tabindex="0">
                         <span>ℹ️</span>
                         <span>Torrent Info</span>
@@ -565,6 +573,38 @@
 
             <div class="dialog-actions">
                 <button class="btn-secondary focusable" id="subtitles-close-btn" tabindex="0">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Episodes / Multi-file Selector Dialog -->
+    <div class="app-dialog-backdrop" id="episodes-dialog-backdrop">
+        <div class="dialog-window" style="width: 860px; max-height: 82vh;">
+            <div class="dialog-title" id="episodes-dialog-title">📑 Series Episodes &amp; Files</div>
+            <div class="dialog-body" id="episodes-dialog-subtitle" style="margin-bottom: 14px; color: var(--text-muted); font-size: 15px;">
+                Select an episode to play:
+            </div>
+            <div id="episodes-list-container" style="max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
+                <!-- Dynamically rendered episodes -->
+            </div>
+            <div class="dialog-actions" style="margin-top: 16px;">
+                <button class="btn-secondary focusable" id="episodes-close-btn" tabindex="0">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Language Track Selector Dialog -->
+    <div class="app-dialog-backdrop" id="audio-dialog-backdrop">
+        <div class="dialog-window" style="width: 640px;">
+            <div class="dialog-title">🌐 Audio Language Selection</div>
+            <div class="dialog-body" style="margin-bottom: 14px; color: var(--text-muted); font-size: 15px;">
+                Select audio language track for playback:
+            </div>
+            <div id="audio-tracks-list" style="max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+                <!-- Dynamically rendered audio tracks -->
+            </div>
+            <div class="dialog-actions" style="margin-top: 16px;">
+                <button class="btn-secondary focusable" id="audio-dialog-close-btn" tabindex="0">Close</button>
             </div>
         </div>
     </div>

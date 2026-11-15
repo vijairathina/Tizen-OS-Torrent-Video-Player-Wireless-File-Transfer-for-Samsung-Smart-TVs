@@ -27,7 +27,14 @@ function formatBytes(bytes) {
 client.add(torrentInput, { path: downloadDir }, torrent => {
     console.log('[TorrentEngine] Torrent ready:', torrent.name);
 
-    // Pick largest video file
+    // Parse optional target file index from command-line argument: --file-idx=N
+    let targetFileIdx = -1;
+    const fileIdxArg = process.argv.find(a => a.startsWith('--file-idx='));
+    if (fileIdxArg) {
+        targetFileIdx = parseInt(fileIdxArg.split('=')[1], 10);
+    }
+
+    // Default to largest video file if no index specified
     let fileIdx = 0;
     let maxSize = 0;
     torrent.files.forEach((f, idx) => {
@@ -38,12 +45,43 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
         }
     });
 
+    if (targetFileIdx >= 0 && targetFileIdx < torrent.files.length) {
+        fileIdx = targetFileIdx;
+        console.log(`[TorrentEngine] Targeted specific file #${fileIdx}: ${torrent.files[fileIdx].name}`);
+    }
+
     const targetFile = torrent.files[fileIdx];
-    const mimeType = targetFile.name.endsWith('.mkv') ? 'video/x-matroska' : 'video/mp4';
+
+    // Log structured file list for companion server episode discovery
+    const filesMeta = torrent.files.map((f, idx) => ({
+        index: idx,
+        name: f.name,
+        length: f.length,
+        path: f.path,
+        isVideo: /\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name)
+    }));
+    console.log(`[ENGINE_FILES] ${JSON.stringify(filesMeta)}`);
 
     if (!isDownloadOnly) {
         const server = http.createServer((req, res) => {
-            const total = targetFile.length;
+            // Determine active file for this HTTP request (allows streaming any episode via /<index> or ?file=<index>)
+            let reqFile = targetFile;
+            try {
+                const u = new URL(req.url, 'http://127.0.0.1:8889');
+                let reqIdx = -1;
+                if (u.searchParams.has('file')) {
+                    reqIdx = parseInt(u.searchParams.get('file'), 10);
+                } else {
+                    const m = u.pathname.match(/^\/(\d+)/);
+                    if (m) reqIdx = parseInt(m[1], 10);
+                }
+                if (reqIdx >= 0 && reqIdx < torrent.files.length) {
+                    reqFile = torrent.files[reqIdx];
+                }
+            } catch (e) {}
+
+            const total = reqFile.length;
+            const mimeType = reqFile.name.endsWith('.mkv') ? 'video/x-matroska' : 'video/mp4';
             const range = req.headers.range;
 
             res.setHeader('Accept-Ranges', 'bytes');
@@ -86,7 +124,7 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
                     'Content-Type': mimeType
                 });
 
-                const stream = targetFile.createReadStream({ start, end });
+                const stream = reqFile.createReadStream({ start, end });
                 stream.on('error', err => {
                     console.warn('[TorrentEngine] Stream range error:', err);
                     try { res.end(); } catch (e) {}
@@ -100,7 +138,7 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
                     'Content-Length': total,
                     'Content-Type': mimeType
                 });
-                const stream = targetFile.createReadStream();
+                const stream = reqFile.createReadStream();
                 stream.on('error', err => {
                     console.warn('[TorrentEngine] Stream full error:', err);
                     try { res.end(); } catch (e) {}
@@ -117,7 +155,7 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
             console.error('[TorrentEngine] HTTP server error:', err.message);
         });
         server.listen(port, '0.0.0.0', () => {
-            const streamUrl = `http://192.168.0.13:${port}/`;
+            const streamUrl = `http://192.168.0.13:${port}/${fileIdx}`;
             console.log(`[ENGINE_STREAM_URL] ${streamUrl}`);
         });
     } else {
@@ -126,14 +164,16 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
 
     torrent.on('done', () => {
         console.log(`[ENGINE_DONE] ${torrent.name}`);
-        console.log(`[ENGINE_DOWNLOADED_FILE] ${targetFile.name}`);
-        try {
-            const markerPath = path.join(downloadDir, `${targetFile.name}.done`);
-            fs.writeFileSync(markerPath, '1', 'utf-8');
-            console.log(`[ENGINE_DONE_SAVED] Marked complete: ${markerPath}`);
-        } catch (e) {
-            console.warn('[TorrentEngine] Failed to write .done marker:', e.message);
-        }
+        // Mark all video files as done
+        torrent.files.forEach(f => {
+            if (/\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name)) {
+                console.log(`[ENGINE_DOWNLOADED_FILE] ${f.name}`);
+                try {
+                    const markerPath = path.join(downloadDir, `${f.name}.done`);
+                    fs.writeFileSync(markerPath, '1', 'utf-8');
+                } catch (e) {}
+            }
+        });
     });
 
     setInterval(() => {

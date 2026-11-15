@@ -86,6 +86,12 @@ def find_media_file(filename_or_query):
             if f.lower() == target_lower:
                 return os.path.join(root, f)
 
+    # 5. Substring match in DOWNLOADS_DIR
+    for root, dirs, files in os.walk(DOWNLOADS_DIR):
+        for f in files:
+            if target_lower in f.lower() or f.lower() in target_lower:
+                return os.path.join(root, f)
+
     return None
 
 def find_torrent_file(filename_or_query):
@@ -195,6 +201,162 @@ def find_downloaded_video(filename_or_query):
     return None
 
 
+def parse_torrent_files(torrent_path):
+    """Parses .torrent bencode metadata and returns list of video files/episodes."""
+    if not torrent_path or not os.path.exists(torrent_path):
+        return []
+
+    try:
+        with open(torrent_path, 'rb') as f:
+            data = f.read()
+
+        def decode_bencode(idx=0):
+            if idx >= len(data): return None, idx
+            b = data[idx:idx+1]
+            if b == b'i':
+                end = data.find(b'e', idx)
+                return int(data[idx+1:end]), end + 1
+            elif b == b'l':
+                idx += 1
+                res = []
+                while idx < len(data) and data[idx:idx+1] != b'e':
+                    val, idx = decode_bencode(idx)
+                    res.append(val)
+                return res, idx + 1
+            elif b == b'd':
+                idx += 1
+                res = {}
+                while idx < len(data) and data[idx:idx+1] != b'e':
+                    key, idx = decode_bencode(idx)
+                    val, idx = decode_bencode(idx)
+                    if isinstance(key, bytes):
+                        try: key = key.decode('utf-8', errors='ignore')
+                        except Exception: key = str(key)
+                    res[key] = val
+                return res, idx + 1
+            elif b.isdigit():
+                colon = data.find(b':', idx)
+                length = int(data[idx:colon])
+                start = colon + 1
+                return data[start:start+length], start + length
+            return None, idx + 1
+
+        meta, _ = decode_bencode(0)
+        info = meta.get('info', {}) if meta else {}
+        files_list = []
+        video_exts = ('.mkv', '.mp4', '.avi', '.mov', '.webm', '.ts')
+        import urllib.parse
+
+        if 'files' in info:
+            for idx, item in enumerate(info['files']):
+                length = item.get('length', 0)
+                raw_path = item.get('path', [])
+                path_parts = [p.decode('utf-8', errors='ignore') if isinstance(p, bytes) else str(p) for p in raw_path]
+                file_name = path_parts[-1] if path_parts else f'file_{idx}'
+                if file_name.lower().endswith(video_exts):
+                    downloaded_path = find_media_file(file_name)
+                    is_downloaded = bool(downloaded_path and os.path.exists(downloaded_path) and os.path.getsize(downloaded_path) > 0)
+                    url = f"http://192.168.0.13:{PORT}/files/{urllib.parse.quote(file_name)}" if is_downloaded else f"http://192.168.0.13:8889/{idx}"
+                    files_list.append({
+                        'index': idx,
+                        'name': file_name,
+                        'path': '/'.join(path_parts),
+                        'length': length,
+                        'sizeStr': format_bytes(length),
+                        'isDownloaded': is_downloaded,
+                        'streamUrl': url
+                    })
+        else:
+            name = info.get('name', b'').decode('utf-8', errors='ignore') if isinstance(info.get('name'), bytes) else str(info.get('name', ''))
+            length = info.get('length', 0)
+            if name.lower().endswith(video_exts):
+                downloaded_path = find_media_file(name)
+                is_downloaded = bool(downloaded_path and os.path.exists(downloaded_path) and os.path.getsize(downloaded_path) > 0)
+                url = f"http://192.168.0.13:{PORT}/files/{urllib.parse.quote(name)}" if is_downloaded else f"http://192.168.0.13:8889/0"
+                files_list.append({
+                    'index': 0,
+                    'name': name,
+                    'path': name,
+                    'length': length,
+                    'sizeStr': format_bytes(length),
+                    'isDownloaded': is_downloaded,
+                    'streamUrl': url
+                })
+        return files_list
+    except Exception as e:
+        print(f"[TorrentEngine] Error parsing torrent files: {e}")
+        return []
+
+LANG_NAME_MAP = {
+    'tam': 'Tamil', 'ta': 'Tamil',
+    'tel': 'Telugu', 'te': 'Telugu',
+    'hin': 'Hindi', 'hi': 'Hindi',
+    'mal': 'Malayalam', 'ml': 'Malayalam',
+    'kan': 'Kannada', 'kn': 'Kannada',
+    'eng': 'English', 'en': 'English',
+    'spa': 'Spanish', 'es': 'Spanish',
+    'fra': 'French', 'fr': 'French',
+    'ger': 'German', 'de': 'German',
+    'ben': 'Bengali', 'bn': 'Bengali',
+    'mar': 'Marathi', 'mr': 'Marathi'
+}
+
+def get_media_audio_tracks(filename_or_path):
+    """Detects embedded audio language tracks from MKV / MP4 container headers."""
+    filepath = find_media_file(filename_or_path)
+    if not filepath or not os.path.exists(filepath):
+        clean = os.path.basename(filename_or_path)
+        m = re.search(r'\[(.*?)\]', clean)
+        if m:
+            raw_langs = re.split(r'[\+\,\/\|\s]+', m.group(1))
+            res = []
+            idx = 0
+            for rl in raw_langs:
+                low = rl.strip().lower()
+                if low in LANG_NAME_MAP:
+                    res.append({'index': idx, 'code': low, 'name': LANG_NAME_MAP[low]})
+                    idx += 1
+            if res:
+                return res
+        return []
+
+    try:
+        with open(filepath, 'rb') as f:
+            data = f.read(300000)
+
+        # Matroska EBML: Element ID 0x22B59C (\x22\xb5\x9c) is Language
+        raw_matches = re.findall(b'\\x22\\xb5\\x9c\\x83([a-z]{3})', data)
+        audio_tracks = []
+        idx = 0
+        for m in raw_matches:
+            code = m.decode('ascii', errors='ignore').strip().lower()
+            if code and code != 'und':
+                name = LANG_NAME_MAP.get(code, code.upper())
+                audio_tracks.append({
+                    'index': idx,
+                    'code': code,
+                    'name': name
+                })
+                idx += 1
+
+        if not audio_tracks:
+            clean = os.path.basename(filepath)
+            m = re.search(r'\[(.*?)\]', clean)
+            if m:
+                raw_langs = re.split(r'[\+\,\/\|\s]+', m.group(1))
+                idx = 0
+                for rl in raw_langs:
+                    low = rl.strip().lower()
+                    if low in LANG_NAME_MAP:
+                        audio_tracks.append({'index': idx, 'code': low, 'name': LANG_NAME_MAP[low]})
+                        idx += 1
+
+        return audio_tracks
+    except Exception as e:
+        print(f"[MediaInfo] Error reading audio tracks: {e}")
+        return []
+
+
 class TorrentStreamManager:
     def __init__(self, host_ip="192.168.0.13"):
         self.host_ip = host_ip
@@ -212,7 +374,7 @@ class TorrentStreamManager:
             "timeRemaining": ""
         }
 
-    def start_torrent(self, torrent_path_or_magnet, title=None):
+    def start_torrent(self, torrent_path_or_magnet, title=None, file_idx=None):
         with self.lock:
             clean_title = title or os.path.basename(torrent_path_or_magnet)
             
@@ -249,13 +411,14 @@ class TorrentStreamManager:
                 return stream_url
 
             if self.process and self.current_torrent == torrent_path_or_magnet:
+                target_url = f"http://{self.host_ip}:{TORRENT_STREAM_PORT}/{file_idx}" if file_idx is not None else self.current_stream_url
                 if self.current_stream_url:
                     broadcast_message({
                         "type": "torrent_stream_started",
-                        "streamUrl": self.current_stream_url,
+                        "streamUrl": target_url or self.current_stream_url,
                         "title": clean_title
                     })
-                    return self.current_stream_url
+                    return target_url or self.current_stream_url
 
             self.stop()
             self.current_torrent = torrent_path_or_magnet
@@ -270,7 +433,9 @@ class TorrentStreamManager:
             }
 
             cmd = ["node", os.path.join(BASE_DIR, "torrent_engine.mjs"), torrent_path_or_magnet]
-            print(f"[TorrentEngine] Starting sequential download & stream for: {clean_title}")
+            if file_idx is not None:
+                cmd.append(f"--file-idx={file_idx}")
+            print(f"[TorrentEngine] Starting sequential download & stream for: {clean_title} (file_idx={file_idx})")
 
             try:
                 self.process = subprocess.Popen(
@@ -281,7 +446,7 @@ class TorrentStreamManager:
                     bufsize=1,
                     cwd=BASE_DIR
                 )
-                self.current_stream_url = f"http://{self.host_ip}:{TORRENT_STREAM_PORT}/"
+                self.current_stream_url = f"http://{self.host_ip}:{TORRENT_STREAM_PORT}/{file_idx if file_idx is not None else ''}"
                 threading.Thread(target=self._monitor_stream, args=(self.process,), daemon=True).start()
                 return self.current_stream_url
             except Exception as e:
@@ -793,10 +958,28 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 if unquoted:
                     fnames = [unquoted]
 
+            file_idx_str = qs.get('fileIdx', qs.get('file_idx', [None]))[0]
+            file_idx = int(file_idx_str) if (file_idx_str is not None and str(file_idx_str).isdigit()) else None
+            episode_param = qs.get('episode', [None])[0]
+
             if fnames:
                 fname = os.path.basename(fnames[0]).strip()
-                print(f"[TorrentEngine] /start_torrent requested for: {fname} (downloadOnly={download_only})")
+                print(f"[TorrentEngine] /start_torrent requested for: {fname} (downloadOnly={download_only}, file_idx={file_idx}, ep={episode_param})")
                 sys.stdout.flush()
+
+                # Check if specific episode is already on disk
+                if episode_param:
+                    ep_clean = os.path.basename(episode_param)
+                    ep_path = find_media_file(ep_clean)
+                    if ep_path and os.path.exists(ep_path) and os.path.getsize(ep_path) > 0:
+                        import urllib.parse
+                        direct_url = f"http://{TORRENT_MANAGER.host_ip}:{PORT}/files/{urllib.parse.quote(os.path.basename(ep_path))}"
+                        print(f"[TorrentEngine] Episode '{ep_clean}' directly served from disk: {direct_url}")
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'status': 'started', 'streamUrl': direct_url, 'filename': ep_clean, 'isDownloaded': True}).encode('utf-8'))
+                        return
 
                 # 1. Check if video is already downloaded in DOWNLOADS_DIR for this specific title
                 media_path = find_downloaded_video(fname)
@@ -808,7 +991,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(json.dumps({'status': 'already_downloaded', 'filename': os.path.basename(media_path), 'downloadOnly': True, 'isDownloaded': True}).encode('utf-8'))
                         return
-                    stream_url = TORRENT_MANAGER.start_torrent(media_path, title=os.path.basename(media_path))
+                    stream_url = TORRENT_MANAGER.start_torrent(media_path, title=os.path.basename(media_path), file_idx=file_idx)
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
@@ -832,11 +1015,11 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                         self.wfile.write(json.dumps({'status': 'background_started', 'filename': matched_name, 'downloadOnly': True}).encode('utf-8'))
                         return
 
-                    stream_url = TORRENT_MANAGER.start_torrent(torrent_path, title=matched_name)
+                    stream_url = TORRENT_MANAGER.start_torrent(torrent_path, title=matched_name, file_idx=file_idx)
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': matched_name}).encode('utf-8'))
+                    self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': matched_name, 'fileIdx': file_idx}).encode('utf-8'))
                     return
                 else:
                     print(f"[TorrentEngine] ERROR: No matching torrent found for '{fname}' in uploads")
@@ -851,11 +1034,11 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(json.dumps({'status': 'background_started', 'downloadOnly': True}).encode('utf-8'))
                     return
-                stream_url = TORRENT_MANAGER.start_torrent(magnets[0], title="Magnet Stream")
+                stream_url = TORRENT_MANAGER.start_torrent(magnets[0], title="Magnet Stream", file_idx=file_idx)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url}).encode('utf-8'))
+                self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'fileIdx': file_idx}).encode('utf-8'))
                 return
             else:
                 self.send_error(400, 'Missing file or magnet parameter')
@@ -877,6 +1060,43 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(TORRENT_MANAGER.get_stats(file_query)).encode('utf-8'))
+            return
+
+        elif path == '/torrent_files':
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            query = qs.get('file', [''])[0]
+            t_path = find_torrent_file(query)
+            if not t_path and query:
+                cand = os.path.join(UPLOADS_DIR, query)
+                if os.path.exists(cand): t_path = cand
+            files = parse_torrent_files(t_path) if t_path else []
+            resp = {
+                "success": bool(files),
+                "torrentFile": os.path.basename(t_path) if t_path else query,
+                "totalEpisodes": len(files),
+                "episodes": files
+            }
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode('utf-8'))
+            return
+
+        elif path == '/media_info':
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            query = qs.get('file', [''])[0]
+            tracks = get_media_audio_tracks(query)
+            resp = {
+                "filename": query,
+                "hasMultipleAudio": len(tracks) > 1,
+                "audioTracks": tracks
+            }
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode('utf-8'))
             return
 
         elif path == '/delete_file':

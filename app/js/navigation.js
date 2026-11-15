@@ -391,6 +391,7 @@ window.Navigation = (function() {
                 move('down');
                 break;
             case KEY_CODES.ENTER:
+                e.preventDefault();
                 if (currentFocusedElement) {
                     currentFocusedElement.click();
                 }
