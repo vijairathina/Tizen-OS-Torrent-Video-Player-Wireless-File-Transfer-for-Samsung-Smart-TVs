@@ -2,7 +2,11 @@ const WebTorrent = require('webtorrent');
 const path = require('path');
 
 const client = new WebTorrent();
-const torrentInput = process.argv[2] || path.join(__dirname, 'uploads', 'www.1TamilMV.io - Jailer 2 (2026) Tamil HQ HDRip - 1080p - HEVC - x265 - (AAC 2.0) - 1.7GB - HC-ESub.mkv.torrent');
+const torrentInput = process.argv[2];
+if (!torrentInput) {
+    console.error('[TorrentEngine] Error: No torrent file or magnet link provided.');
+    process.exit(1);
+}
 const downloadDir = path.join(__dirname, 'downloads');
 
 console.log('[TorrentEngine] Adding torrent:', torrentInput);

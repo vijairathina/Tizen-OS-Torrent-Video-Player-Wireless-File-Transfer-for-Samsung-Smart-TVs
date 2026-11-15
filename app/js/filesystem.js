@@ -761,7 +761,7 @@ window.TVFilesystem = (function() {
             { name: 'Downloads', fullPath: 'wgt-private/Downloads', isDirectory: true, fileType: 'folder', fileSize: 0 },
             { name: 'Movies', fullPath: 'wgt-private/Movies', isDirectory: true, fileType: 'folder', fileSize: 0 },
             { name: '4K_Sample_Demo.mp4', fullPath: 'wgt-private/4K_Sample_Demo.mp4', isDirectory: false, fileType: 'video', fileSize: 184549320 },
-            { name: 'Jailer_2_HDRip.mkv.torrent', fullPath: 'wgt-private/Jailer_2_HDRip.mkv.torrent', isDirectory: false, fileType: 'torrent', fileSize: 184968 }
+            { name: 'Sample_Video.torrent', fullPath: 'wgt-private/Sample_Video.torrent', isDirectory: false, fileType: 'torrent', fileSize: 184968 }
         ],
         'wgt-private/TVFileHub': [
             { name: 'Received', fullPath: 'wgt-private/TVFileHub/Received', isDirectory: true, fileType: 'folder', fileSize: 0 },

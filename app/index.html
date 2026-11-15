@@ -414,6 +414,12 @@
             <span id="player-resume-text">Resuming from 00:00</span>
         </div>
 
+        <!-- Aspect Ratio Change Notification Toast -->
+        <div class="player-aspect-toast" id="player-aspect-toast" style="display:none;">
+            <span>📐</span>
+            <span id="player-aspect-text">Aspect: Fit</span>
+        </div>
+
         <!-- In-Player Live Download Indicator -->
         <div class="player-dl-badge" id="player-dl-badge" style="display:none;">
             <span class="dl-badge-icon">⚡</span>
@@ -442,9 +448,9 @@
                         <span>💬</span>
                         <span>Subtitles</span>
                     </button>
-                    <button class="osd-btn focusable" id="osd-aspect-btn" tabindex="0">
+                    <button class="osd-btn focusable" id="osd-aspect-btn" tabindex="0" title="Aspect Ratio">
                         <span>📐</span>
-                        <span>Aspect Ratio</span>
+                        <span id="osd-aspect-label">Aspect: Fit</span>
                     </button>
                     <button class="osd-btn focusable" id="osd-close-btn" tabindex="0" style="background:rgba(239,68,68,0.2); border-color:var(--color-danger);">
                         <span>✕</span>

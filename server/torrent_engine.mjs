@@ -8,8 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDownloadOnly = process.argv.includes('--download-only');
-const torrentArgs = process.argv.slice(2).filter(a => a !== '--download-only');
-const torrentInput = torrentArgs[0] || path.join(__dirname, 'uploads', 'www.1TamilMV.io - Jailer 2 (2026) Tamil HQ HDRip - 1080p - HEVC - x265 - (AAC 2.0) - 1.7GB - HC-ESub.mkv.torrent');
+const torrentArgs = process.argv.slice(2).filter(a => a !== '--download-only' && !a.startsWith('--file-idx='));
+const torrentInput = torrentArgs[0];
+if (!torrentInput) {
+    console.error('[TorrentEngine] Error: No torrent file or magnet link provided.');
+    process.exit(1);
+}
 const downloadDir = path.join(__dirname, 'downloads');
 
 console.log('[TorrentEngine] Initializing WebTorrent (downloadOnly=' + isDownloadOnly + ') for:', torrentInput);

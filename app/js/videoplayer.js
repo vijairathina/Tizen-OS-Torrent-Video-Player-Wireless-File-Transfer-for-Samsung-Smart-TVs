@@ -767,10 +767,10 @@ window.VideoPlayer = (function() {
         if (!listEl) return;
 
         const results = [
-            { id: 1, title: 'English [OpenSubtitles.org]', lang: 'ENG', url: 'sample.srt' },
-            { id: 2, title: 'Tamil [Subscene]', lang: 'TAM', url: 'sample.srt' },
-            { id: 3, title: 'English Hearing Impaired [BSPlayer]', lang: 'ENG', url: 'sample.srt' },
-            { id: 4, title: 'Hindi [SubDB]', lang: 'HIN', url: 'sample.srt' }
+            { id: 1, title: 'English [OpenSubtitles]', lang: 'ENG', url: 'sample.srt' },
+            { id: 2, title: 'Tamil [CC Subtitles]', lang: 'TAM', url: 'sample.srt' },
+            { id: 3, title: 'English [SDH Subtitles]', lang: 'ENG', url: 'sample.srt' },
+            { id: 4, title: 'Hindi [CC Subtitles]', lang: 'HIN', url: 'sample.srt' }
         ];
 
         listEl.innerHTML = '';

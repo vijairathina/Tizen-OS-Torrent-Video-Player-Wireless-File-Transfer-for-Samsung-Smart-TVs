@@ -34,12 +34,46 @@ window.Player = (function() {
     let isSeekingInProgress = false;
     let queuedSeekTarget = null;
 
-    const DISPLAY_MODES = [
-        'PLAYER_DISPLAY_MODE_LETTER_BOX',
-        'PLAYER_DISPLAY_MODE_FULL_SCREEN',
-        'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO'
+    const ASPECT_MODES = [
+        {
+            id: 'fit',
+            name: 'Fit (16:9 Letterbox)',
+            short: 'Aspect: Fit',
+            avplay: { x: 0, y: 0, width: 1920, height: 1080, method: 'PLAYER_DISPLAY_MODE_LETTER_BOX' },
+            html5: { width: '100%', height: '100%', left: '0px', top: '0px', objectFit: 'contain', transform: 'none' }
+        },
+        {
+            id: 'zoom',
+            name: 'Zoom to Fill (133% - No Black Bars)',
+            short: 'Aspect: Zoom',
+            // Scales out black bars from 2.35:1 movie frame
+            avplay: { x: -320, y: -180, width: 2560, height: 1440, method: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' },
+            html5: { width: '100%', height: '100%', left: '0px', top: '0px', objectFit: 'cover', transform: 'scale(1.3333)', transformOrigin: 'center center' }
+        },
+        {
+            id: 'stretch',
+            name: 'Full Screen (Stretch)',
+            short: 'Aspect: Stretch',
+            avplay: { x: 0, y: 0, width: 1920, height: 1080, method: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' },
+            html5: { width: '100%', height: '100%', left: '0px', top: '0px', objectFit: 'fill', transform: 'none' }
+        },
+        {
+            id: '4:3',
+            name: '4:3 Standard (Classic Pillarbox)',
+            short: 'Aspect: 4:3',
+            avplay: { x: 240, y: 0, width: 1440, height: 1080, method: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' },
+            html5: { width: '1440px', height: '1080px', left: 'calc((100vw - 1440px) / 2)', top: '0px', objectFit: 'fill', transform: 'none' }
+        },
+        {
+            id: '21:9',
+            name: '21:9 Cinemascope (Ultra-Wide)',
+            short: 'Aspect: 21:9',
+            avplay: { x: 0, y: 138, width: 1920, height: 804, method: 'PLAYER_DISPLAY_MODE_FULL_SCREEN' },
+            html5: { width: '100%', height: '804px', left: '0px', top: 'calc((100vh - 804px) / 2)', objectFit: 'fill', transform: 'none' }
+        }
     ];
-    let currentDisplayModeIdx = 0;
+    let currentAspectModeIdx = 0;
+    let aspectToastTimeout = null;
 
     function getResumePoints() {
         try {
@@ -324,8 +358,7 @@ window.Player = (function() {
         try {
             stopAndCloseAVPlay();
             webapis.avplay.open(url);
-            webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
-            webapis.avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
+            applyAspectRatio();
 
             webapis.avplay.setListener({
                 onbufferingstart: function() {
@@ -343,6 +376,7 @@ window.Player = (function() {
                     isSettlingSeek = false;
                     targetSeekSec = null;
                     isSeekingInProgress = false;
+                    applyAspectRatio();
                 },
                 oncurrentplaytime: function(ms) {
                     if (isScrubbing || isSettlingSeek) return;
@@ -435,6 +469,7 @@ window.Player = (function() {
 
         vid.style.display = 'block';
         vid.src = url;
+        applyAspectRatio();
 
         vid.onerror = function(e) {
             console.error('[Player] HTML5 video fallback error:', e);
@@ -833,23 +868,96 @@ window.Player = (function() {
         }
     }
 
-    function toggleAspectRatio() {
-        currentDisplayModeIdx = (currentDisplayModeIdx + 1) % DISPLAY_MODES.length;
-        const mode = DISPLAY_MODES[currentDisplayModeIdx];
+    function showAspectToast(text) {
+        const toast = document.getElementById('player-aspect-toast');
+        const textEl = document.getElementById('player-aspect-text');
+        if (toast && textEl) {
+            textEl.textContent = text;
+            toast.style.display = 'flex';
+            clearTimeout(aspectToastTimeout);
+            aspectToastTimeout = setTimeout(function() {
+                toast.style.display = 'none';
+            }, 2400);
+        }
+
+        const feedbackEl = document.getElementById('osd-seek-feedback');
+        if (feedbackEl) {
+            feedbackEl.textContent = `📐 ${text}`;
+            feedbackEl.style.display = 'inline-flex';
+            clearTimeout(seekFeedbackTimeout);
+            seekFeedbackTimeout = setTimeout(function() {
+                feedbackEl.style.display = 'none';
+            }, 2400);
+        }
+
+        const statusTag = document.getElementById('osd-status-tag');
+        if (statusTag) {
+            const originalStatus = isPlaying ? 'Playing' : 'Paused';
+            statusTag.textContent = text;
+            setTimeout(function() {
+                if (statusTag.textContent === text) {
+                    updateStatusTag(originalStatus);
+                }
+            }, 2400);
+        }
+    }
+
+    function applyAspectRatio(targetIdx) {
+        if (typeof targetIdx === 'number') {
+            currentAspectModeIdx = ((targetIdx % ASPECT_MODES.length) + ASPECT_MODES.length) % ASPECT_MODES.length;
+        }
+        const mode = ASPECT_MODES[currentAspectModeIdx] || ASPECT_MODES[0];
+        console.log(`[Player] Applying aspect ratio mode [${currentAspectModeIdx}]: ${mode.name}`);
+
+        const aspectBtnLabel = document.getElementById('osd-aspect-label');
+        if (aspectBtnLabel) {
+            aspectBtnLabel.textContent = mode.short;
+        }
 
         if (isAVPlay) {
             try {
-                webapis.avplay.setDisplayMethod(mode);
-            } catch (e) {}
-        } else {
-            const vid = document.getElementById('fallback-video');
-            if (vid) {
-                vid.style.objectFit = currentDisplayModeIdx === 1 ? 'fill' : 'contain';
+                const cfg = mode.avplay;
+                try {
+                    webapis.avplay.setDisplayRect(cfg.x, cfg.y, cfg.width, cfg.height);
+                } catch (eRect) {
+                    console.warn('[Player] Custom setDisplayRect failed, falling back to 0,0,1920,1080:', eRect);
+                    try {
+                        webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
+                    } catch (eFallback) {}
+                }
+                if (cfg.method) {
+                    webapis.avplay.setDisplayMethod(cfg.method);
+                }
+            } catch (e) {
+                console.warn('[Player] AVPlay setDisplayMethod exception:', e);
             }
         }
 
-        const tag = mode.replace('PLAYER_DISPLAY_MODE_', '');
-        window.FileReceiver.showToast(`Aspect Ratio: ${tag}`);
+        const vid = document.getElementById('fallback-video');
+        if (vid) {
+            const h = mode.html5;
+            vid.style.width = h.width || '100%';
+            vid.style.height = h.height || '100%';
+            vid.style.left = h.left || '0px';
+            vid.style.top = h.top || '0px';
+            vid.style.objectFit = h.objectFit || 'contain';
+            vid.style.transform = h.transform || 'none';
+            if (h.transformOrigin) {
+                vid.style.transformOrigin = h.transformOrigin;
+            } else {
+                vid.style.transformOrigin = 'center center';
+            }
+        }
+    }
+
+    function toggleAspectRatio() {
+        currentAspectModeIdx = (currentAspectModeIdx + 1) % ASPECT_MODES.length;
+        applyAspectRatio(currentAspectModeIdx);
+        const mode = ASPECT_MODES[currentAspectModeIdx];
+        showAspectToast(mode.name);
+        if (window.FileReceiver && window.FileReceiver.showToast) {
+            window.FileReceiver.showToast(`📐 Aspect Ratio: ${mode.name}`);
+        }
     }
 
     function close() {
@@ -861,6 +969,10 @@ window.Player = (function() {
 
         const toast = document.getElementById('player-resume-toast');
         if (toast) toast.style.display = 'none';
+
+        const aspectToast = document.getElementById('player-aspect-toast');
+        if (aspectToast) aspectToast.style.display = 'none';
+        clearTimeout(aspectToastTimeout);
 
         document.body.classList.remove('media-playing-mode');
 
@@ -1262,6 +1374,8 @@ window.Player = (function() {
         close: close,
         isActive: function() { return isPlayerOpen; },
         getCurrentTitle: function() { return currentTitle; },
-        loadSubtitle: loadSubtitle
+        loadSubtitle: loadSubtitle,
+        toggleAspectRatio: toggleAspectRatio,
+        applyAspectRatio: applyAspectRatio
     };
 })();

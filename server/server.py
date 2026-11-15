@@ -122,7 +122,7 @@ def find_torrent_file(filename_or_query):
            (stem_lower in f_stem or f_stem in stem_lower):
             return os.path.join(UPLOADS_DIR, f)
 
-    # 3. Movie title keyword match, e.g. "DC", "Scene", "Sandakari", "Jailer 2"
+    # 3. Release title and year keyword match, e.g. "Title (Year)"
     m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean)
     if m:
         keyword = m.group(1).strip().lower()
@@ -131,10 +131,10 @@ def find_torrent_file(filename_or_query):
             if keyword in f.lower() and year in f:
                 return os.path.join(UPLOADS_DIR, f)
 
-    # 4. Fallback search by any distinct movie title word
+    # 4. Fallback search by any distinct release title word
     words = [w for w in re.split(r'[^a-zA-Z0-9]+', stem_lower) if len(w) >= 3 and w not in (
         'tamil', 'hindi', 'telugu', '1080p', '720p', 'hevc', 'x264', 'x265', 'true',
-        'web', 'dl', 'hdts', 'hdrip', 'atmos', 'esub', 'clean', 'www', '1tamilmv', 'insure', 'meme', 'torrent')]
+        'web', 'dl', 'hdts', 'hdrip', 'atmos', 'esub', 'clean', 'www', 'torrent', 'bluray', 'remux', 'dvdrip', 'aac', 'ac3')]
     if words:
         for f in torrents:
             f_lower = f.lower()
