@@ -472,10 +472,7 @@ window.VideoPlayer = (function() {
         const settingsCard = document.getElementById('player-card-settings') || document.getElementById('amnis-card-settings');
 
         if (loadFileCard) {
-            loadFileCard.addEventListener('click', function() {
-                if (window.App) window.App.switchView('filemanager');
-                window.FileReceiver.showToast('Select a video or torrent file from USB or Internal storage');
-            });
+            loadFileCard.addEventListener('click', openStorageDialog);
         }
 
         if (loadUrlCard) {
@@ -488,6 +485,84 @@ window.VideoPlayer = (function() {
 
         if (settingsCard) {
             settingsCard.addEventListener('click', openSettingsDialog);
+        }
+    }
+
+    /* Storage Browser Dialog */
+    function openStorageDialog() {
+        const dialog = document.getElementById('storage-dialog-backdrop');
+        if (!dialog) return;
+        renderStorageDialogList();
+        dialog.classList.add('dialog-open');
+        setTimeout(function() {
+            const firstFocusable = dialog.querySelector('.focusable');
+            if (firstFocusable && window.Navigation) {
+                window.Navigation.setFocus(firstFocusable);
+            }
+        }, 80);
+    }
+
+    function closeStorageDialog() {
+        const dialog = document.getElementById('storage-dialog-backdrop');
+        if (dialog) dialog.classList.remove('dialog-open');
+        if (window.Navigation) window.Navigation.focusInitialElement();
+    }
+
+    function renderStorageDialogList() {
+        const listEl = document.getElementById('storage-dialog-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div style="color:var(--text-muted); padding:24px; text-align:center;">Scanning connected storage devices...</div>';
+
+        if (window.TVFilesystem && window.TVFilesystem.listStorages) {
+            window.TVFilesystem.listStorages(function(storages) {
+                if (!storages || storages.length === 0) {
+                    listEl.innerHTML = '<div style="color:var(--text-muted); padding:24px; text-align:center;">No storage devices detected.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = '';
+                storages.forEach(s => {
+                    const card = document.createElement('div');
+                    card.className = 'transfer-card focusable';
+                    card.tabIndex = 0;
+                    card.style.display = 'flex';
+                    card.style.justifyContent = 'space-between';
+                    card.style.alignItems = 'center';
+                    card.style.padding = '18px 22px';
+                    card.style.borderRadius = '14px';
+                    card.style.background = 'rgba(255,255,255,0.06)';
+                    card.style.border = '1.5px solid rgba(255,255,255,0.12)';
+                    card.style.cursor = 'pointer';
+
+                    const icon = s.isUsb ? '🔌' : '📺';
+                    const avail = s.availableSize ? window.TVFilesystem.formatBytes(s.availableSize) : 'Available';
+                    const total = s.totalSize ? window.TVFilesystem.formatBytes(s.totalSize) : '';
+                    const sizeInfo = total ? `${avail} free of ${total}` : avail;
+
+                    card.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:16px;">
+                            <span style="font-size:32px;">${icon}</span>
+                            <div>
+                                <div style="font-size:18px; font-weight:700; color:#fff;">${s.displayName}</div>
+                                <div style="font-size:14px; color:var(--text-muted); font-family:Consolas, monospace;">${s.label} • ${sizeInfo}</div>
+                            </div>
+                        </div>
+                        <button class="action-btn-play focusable" tabindex="0" style="padding:8px 20px; font-size:14px; border-radius:10px;">Browse</button>
+                    `;
+
+                    card.addEventListener('click', function() {
+                        closeStorageDialog();
+                        if (window.FileManager && window.FileManager.loadFolder) {
+                            if (window.App) window.App.switchView('filemanager');
+                            window.FileManager.loadFolder(s.label);
+                        } else if (window.App) {
+                            window.App.switchView('filemanager');
+                        }
+                    });
+
+                    listEl.appendChild(card);
+                });
+            });
         }
     }
 
@@ -1292,6 +1367,17 @@ window.VideoPlayer = (function() {
         if (subsCloseBtn) subsCloseBtn.addEventListener('click', closeSubtitleSearchModal);
         if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', closeSettingsDialog);
 
+        const storageCloseBtn = document.getElementById('storage-dialog-close-btn');
+        if (storageCloseBtn) storageCloseBtn.addEventListener('click', closeStorageDialog);
+
+        const storageFmBtn = document.getElementById('storage-dialog-filemanager-btn');
+        if (storageFmBtn) {
+            storageFmBtn.addEventListener('click', function() {
+                closeStorageDialog();
+                if (window.App) window.App.switchView('filemanager');
+            });
+        }
+
         // Preset stream buttons in URL modal
         const presetButtons = document.querySelectorAll('.preset-stream-btn');
         presetButtons.forEach((btn, idx) => {
@@ -1301,6 +1387,7 @@ window.VideoPlayer = (function() {
 
     return {
         init: init,
+        openStorageDialog: openStorageDialog,
         openUrlDialog: openUrlDialog,
         openSubtitleSearchModal: openSubtitleSearchModal,
         openSettingsDialog: openSettingsDialog,

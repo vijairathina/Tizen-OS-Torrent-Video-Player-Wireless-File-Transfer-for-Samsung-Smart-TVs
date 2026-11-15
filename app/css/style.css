@@ -642,6 +642,67 @@ main.app-main {
     font-weight: 500;
 }
 
+/* Video Player Header Top-Right Action Buttons */
+.player-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.player-header-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+    white-space: nowrap;
+}
+
+.player-header-btn .btn-icon {
+    font-size: 18px;
+}
+
+.player-header-btn .btn-text {
+    font-size: 14px;
+    letter-spacing: 0.3px;
+}
+
+.player-header-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.player-header-btn:focus,
+.player-header-btn.focused {
+    outline: none;
+    border-color: var(--border-focus) !important;
+    background: rgba(0, 242, 254, 0.24) !important;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.65) !important;
+    transform: scale(1.06);
+}
+
+body.theme-day .player-header-btn {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.16);
+    color: #1e1b4b;
+}
+
+body.theme-day .player-header-btn:focus,
+body.theme-day .player-header-btn.focused {
+    border-color: #6366f1 !important;
+    background: rgba(99, 102, 241, 0.15) !important;
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.4) !important;
+}
+
 /* Amnis 4 Main Action Cards Grid (2x2) */
 .amnis-cards-grid {
     flex: 1;
@@ -718,17 +779,20 @@ main.app-main {
     line-height: 1.4;
 }
 
-/* Amnis Downloads & Streams Container */
+/* Amnis Downloads & Streams Container (Large Screen Layout) */
 .amnis-downloads-container {
-    margin-top: 32px;
+    margin-top: 10px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 20px;
-    padding: 28px 36px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    border-radius: 24px;
+    padding: 26px 36px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
+    flex: 1;
+    min-height: 580px;
+    max-height: calc(100vh - 200px);
 }
 
 .amnis-downloads-header {
@@ -736,16 +800,17 @@ main.app-main {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border-subtle);
-    padding-bottom: 12px;
+    padding-bottom: 14px;
 }
 
 .amnis-downloads-list {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    max-height: 280px;
+    flex: 1;
+    max-height: calc(100vh - 280px);
     overflow-y: auto;
-    padding-right: 6px;
+    padding-right: 8px;
 }
 
 .amnis-download-card {
@@ -943,14 +1008,17 @@ body.media-playing-mode #app-container {
 
 /* Amnis Active Downloads Section */
 .amnis-downloads-container {
-    margin-top: 28px;
+    margin-top: 10px;
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
-    border-radius: 20px;
-    padding: 20px 28px;
+    border-radius: 24px;
+    padding: 26px 36px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 18px;
+    flex: 1;
+    min-height: 580px;
+    max-height: calc(100vh - 200px);
 }
 
 .amnis-downloads-header {
@@ -958,14 +1026,15 @@ body.media-playing-mode #app-container {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid var(--border-subtle);
-    padding-bottom: 12px;
+    padding-bottom: 14px;
 }
 
 .amnis-downloads-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    max-height: 280px;
+    gap: 16px;
+    flex: 1;
+    max-height: calc(100vh - 280px);
     overflow-y: auto;
 }
 

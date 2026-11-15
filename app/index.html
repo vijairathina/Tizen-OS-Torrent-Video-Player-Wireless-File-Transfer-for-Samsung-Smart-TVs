@@ -322,63 +322,56 @@
             <section class="app-view" id="view-player">
                 <div class="player-view-container amnis-container">
                     <div class="player-banner amnis-banner">
-                        <div class="player-title amnis-title">
-                            <span style="color:#d8b4fe;">🎬</span>
-                            <span>Video Player</span>
+                        <div class="player-banner-info">
+                            <div class="player-title amnis-title">
+                                <span style="color:#d8b4fe;">🎬</span>
+                                <span>Video Player</span>
+                            </div>
+                            <div class="player-tagline amnis-tagline">Stream Torrents, Network URLs, &amp; Local Media with AVPlay</div>
                         </div>
-                        <div class="player-tagline amnis-tagline">Stream Torrents, Network URLs, &amp; Local Media with AVPlay</div>
+
+                        <!-- Top-Right Action Icon Buttons -->
+                        <div class="player-header-actions" id="player-header-actions">
+                            <button class="player-header-btn focusable" id="player-card-load-file" tabindex="0" title="Browse Storage">
+                                <span class="btn-icon">📁</span>
+                                <span class="btn-text">Browse Storage</span>
+                            </button>
+                            <button class="player-header-btn focusable" id="player-card-load-url" tabindex="0" title="From URL / Magnet">
+                                <span class="btn-icon">🔗</span>
+                                <span class="btn-text">URL / Magnet</span>
+                            </button>
+                            <button class="player-header-btn focusable" id="player-card-addons" tabindex="0" title="Addons &amp; Subtitles">
+                                <span class="btn-icon">🧩</span>
+                                <span class="btn-text">Subtitles</span>
+                            </button>
+                            <button class="player-header-btn focusable" id="player-card-settings" tabindex="0" title="Settings &amp; Theme">
+                                <span class="btn-icon">⚙️</span>
+                                <span class="btn-text">Settings</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Active Downloads / Torrents Section (PLACED PROMINENTLY AT TOP) -->
+                    <!-- Active Downloads / Torrents Section (Expands to Large Screen) -->
                     <div class="player-downloads-container amnis-downloads-container" id="player-downloads-container">
                         <div class="player-downloads-header amnis-downloads-header">
-                            <div class="panel-title" style="margin-bottom:0; font-size:20px;">
-                                <span>⚡</span>
+                            <div class="panel-title" style="margin-bottom:0; font-size:22px; display:flex; align-items:center; gap:10px;">
+                                <span style="color:#00f2fe;">⚡</span>
                                 <span>Active Downloads &amp; Streams</span>
                             </div>
                             <div class="queue-stats" id="player-downloads-stats">0 active streams</div>
                         </div>
                         <div class="player-downloads-list amnis-downloads-list" id="player-downloads-list">
                             <!-- Empty State Placeholder -->
-                            <div class="empty-state" id="player-downloads-empty" style="padding: 24px 0;">
-                                <div style="font-size: 15px; color: var(--text-muted); text-align: center;">
-                                    No active torrent downloads. Send a .torrent from phone, enter magnet URL, or browse storage.
+                            <div class="empty-state" id="player-downloads-empty" style="padding: 60px 24px; text-align: center;">
+                                <div style="font-size: 52px; margin-bottom: 14px; filter: drop-shadow(0 0 18px rgba(0,242,254,0.45));">⚡</div>
+                                <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Active Downloads or Streams</div>
+                                <div style="font-size: 15px; color: var(--text-muted); max-width: 580px; margin: 0 auto 20px; line-height: 1.6;">
+                                    Send a <strong style="color:#00f2fe;">.torrent</strong> file wirelessly from your phone, stream from a <strong style="color:#d8b4fe;">🔗 URL / Magnet</strong>, or <strong style="color:#10b981;">📁 Browse Storage</strong> using the buttons in the top right.
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2x2 Video Player Primary Cards Grid (Placed Below Active Downloads) -->
-                    <div class="player-cards-grid amnis-cards-grid">
-                        <div class="player-card amnis-card focusable" id="player-card-load-file" tabindex="0">
-                            <div class="player-card-icon amnis-card-icon">📁</div>
-                            <div class="player-card-content amnis-card-content">
-                                <div class="player-card-title amnis-card-title">Browse Storage</div>
-                                <div class="player-card-desc amnis-card-desc">Select video or torrent file directly from USB drive or TV local storage</div>
-                            </div>
-                        </div>
-
-                        <div class="player-card amnis-card focusable" id="player-card-load-url" tabindex="0">
-                            <div class="player-card-icon amnis-card-icon">🔗</div>
-                            <div class="player-card-content amnis-card-content">
-                                <div class="player-card-title amnis-card-title">From URL / Magnet ...</div>
-                                <div class="player-card-desc amnis-card-desc">Stream live video directly from HTTP, HTTPS, HLS, or magnet stream URLs</div>
-                            </div>
-                        </div>
-
-                        <div class="player-card amnis-card focusable" id="player-card-addons" tabindex="0">
-                            <div class="player-card-icon amnis-card-icon">🧩</div>
-                            <div class="player-card-content amnis-card-content">
-                                <div class="player-card-title amnis-card-title">Addons &amp; Subtitles</div>
-                                <div class="player-card-desc amnis-card-desc">Search and load subtitles from OpenSubtitles, BSPlayer, or local SRT files</div>
-                            </div>
-                        </div>
-
-                        <div class="player-card amnis-card focusable" id="player-card-settings" tabindex="0">
-                            <div class="player-card-icon amnis-card-icon">⚙️</div>
-                            <div class="player-card-content amnis-card-content">
-                                <div class="player-card-title amnis-card-title">Settings &amp; Theme</div>
-                                <div class="player-card-desc amnis-card-desc">Storage destination, Day/Night themes, font scaling, and decoder options</div>
+                                <div style="display:flex; justify-content:center; gap:14px;">
+                                    <button class="btn-primary focusable" onclick="document.getElementById('player-card-load-url').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">🔗 Stream URL / Magnet</button>
+                                    <button class="btn-secondary focusable" onclick="document.getElementById('player-card-load-file').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">📁 Browse Storage Devices</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -537,6 +530,23 @@
             <div class="dialog-actions" style="margin-top:16px; display:flex; gap:12px; justify-content:flex-end;">
                 <button class="btn-primary focusable" id="hud-play-btn" tabindex="0">▶️ Play Video Stream</button>
                 <button class="btn-secondary focusable" id="hud-close-btn" tabindex="0">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Storage Browser Dialog -->
+    <div class="app-dialog-backdrop" id="storage-dialog-backdrop">
+        <div class="dialog-window" style="width: 760px;">
+            <div class="dialog-title">📁 Browse Storage Devices</div>
+            <div class="dialog-body" style="margin-bottom: 14px; color: var(--text-muted); font-size: 15px;">
+                Select a connected storage device to browse and stream videos or torrents:
+            </div>
+            <div id="storage-dialog-list" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+                <!-- Dynamically populated storage drives -->
+            </div>
+            <div class="dialog-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-primary focusable" id="storage-dialog-filemanager-btn" tabindex="0">📂 Open Full File Manager</button>
+                <button class="btn-secondary focusable" id="storage-dialog-close-btn" tabindex="0">Close</button>
             </div>
         </div>
     </div>
