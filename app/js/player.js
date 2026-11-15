@@ -193,12 +193,28 @@ window.Player = (function() {
         }
     }
 
+    let currentSubtitleUrl = '';
+
     function openMedia(mediaUrl, title, subtitleUrl) {
         checkAVPlaySupport();
         currentMediaUrl = mediaUrl;
         currentTitle = title || 'Video Stream';
+        currentSubtitleUrl = subtitleUrl || '';
         videoResumeKey = (title || mediaUrl).trim();
         isPlayerOpen = true;
+
+        // Reset all seek and scrubbing states to prevent carrying over frozen state
+        isScrubbing = false;
+        isSettlingSeek = false;
+        targetSeekSec = null;
+        isSeekingInProgress = false;
+        queuedSeekTarget = null;
+        currentTimeSec = 0;
+        durationSec = 0;
+        clearTimeout(scrubCommitTimeout);
+        clearTimeout(scrubSettlingTimeout);
+        clearTimeout(seekDebounceTimeout);
+        clearTimeout(seekFeedbackTimeout);
 
         // Check for saved resume point
         const savedTime = getSavedResumePosition(videoResumeKey);
@@ -260,20 +276,14 @@ window.Player = (function() {
                     updateStatusTag('Playing');
                     showBufferingOverlay(false);
                     // Clear settling lock after buffering completes following a seek
-                    setTimeout(function() {
-                        isSettlingSeek = false;
-                    }, 400);
+                    isSettlingSeek = false;
+                    targetSeekSec = null;
+                    isSeekingInProgress = false;
                 },
                 oncurrentplaytime: function(ms) {
                     if (isScrubbing || isSettlingSeek) return;
+                    targetSeekSec = null;
                     const sec = Math.floor(ms / 1000);
-                    // Discard stale pre-seek ticks to prevent progress bar rubber-banding
-                    if (targetSeekSec !== null) {
-                        if (Math.abs(sec - targetSeekSec) > 6) {
-                            return;
-                        }
-                        targetSeekSec = null;
-                    }
                     currentTimeSec = sec;
                     if (durationSec <= 0) {
                         try {
@@ -300,7 +310,7 @@ window.Player = (function() {
                     console.log(`[Player] AVPlay failed with: ${errStr} at ${currentTimeSec}s`);
                     
                     if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                        window.FileReceiver.sendSocketMessage(`[AVPlay Error] ${errStr} at ${currentTimeSec}s for ${currentMediaTitle}`);
+                        window.FileReceiver.sendSocketMessage(`[AVPlay Error] ${errStr} at ${currentTimeSec}s for ${currentTitle}`);
                     }
                     
                     updateStatusTag(`Error (${errStr})`);
@@ -313,7 +323,7 @@ window.Player = (function() {
                         setTimeout(function() {
                             if (isPlayerOpen) {
                                 console.log('[Player] Reconnecting stream at', currentTimeSec);
-                                openMedia(currentMediaUrl, currentMediaTitle, currentSubtitleUrl);
+                                openMedia(currentMediaUrl, currentTitle, currentSubtitleUrl);
                             }
                         }, 2500);
                     } else {
@@ -365,7 +375,7 @@ window.Player = (function() {
         vid.onerror = function(e) {
             console.error('[Player] HTML5 video fallback error:', e);
             if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                window.FileReceiver.sendSocketMessage(`[HTML5 Video Error] code=${vid.error ? vid.error.code : 'unknown'} for ${currentMediaTitle}`);
+                window.FileReceiver.sendSocketMessage(`[HTML5 Video Error] code=${vid.error ? vid.error.code : 'unknown'} for ${currentTitle}`);
             }
             updateStatusTag('Playback Error');
             showBufferingOverlay(false);
@@ -540,13 +550,14 @@ window.Player = (function() {
         currentTimeSec = target;
         updateTimeline();
 
-        // Lock oncurrentplaytime from jumping back to old position while hardware settles
+        // Brief settling lock so hardware has time to buffer the new frame
         targetSeekSec = target;
         isSettlingSeek = true;
         clearTimeout(scrubSettlingTimeout);
         scrubSettlingTimeout = setTimeout(function() {
             isSettlingSeek = false;
-        }, 3500);
+            targetSeekSec = null;
+        }, 800);
 
         // Commit seek
         if (isAVPlay) {
@@ -589,7 +600,8 @@ window.Player = (function() {
         clearTimeout(scrubSettlingTimeout);
         scrubSettlingTimeout = setTimeout(function() {
             isSettlingSeek = false;
-        }, 3500);
+            targetSeekSec = null;
+        }, 800);
 
         if (isAVPlay) {
             performAvplaySeek(target);
@@ -616,42 +628,64 @@ window.Player = (function() {
             }
 
             if (state === 'PLAYING' || state === 'PAUSED') {
-                const targetMs = Math.max(100, Math.round(targetSec * 1000));
+                // Ensure targetMs is within valid boundaries: [1000, durationMs - 1000]
+                let targetMs = Math.round(targetSec * 1000);
+                if (durationSec > 0) {
+                    targetMs = Math.min(targetMs, Math.max(1000, (durationSec - 2) * 1000));
+                }
+                targetMs = Math.max(1000, targetMs);
+
                 isSeekingInProgress = true;
                 isSettlingSeek = true;
                 targetSeekSec = targetSec;
+                updateStatusTag('Seeking...');
 
+                // Safety watchdog: clear locks if hardware doesn't respond in 20 seconds
                 clearTimeout(scrubSettlingTimeout);
                 scrubSettlingTimeout = setTimeout(function() {
-                    isSettlingSeek = false;
-                    isSeekingInProgress = false;
-                }, 4000);
+                    finalizeSeek(false, '[Player] Seek timeout watchdog reset');
+                }, 20000);
 
-                webapis.avplay.seekTo(
-                    targetMs,
-                    function() {
-                        console.log('[Player] AVPlay seekTo success at', targetMs, 'ms');
-                        if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                            window.FileReceiver.sendSocketMessage(`[Player] AVPlay seekTo SUCCESS at ${targetSec}s`);
-                        }
-                        updateStatusTag(isPlaying ? 'Playing' : 'Paused');
+                function finalizeSeek(success, message) {
+                    clearTimeout(scrubSettlingTimeout);
+                    if (message && window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                        window.FileReceiver.sendSocketMessage(message);
+                    }
+                    setTimeout(function() {
+                        isSettlingSeek = false;
+                        targetSeekSec = null;
                         isSeekingInProgress = false;
-                        setTimeout(function() {
-                            isSettlingSeek = false;
-                        }, 500);
 
+                        // If seek failed completely and returned an error callback, sync currentTimeSec back
+                        if (!success) {
+                            try {
+                                const realMs = webapis.avplay.getCurrentTime();
+                                if (realMs >= 0) {
+                                    currentTimeSec = Math.floor(realMs / 1000);
+                                    updateTimeline();
+                                }
+                            } catch (ex) {}
+                        }
+
+                        // Process queued seek if user scrubbed again while waiting
                         if (queuedSeekTarget !== null) {
                             const nextTarget = queuedSeekTarget;
                             queuedSeekTarget = null;
                             performAvplaySeek(nextTarget);
                         }
+                    }, 350);
+                }
+
+                webapis.avplay.seekTo(
+                    targetMs,
+                    function() {
+                        console.log('[Player] AVPlay seekTo success at', targetMs, 'ms');
+                        updateStatusTag(isPlaying ? 'Playing' : 'Paused');
+                        finalizeSeek(true, `[Player] AVPlay seekTo SUCCESS at ${targetSec}s`);
                     },
                     function(err) {
-                        console.warn('[Player] AVPlay seekTo callback error:', err);
+                        console.warn('[Player] AVPlay seekTo error:', err);
                         const errDesc = (err && (err.name || err.message)) ? (err.name || err.message) : JSON.stringify(err);
-                        if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                            window.FileReceiver.sendSocketMessage(`[Player] AVPlay seekTo failed: ${errDesc}. Attempting jump fallback...`);
-                        }
 
                         // Fallback with jumpForward / jumpBackward (offset in MILLISECONDS)
                         try {
@@ -660,34 +694,24 @@ window.Player = (function() {
                             const diffMs = Math.abs(diffSec) * 1000;
                             if (diffSec > 0) {
                                 webapis.avplay.jumpForward(diffMs, function() {
-                                    if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                                        window.FileReceiver.sendSocketMessage(`[Player] jumpForward +${diffSec}s SUCCESS`);
-                                    }
+                                    finalizeSeek(true, `[Player] jumpForward +${diffSec}s SUCCESS`);
                                 }, function(e) {
                                     console.warn('[Player] jumpForward error:', e);
+                                    finalizeSeek(false, `[Player] Seek & Jump failed: ${errDesc}`);
                                 });
                             } else if (diffSec < 0) {
                                 webapis.avplay.jumpBackward(diffMs, function() {
-                                    if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                                        window.FileReceiver.sendSocketMessage(`[Player] jumpBackward -${Math.abs(diffSec)}s SUCCESS`);
-                                    }
+                                    finalizeSeek(true, `[Player] jumpBackward -${Math.abs(diffSec)}s SUCCESS`);
                                 }, function(e) {
                                     console.warn('[Player] jumpBackward error:', e);
+                                    finalizeSeek(false, `[Player] Seek & Jump failed: ${errDesc}`);
                                 });
+                            } else {
+                                finalizeSeek(true, `[Player] Already at target`);
                             }
                         } catch (ex) {
-                            console.warn('[Player] jump fallback failed:', ex);
-                        }
-
-                        isSeekingInProgress = false;
-                        setTimeout(function() {
-                            isSettlingSeek = false;
-                        }, 800);
-
-                        if (queuedSeekTarget !== null) {
-                            const nextTarget = queuedSeekTarget;
-                            queuedSeekTarget = null;
-                            performAvplaySeek(nextTarget);
+                            console.warn('[Player] jump fallback exception:', ex);
+                            finalizeSeek(false, `[Player] Jump exception: ${ex.message}`);
                         }
                     }
                 );
@@ -697,11 +721,16 @@ window.Player = (function() {
                 setTimeout(function() {
                     performAvplaySeek(targetSec);
                 }, 250);
+            } else {
+                isSeekingInProgress = false;
+                isSettlingSeek = false;
+                targetSeekSec = null;
             }
         } catch (e) {
             console.error('[Player] Error calling AVPlay seekTo:', e);
             isSeekingInProgress = false;
             isSettlingSeek = false;
+            targetSeekSec = null;
         }
     }
 
@@ -794,6 +823,9 @@ window.Player = (function() {
         clearTimeout(scrubSettlingTimeout);
         isScrubbing = false;
         isSettlingSeek = false;
+        targetSeekSec = null;
+        isSeekingInProgress = false;
+        queuedSeekTarget = null;
         scrubRepeatCount = 0;
         const timelineBox = document.getElementById('osd-timeline-box');
         if (timelineBox) timelineBox.classList.remove('is-scrubbing');

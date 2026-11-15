@@ -88,46 +88,6 @@ def find_media_file(filename_or_query):
 
     return None
 
-def find_downloaded_video(filename_or_query):
-    """Finds a 100% completed video file matching a torrent or query in DOWNLOADS_DIR."""
-    if not filename_or_query:
-        return None
-
-    clean_target = os.path.basename(filename_or_query).strip()
-    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
-    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
-    stem_lower = stem_clean.lower()
-
-    m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean_target)
-    target_keyword = m.group(1).strip().lower() if m else None
-    target_year = m.group(2) if m else None
-
-    # 1. Direct stem match in DOWNLOADS_DIR
-    p = os.path.join(DOWNLOADS_DIR, stem)
-    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
-        return p
-
-    p = os.path.join(DOWNLOADS_DIR, stem_clean)
-    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
-        return p
-
-    # 2. Search DOWNLOADS_DIR recursively for matching video files
-    for root, dirs, files in os.walk(DOWNLOADS_DIR):
-        for f in files:
-            f_lower = f.lower()
-            if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
-                f_stem = re.sub(r'\.[a-z0-9]+$', '', f_lower).strip()
-                if target_keyword:
-                    if target_keyword in f_lower and (not target_year or target_year in f_lower):
-                        return os.path.join(root, f)
-                    continue
-                if f_lower == stem_lower or f_stem == stem_lower:
-                    return os.path.join(root, f)
-                if len(stem_lower) > 20 and (stem_lower[:40] in f_lower or f_lower[:40] in stem_lower):
-                    return os.path.join(root, f)
-
-    return None
-
 def find_torrent_file(filename_or_query):
     """Finds exact, prefix, or keyword-matched torrent file in UPLOADS_DIR. Never returns an unrelated movie."""
     if not filename_or_query:
@@ -176,6 +136,77 @@ def find_torrent_file(filename_or_query):
                 return os.path.join(UPLOADS_DIR, f)
 
     return None
+
+def is_video_complete(video_path, torrent_name_or_query=None):
+    """Checks whether a video on disk has reached the expected length declared in its torrent file."""
+    if not video_path or not os.path.exists(video_path) or not os.path.isfile(video_path):
+        return False
+    t_file = find_torrent_file(torrent_name_or_query or os.path.basename(video_path))
+    if t_file and os.path.exists(t_file):
+        try:
+            with open(t_file, 'rb') as f:
+                content = f.read()
+            m = re.findall(rb'6:lengthi(\d+)e', content)
+            if not m:
+                m = re.findall(rb':lengthi(\d+)e', content)
+            if m:
+                expected_max = max(int(x) for x in m)
+                actual_size = os.path.getsize(video_path)
+                if actual_size < expected_max * 0.98:
+                    print(f"[TorrentEngine] Candidate video '{os.path.basename(video_path)}' is INCOMPLETE ({actual_size}/{expected_max} bytes). Forwarding to WebTorrent engine.")
+                    sys.stdout.flush()
+                    return False
+        except Exception as e:
+            print(f"[TorrentEngine] Error verifying video completeness: {e}")
+            sys.stdout.flush()
+    return True
+
+def find_downloaded_video(filename_or_query):
+    """Finds a 100% completed video file matching a torrent or query in DOWNLOADS_DIR."""
+    if not filename_or_query:
+        return None
+
+    clean_target = os.path.basename(filename_or_query).strip()
+    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
+    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
+    stem_lower = stem_clean.lower()
+
+    m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean_target)
+    target_keyword = m.group(1).strip().lower() if m else None
+    target_year = m.group(2) if m else None
+
+    # 1. Direct stem match in DOWNLOADS_DIR
+    p = os.path.join(DOWNLOADS_DIR, stem)
+    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
+        if is_video_complete(p, clean_target):
+            return p
+
+    p = os.path.join(DOWNLOADS_DIR, stem_clean)
+    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
+        if is_video_complete(p, clean_target):
+            return p
+
+    # 2. Search DOWNLOADS_DIR recursively for matching video files
+    for root, dirs, files in os.walk(DOWNLOADS_DIR):
+        for f in files:
+            f_lower = f.lower()
+            if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
+                f_stem = re.sub(r'\.[a-z0-9]+$', '', f_lower).strip()
+                cand_path = os.path.join(root, f)
+                if target_keyword:
+                    if target_keyword in f_lower and (not target_year or target_year in f_lower):
+                        if is_video_complete(cand_path, clean_target):
+                            return cand_path
+                    continue
+                if f_lower == stem_lower or f_stem == stem_lower:
+                    if is_video_complete(cand_path, clean_target):
+                        return cand_path
+                if len(stem_lower) > 20 and (stem_lower[:40] in f_lower or f_lower[:40] in stem_lower):
+                    if is_video_complete(cand_path, clean_target):
+                        return cand_path
+
+    return None
+
 
 class TorrentStreamManager:
     def __init__(self, host_ip="192.168.0.13"):
