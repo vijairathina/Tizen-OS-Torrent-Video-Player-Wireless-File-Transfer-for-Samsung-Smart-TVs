@@ -281,8 +281,31 @@ window.Player = (function() {
                 },
                 onerror: function(error) {
                     console.error('[Player] AVPlay error:', error);
-                    updateStatusTag('Playback Error');
+                    const errStr = (typeof error === 'string') ? error : ((error && (error.name || error.message)) ? (error.name || error.message) : 'Playback Interrupted');
+                    console.log(`[Player] AVPlay failed with: ${errStr} at ${currentTimeSec}s`);
+                    
+                    if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                        window.FileReceiver.sendSocketMessage(`[AVPlay Error] ${errStr} at ${currentTimeSec}s for ${currentMediaTitle}`);
+                    }
+                    
+                    updateStatusTag(`Error (${errStr})`);
                     showBufferingOverlay(false);
+                    
+                    // If video was already playing and stream was interrupted (e.g. buffer underrun or socket drop), auto-recover
+                    if (currentTimeSec > 0 && isPlayerOpen) {
+                        saveResumePosition(true);
+                        window.FileReceiver.showToast(`Stream paused (${errStr}). Reconnecting...`);
+                        setTimeout(function() {
+                            if (isPlayerOpen) {
+                                console.log('[Player] Reconnecting stream at', currentTimeSec);
+                                openMedia(currentMediaUrl, currentMediaTitle, currentSubtitleUrl);
+                            }
+                        }, 2500);
+                    } else {
+                        // If AVPlay failed at startup, try HTML5 fallback
+                        console.warn('[Player] AVPlay initial failure, attempting HTML5 fallback');
+                        startFallbackVideo(url);
+                    }
                 }
             });
 
@@ -323,6 +346,15 @@ window.Player = (function() {
 
         vid.style.display = 'block';
         vid.src = url;
+
+        vid.onerror = function(e) {
+            console.error('[Player] HTML5 video fallback error:', e);
+            if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                window.FileReceiver.sendSocketMessage(`[HTML5 Video Error] code=${vid.error ? vid.error.code : 'unknown'} for ${currentMediaTitle}`);
+            }
+            updateStatusTag('Playback Error');
+            showBufferingOverlay(false);
+        };
 
         vid.onloadedmetadata = function() {
             durationSec = Math.floor(vid.duration);

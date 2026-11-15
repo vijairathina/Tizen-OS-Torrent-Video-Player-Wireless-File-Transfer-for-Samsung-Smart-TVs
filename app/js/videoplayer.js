@@ -219,12 +219,14 @@ window.VideoPlayer = (function() {
             const infoBtn = card.querySelector(`#player-info-${item.id}`);
             const delBtn = card.querySelector(`#player-del-${item.id}`);
 
+            const isTorrent = item.name.toLowerCase().endsWith('.torrent') || (item.streamUrl && item.streamUrl.toLowerCase().endsWith('.torrent'));
+
             const playAction = () => {
                 isUserInitiatedPlay = true;
                 window.FileReceiver.showToast(`Loading: ${item.cleanTitle}...`);
 
-                // If already has direct port 8080 streaming link, play immediately
-                if (item.streamUrl && item.streamUrl.includes(':8080')) {
+                // If already has direct port 8080 streaming link for an actual VIDEO file (not a .torrent metadata file), play immediately
+                if (!isTorrent && item.streamUrl && item.streamUrl.includes(':8080') && !item.streamUrl.toLowerCase().endsWith('.torrent')) {
                     console.log('[VideoPlayer] Opening direct video URL:', item.streamUrl);
                     window.Player.openMedia(item.streamUrl, item.cleanTitle);
                     return;
@@ -234,16 +236,20 @@ window.VideoPlayer = (function() {
                 fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(item.name)}`)
                     .then(res => res.json())
                     .then(data => {
-                        const finalUrl = (data && data.streamUrl) ? data.streamUrl : (item.streamUrl || `http://192.168.0.13:8080/files/${encodeURIComponent(item.name)}`);
+                        const finalUrl = (data && data.streamUrl) ? data.streamUrl : null;
+                        if (!finalUrl || finalUrl.toLowerCase().endsWith('.torrent')) {
+                            console.log('[VideoPlayer] Torrent started, waiting for stream URL broadcast...');
+                            window.FileReceiver.showToast('Connecting to swarm for video stream...');
+                            return;
+                        }
                         item.streamUrl = finalUrl;
                         saveDownloads();
                         console.log('[VideoPlayer] Playing stream from server:', finalUrl);
                         window.Player.openMedia(finalUrl, item.cleanTitle);
                     })
                     .catch(err => {
-                        console.warn('[VideoPlayer] start_torrent error, attempting fallback URL:', err);
-                        const fallback = item.streamUrl || `http://192.168.0.13:8080/files/${encodeURIComponent(item.name)}`;
-                        window.Player.openMedia(fallback, item.cleanTitle);
+                        console.warn('[VideoPlayer] start_torrent error:', err);
+                        window.FileReceiver.showToast('Connecting to swarm for stream...');
                     });
             };
 
@@ -471,16 +477,20 @@ window.VideoPlayer = (function() {
         fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(rawName)}`)
             .then(res => res.json())
             .then(data => {
-                const finalUrl = (data && data.streamUrl) ? data.streamUrl : `http://192.168.0.13:8080/files/${encodeURIComponent(rawName)}`;
-                onTorrentStreamStarted(finalUrl, cleanName);
+                if (data && data.streamUrl && !data.streamUrl.toLowerCase().endsWith('.torrent')) {
+                    onTorrentStreamStarted(data.streamUrl, cleanName);
+                }
             })
             .catch(err => {
-                console.warn('[VideoPlayer] start_torrent HTTP fetch error, using fallback stream URL:', err);
-                onTorrentStreamStarted(`http://192.168.0.13:8080/files/${encodeURIComponent(rawName)}`, cleanName);
+                console.warn('[VideoPlayer] start_torrent HTTP fetch error:', err);
             });
     }
 
     function onTorrentStreamStarted(streamUrl, title) {
+        if (!streamUrl || streamUrl.toLowerCase().endsWith('.torrent')) {
+            console.warn('[VideoPlayer] Ignored stream URL ending with .torrent:', streamUrl);
+            return;
+        }
         console.log('[VideoPlayer] BitTorrent sequential stream active:', streamUrl);
         const name = title || torrentStats.name;
 

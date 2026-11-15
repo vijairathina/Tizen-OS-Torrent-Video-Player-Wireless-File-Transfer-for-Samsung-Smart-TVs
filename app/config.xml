@@ -2,7 +2,7 @@
 <widget xmlns="http://www.w3.org/ns/widgets" 
         xmlns:tizen="http://tizen.org/ns/widgets" 
         id="http://tizen.org/tvfilehub" 
-        version="1.0.2" 
+        version="1.0.3" 
         viewmodes="maximized">
     <tizen:application id="aM9fHub001.TVFileHub" 
                        package="aM9fHub001" 

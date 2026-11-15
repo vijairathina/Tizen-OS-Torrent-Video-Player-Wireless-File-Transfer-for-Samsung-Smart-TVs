@@ -61,51 +61,43 @@ def find_media_file(filename_or_query):
         return None
     
     clean_target = os.path.basename(filename_or_query).strip()
-    
-    # 1. Exact match in DOWNLOADS_DIR
-    p = os.path.join(DOWNLOADS_DIR, clean_target)
-    if os.path.exists(p) and os.path.isfile(p):
-        return p
-        
-    # 2. Exact match in UPLOADS_DIR
-    p = os.path.join(UPLOADS_DIR, clean_target)
-    if os.path.exists(p) and os.path.isfile(p):
-        return p
-        
-    # 3. Strip .torrent extension and search in DOWNLOADS_DIR
+    is_torrent_query = clean_target.lower().endswith('.torrent')
     stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
+    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
+    stem_lower = stem_clean.lower()
+
+    # 1. Search DOWNLOADS_DIR for downloaded video first
+    if not is_torrent_query:
+        p = os.path.join(DOWNLOADS_DIR, clean_target)
+        if os.path.exists(p) and os.path.isfile(p):
+            return p
+
     p = os.path.join(DOWNLOADS_DIR, stem)
     if os.path.exists(p) and os.path.isfile(p):
         return p
         
-    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
     p = os.path.join(DOWNLOADS_DIR, stem_clean)
     if os.path.exists(p) and os.path.isfile(p):
         return p
 
-    # 4. Search DOWNLOADS_DIR recursively
-    stem_lower = stem_clean.lower()
+    # Search DOWNLOADS_DIR recursively for matches on video extension
     for root, dirs, files in os.walk(DOWNLOADS_DIR):
         for f in files:
             f_lower = f.lower()
-            if f_lower == clean_target.lower() or f_lower == stem_lower:
+            if f_lower == stem_lower or f_lower == clean_target.lower():
                 return os.path.join(root, f)
             if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
                 if stem_lower and (stem_lower in f_lower or f_lower in stem_lower):
                     return os.path.join(root, f)
-                if 'jailer' in stem_lower and 'jailer' in f_lower:
-                    return os.path.join(root, f)
 
-    # 5. Search UPLOADS_DIR
+    # 2. Only if NO downloaded video was found in DOWNLOADS_DIR, check UPLOADS_DIR
+    p = os.path.join(UPLOADS_DIR, clean_target)
+    if os.path.exists(p) and os.path.isfile(p):
+        return p
+
     for root, dirs, files in os.walk(UPLOADS_DIR):
         for f in files:
             if f.lower() == clean_target.lower() or f.lower() == stem_lower:
-                return os.path.join(root, f)
-
-    # 6. Fallback: if there is any video file in DOWNLOADS_DIR
-    for root, dirs, files in os.walk(DOWNLOADS_DIR):
-        for f in files:
-            if any(f.lower().endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov')):
                 return os.path.join(root, f)
 
     return None
@@ -267,10 +259,13 @@ class TorrentStreamManager:
 
     def _kill_port_8889(self):
         try:
-            res = subprocess.run(["powershell", "-Command", "Get-NetTCPConnection -LocalPort 8889 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique"], capture_output=True, text=True)
-            for pid in res.stdout.strip().split():
-                if pid and pid.isdigit():
-                    subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
+            out = subprocess.check_output("netstat -ano", shell=True, text=True)
+            for line in out.splitlines():
+                if ':8889 ' in line and ('LISTENING' in line or 'ESTABLISHED' in line):
+                    parts = line.strip().split()
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) != os.getpid():
+                        subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
         except Exception:
             pass
 

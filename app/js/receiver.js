@@ -507,7 +507,7 @@ window.FileReceiver = (function() {
                             name: finalName,
                             size: finalSize,
                             isUsb: isUsb,
-                            streamUrl: fetchUrl,
+                            streamUrl: finalName.toLowerCase().endsWith('.torrent') ? '' : fetchUrl,
                             timestamp: Date.now()
                         });
 
