@@ -36,3 +36,7 @@ Thumbs.db
 .system_generated/
 .tempmediaStorage/
 scratch/
+
+# Ignored subprojects
+AndroidTv/
+
