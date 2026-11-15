@@ -202,6 +202,7 @@ class TorrentStreamManager:
         self.current_stream_url = None
         self.current_title = ""
         self.current_torrent = None
+        self.bg_downloads = {} # clean_title -> { proc, torrent, title, stats }
         self.lock = threading.Lock()
         self.stats = {
             "speed": "0 KB/s",
@@ -372,6 +373,141 @@ class TorrentStreamManager:
         except Exception:
             pass
 
+    def start_background_download(self, torrent_path_or_magnet, title=None):
+        with self.lock:
+            clean_title = title or os.path.basename(torrent_path_or_magnet)
+            
+            # Check if video is ALREADY in DOWNLOADS_DIR with .done marker
+            downloaded = find_downloaded_video(clean_title)
+            if downloaded and not downloaded.lower().endswith('.torrent'):
+                v_name = os.path.basename(downloaded)
+                v_size = os.path.getsize(downloaded)
+                print(f"[TorrentEngine] (Background) '{clean_title}' is ALREADY 100% DOWNLOADED at: {downloaded}")
+                broadcast_message({
+                    "type": "torrent_stats_update",
+                    "name": v_name,
+                    "title": v_name,
+                    "speed": "Completed",
+                    "downloaded": format_bytes(v_size),
+                    "total": format_bytes(v_size),
+                    "peers": 0,
+                    "progress": 100,
+                    "timeRemaining": "0s",
+                    "status": "Downloaded 100% (Ready to Stream)"
+                })
+                return True
+
+            # If this torrent is ALREADY running as active stream in self.process:
+            if self.process and self.current_torrent == torrent_path_or_magnet:
+                print(f"[TorrentEngine] (Background) Torrent '{clean_title}' is already active stream.")
+                return True
+
+            # If already running as background download:
+            if clean_title in self.bg_downloads:
+                existing = self.bg_downloads[clean_title]
+                if existing.get("proc") and existing["proc"].poll() is None:
+                    print(f"[TorrentEngine] (Background) Download already active for: {clean_title}")
+                    return True
+
+            cmd = ["node", os.path.join(BASE_DIR, "torrent_engine.mjs"), torrent_path_or_magnet, "--download-only"]
+            print(f"[TorrentEngine] Starting background sequential download for: {clean_title}")
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    cwd=BASE_DIR
+                )
+                self.bg_downloads[clean_title] = {
+                    "proc": proc,
+                    "torrent": torrent_path_or_magnet,
+                    "title": clean_title,
+                    "stats": {
+                        "name": clean_title,
+                        "title": clean_title,
+                        "speed": "Connecting...",
+                        "downloaded": "0 MB",
+                        "total": "...",
+                        "peers": 0,
+                        "progress": 1,
+                        "timeRemaining": "connecting...",
+                        "status": "Background Downloading..."
+                    }
+                }
+                threading.Thread(target=self._monitor_bg_download, args=(proc, clean_title), daemon=True).start()
+                return True
+            except Exception as e:
+                print(f"[TorrentEngine] Error starting background download for {clean_title}: {e}")
+                return False
+
+    def _monitor_bg_download(self, proc, clean_title):
+        while proc and proc.poll() is None:
+            try:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                line_str = line.strip()
+
+                if line_str.startswith("[ENGINE_DOWNLOADED_FILE]"):
+                    v_name = line_str.replace("[ENGINE_DOWNLOADED_FILE]", "").strip()
+                    done_path = os.path.join(DOWNLOADS_DIR, v_name + '.done')
+                    try:
+                        with open(done_path, 'w') as df:
+                            df.write('1')
+                    except Exception:
+                        pass
+                    print(f"[TorrentEngine] (Background) 100% Download completed: {v_name}")
+                    broadcast_message({
+                        "type": "torrent_stats_update",
+                        "name": v_name,
+                        "title": clean_title,
+                        "speed": "Completed",
+                        "peers": 0,
+                        "progress": 100,
+                        "timeRemaining": "0s",
+                        "status": "Downloaded 100% (Ready to Stream)"
+                    })
+
+                elif line_str.startswith("[ENGINE_STATS]"):
+                    payload = line_str.replace("[ENGINE_STATS]", "").strip()
+                    try:
+                        st = json.loads(payload)
+                        st_name = st.get("name", clean_title)
+                        stats_obj = {
+                            "name": st_name,
+                            "title": clean_title,
+                            "speed": st.get("downloadSpeed", "0 B/s"),
+                            "downloaded": st.get("downloaded", "0 B"),
+                            "total": st.get("total", "0 B"),
+                            "peers": st.get("peers", 0),
+                            "progress": st.get("progress", 0),
+                            "timeRemaining": st.get("timeRemaining", ""),
+                            "status": st.get("status", "Active")
+                        }
+                        if clean_title in self.bg_downloads:
+                            self.bg_downloads[clean_title]["stats"] = stats_obj
+                        broadcast_message({
+                            "type": "torrent_stats_update",
+                            "name": stats_obj["name"],
+                            "title": clean_title,
+                            "speed": stats_obj["speed"],
+                            "downloaded": stats_obj["downloaded"],
+                            "total": stats_obj["total"],
+                            "peers": stats_obj["peers"],
+                            "progress": stats_obj["progress"],
+                            "timeRemaining": stats_obj["timeRemaining"],
+                            "status": stats_obj["status"]
+                        })
+                    except Exception:
+                        pass
+                else:
+                    if line_str:
+                        print(f"[TorrentEngineBg:{clean_title[:15]}] {line_str}")
+            except Exception:
+                break
+
     def stop(self):
         if self.process:
             try:
@@ -382,14 +518,27 @@ class TorrentStreamManager:
             self.process = None
         self._kill_port_8889()
 
-    def get_stats(self):
-        return {
-            "active": bool(self.process is not None or self.current_stream_url),
-            "streamUrl": self.current_stream_url,
-            "title": self.current_title,
-            "name": self.stats.get("name", self.current_title),
-            "stats": self.stats
-        }
+    def get_stats(self, query=None):
+        with self.lock:
+            if query:
+                q_clean = query.strip().lower()
+                for title, bg in self.bg_downloads.items():
+                    bg_name = bg.get("stats", {}).get("name", title).lower()
+                    if q_clean in title.lower() or title.lower() in q_clean or q_clean in bg_name:
+                        return {
+                            "active": True,
+                            "streamUrl": "",
+                            "title": title,
+                            "name": bg.get("stats", {}).get("name", title),
+                            "stats": bg.get("stats", {})
+                        }
+            return {
+                "active": bool(self.process is not None or self.current_stream_url),
+                "streamUrl": self.current_stream_url,
+                "title": self.current_title,
+                "name": self.stats.get("name", self.current_title),
+                "stats": self.stats
+            }
 
 TORRENT_MANAGER = TorrentStreamManager(host_ip="192.168.0.13")
 
@@ -652,6 +801,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 # 1. Check if video is already downloaded in DOWNLOADS_DIR for this specific title
                 media_path = find_downloaded_video(fname)
                 if media_path and not media_path.lower().endswith('.torrent'):
+                    if download_only:
+                        print(f"[TorrentEngine] (Background) File is ALREADY downloaded: {os.path.basename(media_path)}")
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'status': 'already_downloaded', 'filename': os.path.basename(media_path), 'downloadOnly': True, 'isDownloaded': True}).encode('utf-8'))
+                        return
                     stream_url = TORRENT_MANAGER.start_torrent(media_path, title=os.path.basename(media_path))
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
@@ -665,6 +821,17 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     matched_name = os.path.basename(torrent_path)
                     print(f"[TorrentEngine] Matched torrent file: {matched_name}")
                     sys.stdout.flush()
+
+                    if download_only:
+                        print(f"[TorrentEngine] Starting background sequential download (running stream uninterrupted): {matched_name}")
+                        sys.stdout.flush()
+                        TORRENT_MANAGER.start_background_download(torrent_path, title=matched_name)
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({'status': 'background_started', 'filename': matched_name, 'downloadOnly': True}).encode('utf-8'))
+                        return
+
                     stream_url = TORRENT_MANAGER.start_torrent(torrent_path, title=matched_name)
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
@@ -677,6 +844,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     self.send_error(404, f'Torrent file not found for: {fname}')
                     return
             elif magnets:
+                if download_only:
+                    TORRENT_MANAGER.start_background_download(magnets[0], title="Magnet Download")
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'status': 'background_started', 'downloadOnly': True}).encode('utf-8'))
+                    return
                 stream_url = TORRENT_MANAGER.start_torrent(magnets[0], title="Magnet Stream")
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -696,10 +870,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         elif path == '/torrent_stats':
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            file_query = qs.get('file', [''])[0]
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(TORRENT_MANAGER.get_stats()).encode('utf-8'))
+            self.wfile.write(json.dumps(TORRENT_MANAGER.get_stats(file_query)).encode('utf-8'))
             return
 
         elif path == '/delete_file':
@@ -710,6 +887,14 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 fname = os.path.basename(fnames[0])
                 if TORRENT_MANAGER.current_torrent and fname in TORRENT_MANAGER.current_torrent:
                     TORRENT_MANAGER.stop()
+                if fname in TORRENT_MANAGER.bg_downloads:
+                    bg_entry = TORRENT_MANAGER.bg_downloads.pop(fname, None)
+                    if bg_entry and bg_entry.get("proc"):
+                        try:
+                            subprocess.run(["taskkill", "/F", "/T", "/PID", str(bg_entry["proc"].pid)], capture_output=True)
+                        except Exception:
+                            try: bg_entry["proc"].terminate()
+                            except Exception: pass
                 
                 up_path = os.path.join(UPLOADS_DIR, fname)
                 if os.path.exists(up_path):

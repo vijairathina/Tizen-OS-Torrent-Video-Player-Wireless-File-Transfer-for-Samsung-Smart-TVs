@@ -7,10 +7,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const torrentInput = process.argv[2] || path.join(__dirname, 'uploads', 'www.1TamilMV.io - Jailer 2 (2026) Tamil HQ HDRip - 1080p - HEVC - x265 - (AAC 2.0) - 1.7GB - HC-ESub.mkv.torrent');
+const isDownloadOnly = process.argv.includes('--download-only');
+const torrentArgs = process.argv.slice(2).filter(a => a !== '--download-only');
+const torrentInput = torrentArgs[0] || path.join(__dirname, 'uploads', 'www.1TamilMV.io - Jailer 2 (2026) Tamil HQ HDRip - 1080p - HEVC - x265 - (AAC 2.0) - 1.7GB - HC-ESub.mkv.torrent');
 const downloadDir = path.join(__dirname, 'downloads');
 
-console.log('[TorrentEngine] Initializing WebTorrent for:', torrentInput);
+console.log('[TorrentEngine] Initializing WebTorrent (downloadOnly=' + isDownloadOnly + ') for:', torrentInput);
 
 const client = new WebTorrent();
 
@@ -39,84 +41,88 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
     const targetFile = torrent.files[fileIdx];
     const mimeType = targetFile.name.endsWith('.mkv') ? 'video/x-matroska' : 'video/mp4';
 
-    const server = http.createServer((req, res) => {
-        const total = targetFile.length;
-        const range = req.headers.range;
+    if (!isDownloadOnly) {
+        const server = http.createServer((req, res) => {
+            const total = targetFile.length;
+            const range = req.headers.range;
 
-        res.setHeader('Accept-Ranges', 'bytes');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('transferMode.dlna.org', 'Streaming');
-        res.setHeader('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000');
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('transferMode.dlna.org', 'Streaming');
+            res.setHeader('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000');
 
-        if (req.method === 'HEAD') {
-            res.writeHead(200, {
-                'Content-Length': total,
-                'Content-Type': mimeType
-            });
-            res.end();
-            return;
-        }
-
-        if (range) {
-            const rStr = range.replace(/bytes=/, '').trim();
-            let start = 0;
-            let end = total - 1;
-
-            if (rStr.startsWith('-')) {
-                // Suffix range: bytes=-65536
-                const suffix = parseInt(rStr.slice(1).trim(), 10) || 0;
-                start = Math.max(0, total - suffix);
-                end = total - 1;
-            } else if (rStr.includes('-')) {
-                const parts = rStr.split('-');
-                start = parseInt(parts[0].trim(), 10) || 0;
-                end = parts[1] && parts[1].trim() ? parseInt(parts[1].trim(), 10) : total - 1;
+            if (req.method === 'HEAD') {
+                res.writeHead(200, {
+                    'Content-Length': total,
+                    'Content-Type': mimeType
+                });
+                res.end();
+                return;
             }
 
-            start = Math.max(0, Math.min(start, total - 1));
-            end = Math.max(start, Math.min(end, total - 1));
-            const chunksize = (end - start) + 1;
+            if (range) {
+                const rStr = range.replace(/bytes=/, '').trim();
+                let start = 0;
+                let end = total - 1;
 
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${total}`,
-                'Content-Length': chunksize,
-                'Content-Type': mimeType
-            });
+                if (rStr.startsWith('-')) {
+                    // Suffix range: bytes=-65536
+                    const suffix = parseInt(rStr.slice(1).trim(), 10) || 0;
+                    start = Math.max(0, total - suffix);
+                    end = total - 1;
+                } else if (rStr.includes('-')) {
+                    const parts = rStr.split('-');
+                    start = parseInt(parts[0].trim(), 10) || 0;
+                    end = parts[1] && parts[1].trim() ? parseInt(parts[1].trim(), 10) : total - 1;
+                }
 
-            const stream = targetFile.createReadStream({ start, end });
-            stream.on('error', err => {
-                console.warn('[TorrentEngine] Stream range error:', err);
-                try { res.end(); } catch (e) {}
-            });
-            res.on('close', () => {
-                try { stream.destroy(); } catch (e) {}
-            });
-            stream.pipe(res);
-        } else {
-            res.writeHead(200, {
-                'Content-Length': total,
-                'Content-Type': mimeType
-            });
-            const stream = targetFile.createReadStream();
-            stream.on('error', err => {
-                console.warn('[TorrentEngine] Stream full error:', err);
-                try { res.end(); } catch (e) {}
-            });
-            res.on('close', () => {
-                try { stream.destroy(); } catch (e) {}
-            });
-            stream.pipe(res);
-        }
-    });
+                start = Math.max(0, Math.min(start, total - 1));
+                end = Math.max(start, Math.min(end, total - 1));
+                const chunksize = (end - start) + 1;
 
-    const port = 8889;
-    server.on('error', err => {
-        console.error('[TorrentEngine] HTTP server error:', err.message);
-    });
-    server.listen(port, '0.0.0.0', () => {
-        const streamUrl = `http://192.168.0.13:${port}/`;
-        console.log(`[ENGINE_STREAM_URL] ${streamUrl}`);
-    });
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${total}`,
+                    'Content-Length': chunksize,
+                    'Content-Type': mimeType
+                });
+
+                const stream = targetFile.createReadStream({ start, end });
+                stream.on('error', err => {
+                    console.warn('[TorrentEngine] Stream range error:', err);
+                    try { res.end(); } catch (e) {}
+                });
+                res.on('close', () => {
+                    try { stream.destroy(); } catch (e) {}
+                });
+                stream.pipe(res);
+            } else {
+                res.writeHead(200, {
+                    'Content-Length': total,
+                    'Content-Type': mimeType
+                });
+                const stream = targetFile.createReadStream();
+                stream.on('error', err => {
+                    console.warn('[TorrentEngine] Stream full error:', err);
+                    try { res.end(); } catch (e) {}
+                });
+                res.on('close', () => {
+                    try { stream.destroy(); } catch (e) {}
+                });
+                stream.pipe(res);
+            }
+        });
+
+        const port = 8889;
+        server.on('error', err => {
+            console.error('[TorrentEngine] HTTP server error:', err.message);
+        });
+        server.listen(port, '0.0.0.0', () => {
+            const streamUrl = `http://192.168.0.13:${port}/`;
+            console.log(`[ENGINE_STREAM_URL] ${streamUrl}`);
+        });
+    } else {
+        console.log(`[ENGINE_BG_DOWNLOAD] Background sequential downloading active for: ${torrent.name}`);
+    }
 
     torrent.on('done', () => {
         console.log(`[ENGINE_DONE] ${torrent.name}`);

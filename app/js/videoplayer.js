@@ -50,6 +50,9 @@ window.VideoPlayer = (function() {
     let currentTheme = 'night';
     let currentFontSize = 'normal';
     let isUserInitiatedPlay = false;
+    let pendingPlayTarget = null;
+    let hudRefreshInterval = null;
+    let currentHudTorrentTarget = null;
 
     try {
         currentTheme = localStorage.getItem('tvhub_theme') || 'night';
@@ -283,9 +286,9 @@ window.VideoPlayer = (function() {
         listEl.innerHTML = '';
         activeDownloads.forEach(item => {
             const card = document.createElement('div');
-            card.className = 'player-download-card amnis-download-card focusable';
+            // Remove 'focusable' from the outer card container so D-pad navigation targets the action buttons directly
+            card.className = 'player-download-card amnis-download-card';
             card.id = `player-card-${item.id}`;
-            card.tabIndex = 0;
 
             const progress = item.progress || 0;
             const speed = item.speed || 'Connecting...';
@@ -330,19 +333,22 @@ window.VideoPlayer = (function() {
                 </div>
             `;
 
-            const playBtn = card.querySelector(`#player-play-${item.id}`);
-            const infoBtn = card.querySelector(`#player-info-${item.id}`);
-            const delBtn = card.querySelector(`#player-del-${item.id}`);
+            const playBtn = card.querySelector('.action-btn-play');
+            const infoBtn = card.querySelector('.action-btn-info');
+            const delBtn = card.querySelector('.action-btn-delete');
 
             const isTorrent = item.name.toLowerCase().endsWith('.torrent') || (item.streamUrl && item.streamUrl.toLowerCase().endsWith('.torrent'));
 
             const playAction = () => {
                 isUserInitiatedPlay = true;
+                pendingPlayTarget = item.cleanTitle;
                 window.FileReceiver.showToast(`Loading: ${item.cleanTitle}...`);
 
                 // If already has direct port 8080 streaming link for an actual VIDEO file (not a .torrent metadata file), play immediately
                 if (!isTorrent && item.streamUrl && item.streamUrl.includes(':8080') && !item.streamUrl.toLowerCase().endsWith('.torrent')) {
                     console.log('[VideoPlayer] Opening direct video URL:', item.streamUrl);
+                    isUserInitiatedPlay = false;
+                    pendingPlayTarget = null;
                     window.Player.openMedia(item.streamUrl, item.cleanTitle);
                     return;
                 }
@@ -360,6 +366,8 @@ window.VideoPlayer = (function() {
                         item.streamUrl = finalUrl;
                         saveDownloads();
                         console.log('[VideoPlayer] Playing stream from server:', finalUrl);
+                        isUserInitiatedPlay = false;
+                        pendingPlayTarget = null;
                         window.Player.openMedia(finalUrl, item.cleanTitle);
                     })
                     .catch(err => {
@@ -374,6 +382,7 @@ window.VideoPlayer = (function() {
             });
             if (infoBtn) infoBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                console.log('[VideoPlayer] Torrent Info clicked for:', item.cleanTitle);
                 torrentStats.name = item.cleanTitle;
                 if (item.speed) torrentStats.speed = item.speed;
                 if (item.progress !== undefined) torrentStats.progress = item.progress;
@@ -382,13 +391,16 @@ window.VideoPlayer = (function() {
                 if (item.peers !== undefined) torrentStats.peers = item.peers;
                 if (item.status) torrentStats.status = item.status;
                 if (item.streamUrl) torrentStats.streamUrl = item.streamUrl;
-                toggleTorrentInfoHud(true);
+                toggleTorrentInfoHud(true, item.name || item.cleanTitle);
             });
             if (delBtn) delBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 deleteDownload(item);
             });
-            card.addEventListener('click', playAction);
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.player-download-actions') || e.target.closest('button')) return;
+                playAction();
+            });
 
             listEl.appendChild(card);
         });
@@ -482,6 +494,7 @@ window.VideoPlayer = (function() {
 
         if (url.startsWith('magnet:')) {
             isUserInitiatedPlay = true;
+            pendingPlayTarget = 'Magnet Stream';
             window.FileReceiver.showToast('Connecting to magnet swarm...');
             if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
                 window.FileReceiver.sendSocketMessage({
@@ -510,6 +523,7 @@ window.VideoPlayer = (function() {
         if (index >= 0 && index < SAMPLE_STREAMS.length) {
             isUserInitiatedPlay = true;
             const preset = SAMPLE_STREAMS[index];
+            pendingPlayTarget = preset.title;
             closeUrlDialog();
             startTorrentStream(preset.title, 1720 * 1024 * 1024, preset.url);
         }
@@ -553,6 +567,7 @@ window.VideoPlayer = (function() {
      */
     function startTorrentStream(rawName, totalBytes, streamUrl) {
         isUserInitiatedPlay = true;
+        pendingPlayTarget = cleanTorrentTitle(rawName);
         let cleanName = cleanTorrentTitle(rawName);
         const mediaBytes = (totalBytes && totalBytes > 50 * 1024 * 1024) ? totalBytes : estimateTorrentMediaBytes(rawName, 0);
         const mediaSizeStr = estimateTorrentMediaSize(rawName, mediaBytes);
@@ -572,6 +587,8 @@ window.VideoPlayer = (function() {
 
         if (isDirectVideo) {
             console.log('[VideoPlayer] Playing direct stream:', streamUrl);
+            isUserInitiatedPlay = false;
+            pendingPlayTarget = null;
             window.Player.openMedia(streamUrl, cleanName);
             return;
         }
@@ -626,11 +643,22 @@ window.VideoPlayer = (function() {
             saveDownloads();
         }
 
-        // Feed live HTTP torrent stream directly into Samsung AVPlay hardware player ONLY if user initiated
-        if (isUserInitiatedPlay) {
+        // Feed live HTTP torrent stream directly into Samsung AVPlay hardware player ONLY if user initiated for this target
+        const isCurrentTarget = pendingPlayTarget && (
+            pendingPlayTarget.toLowerCase() === name.toLowerCase() ||
+            name.toLowerCase().includes(pendingPlayTarget.toLowerCase()) ||
+            pendingPlayTarget.toLowerCase().includes(name.toLowerCase())
+        );
+
+        if (isUserInitiatedPlay && isCurrentTarget) {
             isUserInitiatedPlay = false;
-            window.FileReceiver.showToast(`Swarm Connected! Streaming ${name}...`);
+            pendingPlayTarget = null;
+            if (window.FileReceiver && window.FileReceiver.showToast) {
+                window.FileReceiver.showToast(`Swarm Connected! Streaming ${name}...`);
+            }
             window.Player.openMedia(streamUrl, name);
+        } else {
+            console.log(`[VideoPlayer] Background download ready for '${name}' - keeping running video uninterrupted.`);
         }
     }
 
@@ -898,8 +926,32 @@ window.VideoPlayer = (function() {
 
     let lastFocusedBeforeHud = null;
 
+    function fetchTorrentHudStats(targetName) {
+        const query = targetName || currentHudTorrentTarget || torrentStats.name || '';
+        fetch(`http://192.168.0.13:8080/torrent_stats?file=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data) return;
+                if (data.title && (!torrentStats.name || torrentStats.name === 'Stream')) {
+                    torrentStats.name = cleanTorrentTitle(data.title);
+                }
+                if (data.stats) {
+                    const st = data.stats;
+                    if (st.speed) torrentStats.speed = st.speed;
+                    if (st.downloaded) torrentStats.completedMB = st.downloaded;
+                    if (st.total) torrentStats.totalMB = st.total;
+                    if (st.peers !== undefined) torrentStats.peers = st.peers;
+                    if (st.progress !== undefined) torrentStats.progress = st.progress;
+                    if (st.timeRemaining) torrentStats.pieces = `${st.timeRemaining} left`;
+                    if (st.status) torrentStats.status = st.status;
+                }
+                updateTorrentHudValues();
+            })
+            .catch(() => {});
+    }
+
     /* BitTorrent / Stream Information HUD */
-    function toggleTorrentInfoHud(forceShow) {
+    function toggleTorrentInfoHud(forceShow, targetFilenameOrTitle) {
         const backdrop = document.getElementById('player-hud-backdrop') || document.getElementById('amnis-hud-backdrop');
         if (!backdrop) return;
 
@@ -910,12 +962,31 @@ window.VideoPlayer = (function() {
 
         if (shouldShow) {
             lastFocusedBeforeHud = document.activeElement;
+            currentHudTorrentTarget = targetFilenameOrTitle || torrentStats.name || '';
+            if (targetFilenameOrTitle) {
+                torrentStats.name = cleanTorrentTitle(targetFilenameOrTitle);
+            }
+
+            // If player is currently open, hide the "Play Stream" button inside HUD since video is ALREADY playing!
+            const hudPlayBtn = document.getElementById('hud-play-btn');
+            if (hudPlayBtn) {
+                const isPlayerActive = window.Player && window.Player.isActive && window.Player.isActive();
+                hudPlayBtn.style.display = isPlayerActive ? 'none' : 'inline-block';
+            }
+
             updateTorrentHudValues();
             backdrop.style.display = 'flex';
             backdrop.style.zIndex = '2500';
             backdrop.classList.add('dialog-open', 'hud-visible');
             const overlay = document.getElementById('amnis-hud-overlay');
             if (overlay) overlay.classList.add('hud-visible');
+
+            // Immediately poll server stats for this torrent
+            fetchTorrentHudStats(currentHudTorrentTarget);
+            clearInterval(hudRefreshInterval);
+            hudRefreshInterval = setInterval(() => {
+                fetchTorrentHudStats(currentHudTorrentTarget);
+            }, 1000);
 
             // Default focus strictly to Close button so user can immediately dismiss using remote OK/Enter
             const closeBtn = document.getElementById('hud-close-btn');
@@ -926,6 +997,9 @@ window.VideoPlayer = (function() {
                 }, 60);
             }
         } else {
+            clearInterval(hudRefreshInterval);
+            hudRefreshInterval = null;
+            currentHudTorrentTarget = null;
             backdrop.style.display = 'none';
             backdrop.classList.remove('dialog-open', 'hud-visible');
             const overlay = document.getElementById('amnis-hud-overlay');
@@ -988,6 +1062,7 @@ window.VideoPlayer = (function() {
         if (urlCancelBtn) urlCancelBtn.addEventListener('click', closeUrlDialog);
         if (hudPlayBtn) hudPlayBtn.addEventListener('click', function() {
             isUserInitiatedPlay = true;
+            pendingPlayTarget = torrentStats.name;
             toggleTorrentInfoHud(false);
             let streamUrl = torrentStats.streamUrl;
             if (!streamUrl && activeDownloads.length > 0 && activeDownloads[0].streamUrl) {

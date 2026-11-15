@@ -167,6 +167,64 @@ window.Player = (function() {
     function init() {
         checkAVPlaySupport();
         setupOsdEvents();
+        setupAppLifecycleListeners();
+    }
+
+    function setupAppLifecycleListeners() {
+        // 1. Standard HTML5 Page Visibility API (triggered when Samsung TV Home button is pressed or Smart Hub opens)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                console.log('[Player] Document hidden (Home button pressed or app minimized) -> Pausing playback');
+                if (isPlayerOpen && isPlaying) {
+                    pause();
+                }
+            }
+        });
+
+        // 2. Page Hide & Window Blur events
+        window.addEventListener('pagehide', function() {
+            console.log('[Player] pagehide triggered -> Pausing playback');
+            if (isPlayerOpen && isPlaying) {
+                pause();
+            }
+        });
+
+        window.addEventListener('blur', function() {
+            // Fires when Smart Hub or TV system overlay takes focus
+            if (isPlayerOpen && isPlaying) {
+                console.log('[Player] window blur -> Pausing playback');
+                pause();
+            }
+        });
+
+        // 3. Samsung Tizen Application Lifecycle API
+        if (typeof tizen !== 'undefined' && tizen.application) {
+            try {
+                var currentApp = tizen.application.getCurrentApplication();
+                if (currentApp && currentApp.addEventListener) {
+                    currentApp.addEventListener({
+                        onhidden: function() {
+                            console.log('[Tizen App Lifecycle] onhidden event -> Pausing AVPlay hardware player');
+                            if (isPlayerOpen) {
+                                pause();
+                            }
+                        },
+                        onlowmemory: function() {
+                            console.warn('[Tizen App Lifecycle] onlowmemory warning');
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('[Player] Could not attach Tizen application lifecycle listeners:', e);
+            }
+        }
+
+        // 4. Beforeunload / unload to clean up AVPlay instance
+        window.addEventListener('beforeunload', function() {
+            if (isPlayerOpen) {
+                close();
+            }
+        });
     }
 
     function checkAVPlaySupport() {
@@ -906,7 +964,7 @@ window.Player = (function() {
         if (aspectBtn) aspectBtn.addEventListener('click', toggleAspectRatio);
         if (infoBtn) infoBtn.addEventListener('click', function() {
             if (window.VideoPlayer && window.VideoPlayer.toggleTorrentInfoHud) {
-                window.VideoPlayer.toggleTorrentInfoHud();
+                window.VideoPlayer.toggleTorrentInfoHud(true, currentTitle || currentMediaUrl);
             }
         });
         if (subsBtn) subsBtn.addEventListener('click', function() {
