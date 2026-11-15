@@ -6,7 +6,7 @@
 window.App = (function() {
     'use strict';
 
-    let currentView = 'player';
+    let currentView = 'home';
 
     window.onerror = function(msg, url, lineNo, colNo, error) {
         const errStr = `[TV EXCEPTION] ${msg} (${url}:${lineNo})`;
@@ -21,10 +21,14 @@ window.App = (function() {
         console.log('[App] Initializing TV File Hub & Video Player...');
 
         // Setup tab navigation clicks
+        const tabHome = document.getElementById('tab-home');
         const tabReceiver = document.getElementById('tab-receiver');
         const tabFileManager = document.getElementById('tab-filemanager');
         const tabPlayer = document.getElementById('tab-player') || document.getElementById('tab-amnis');
 
+        if (tabHome) {
+            tabHome.addEventListener('click', () => switchView('home'));
+        }
         if (tabReceiver) {
             tabReceiver.addEventListener('click', () => switchView('receiver'));
         }
@@ -42,19 +46,18 @@ window.App = (function() {
         const playerModule = window.VideoPlayer || window.Amnis;
         if (playerModule && playerModule.init) playerModule.init();
         window.FileReceiver.init();
-
-        // Ensure starting on Video Player view
-        if (playerModule && playerModule.renderDownloadsList) {
-            playerModule.renderDownloadsList();
-        }
+        if (window.HomeLauncher && window.HomeLauncher.init) window.HomeLauncher.init();
 
         // Initialize Filesystem with storage listener
         window.TVFilesystem.init(function(storages, selected) {
             window.FileManager.onStorageUpdated(storages, selected);
             updateTargetUsbBadge(selected);
+            if (window.HomeLauncher && window.HomeLauncher.refresh) {
+                window.HomeLauncher.refresh();
+            }
         });
 
-        console.log('[App] Application ready.');
+        console.log('[App] Application ready on Home Launcher.');
     }
 
     function switchView(viewName) {
@@ -74,8 +77,12 @@ window.App = (function() {
         if (targetViewEl) targetViewEl.classList.add('active-view');
         if (targetTabEl) targetTabEl.classList.add('active');
 
-        // Refresh storage when switching views
-        if (viewName === 'filemanager' || viewName === 'receiver') {
+        // Refresh components when switching views
+        if (viewName === 'home') {
+            if (window.HomeLauncher && window.HomeLauncher.refresh) {
+                window.HomeLauncher.refresh();
+            }
+        } else if (viewName === 'filemanager' || viewName === 'receiver') {
             if (viewName === 'receiver' && window.FileReceiver && window.FileReceiver.clearReceiverTabAlert) {
                 window.FileReceiver.clearReceiverTabAlert();
             }
