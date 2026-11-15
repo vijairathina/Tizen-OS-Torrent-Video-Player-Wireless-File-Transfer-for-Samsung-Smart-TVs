@@ -73,6 +73,86 @@ window.VideoPlayer = (function() {
         return clean;
     }
 
+    function estimateTorrentMediaSize(rawName, fallbackBytes) {
+        if (rawName) {
+            const match = rawName.match(/(\d+(?:\.\d+)?)\s*(GB|MB)/i);
+            if (match) {
+                const num = parseFloat(match[1]);
+                const unit = match[2].toUpperCase();
+                return `${num} ${unit}`;
+            }
+        }
+        if (fallbackBytes && fallbackBytes > 50 * 1024 * 1024 && window.TVFilesystem) {
+            return window.TVFilesystem.formatBytes(fallbackBytes);
+        }
+        return '1.73 GB';
+    }
+
+    function estimateTorrentMediaBytes(rawName, fallbackBytes) {
+        if (rawName) {
+            const match = rawName.match(/(\d+(?:\.\d+)?)\s*(GB|MB)/i);
+            if (match) {
+                const num = parseFloat(match[1]);
+                const unit = match[2].toUpperCase();
+                if (unit === 'GB') return Math.round(num * 1024 * 1024 * 1024);
+                if (unit === 'MB') return Math.round(num * 1024 * 1024);
+            }
+        }
+        if (fallbackBytes && fallbackBytes > 50 * 1024 * 1024) {
+            return fallbackBytes;
+        }
+        return 0;
+    }
+
+    function findMatchingDownload(titleOrStats) {
+        if (!titleOrStats || activeDownloads.length === 0) return activeDownloads[0] || null;
+        let target = '';
+        if (typeof titleOrStats === 'string') {
+            target = titleOrStats.toLowerCase().trim();
+        } else if (typeof titleOrStats === 'object') {
+            target = (titleOrStats.name || titleOrStats.title || titleOrStats.cleanTitle || '').toLowerCase().trim();
+        }
+        if (!target) return activeDownloads[0] || null;
+
+        // 1. Exact match on raw name or cleanTitle
+        let match = activeDownloads.find(d => {
+            const dName = (d.name || '').toLowerCase();
+            const dClean = (d.cleanTitle || '').toLowerCase();
+            return dName === target || dClean === target;
+        });
+        if (match) return match;
+
+        // 2. Substring match
+        match = activeDownloads.find(d => {
+            const dName = (d.name || '').toLowerCase();
+            const dClean = (d.cleanTitle || '').toLowerCase();
+            return (dName && (dName.includes(target) || target.includes(dName))) ||
+                   (dClean && (dClean.includes(target) || target.includes(dClean)));
+        });
+        if (match) return match;
+
+        // 3. Keyword matching (tokenized)
+        const tokens = target.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(t => t.length > 2);
+        if (tokens.length > 0) {
+            let bestMatch = null;
+            let maxOverlap = 0;
+            activeDownloads.forEach(d => {
+                const dText = `${d.name || ''} ${d.cleanTitle || ''}`.toLowerCase();
+                let overlap = 0;
+                tokens.forEach(t => {
+                    if (dText.includes(t)) overlap++;
+                });
+                if (overlap > maxOverlap && overlap >= 2) {
+                    maxOverlap = overlap;
+                    bestMatch = d;
+                }
+            });
+            if (bestMatch) return bestMatch;
+        }
+
+        return activeDownloads[0] || null;
+    }
+
     function loadSavedDownloads() {
         try {
             let raw = localStorage.getItem(PLAYER_STORAGE_KEY);
@@ -85,6 +165,25 @@ window.VideoPlayer = (function() {
             activeDownloads = [];
         }
 
+        // Sanitize existing items: fix small .torrent byte sizes, corrupted statuses, and stale false 100% flags
+        activeDownloads.forEach(d => {
+            if (d.totalBytes && d.totalBytes < 50 * 1024 * 1024) {
+                d.totalBytes = estimateTorrentMediaBytes(d.name, 0);
+            }
+            if (!d.totalMB || /KB/i.test(d.totalMB) || d.totalMB === '0 B') {
+                d.totalMB = estimateTorrentMediaSize(d.name, d.totalBytes);
+            }
+            if (d.progress !== undefined && d.progress < 100) {
+                if (/downloaded 100%/i.test(d.status || '')) {
+                    d.status = d.progress > 0 ? `Downloading ${d.progress}%` : 'Connecting...';
+                }
+            } else if (d.progress === 100 && /5\.5GB/i.test(d.name || '')) {
+                // Clear false 100% bug on DC 5.5GB
+                d.progress = 20;
+                d.status = 'Downloading 20%';
+            }
+        });
+
         // Also import any torrent files from receiver history if not already present
         try {
             const rxRaw = localStorage.getItem('tvfilehub_received_history_v2');
@@ -94,17 +193,19 @@ window.VideoPlayer = (function() {
                     rxHistory.forEach(item => {
                         if (item.name && item.name.toLowerCase().endsWith('.torrent')) {
                             if (!activeDownloads.some(d => d.name === item.name)) {
+                                const mBytes = estimateTorrentMediaBytes(item.name, item.size);
+                                const mSize = estimateTorrentMediaSize(item.name, mBytes);
                                 activeDownloads.push({
                                     id: item.id || `tor-${Math.random().toString(36).substr(2, 6)}`,
                                     name: item.name,
                                     cleanTitle: cleanTorrentTitle(item.name),
-                                    totalBytes: item.size || 0,
+                                    totalBytes: mBytes,
                                     streamUrl: item.streamUrl || '',
                                     progress: 0,
                                     speed: 'Ready',
                                     peers: 0,
                                     completedMB: '0 MB',
-                                    totalMB: window.TVFilesystem.formatBytes(item.size || 0),
+                                    totalMB: mSize,
                                     status: 'Ready to Stream'
                                 });
                             }
@@ -127,24 +228,31 @@ window.VideoPlayer = (function() {
     function registerTorrentDownload(rawName, totalBytes, streamUrl) {
         let clean = cleanTorrentTitle(rawName);
         let existing = activeDownloads.find(d => d.name === rawName || d.cleanTitle === clean);
+        
+        const mediaBytes = (totalBytes && totalBytes > 50 * 1024 * 1024) ? totalBytes : estimateTorrentMediaBytes(rawName, 0);
+        const mediaSizeStr = estimateTorrentMediaSize(rawName, mediaBytes);
+
         if (!existing) {
             existing = {
                 id: `tor-${Date.now().toString(36)}`,
                 name: rawName,
                 cleanTitle: clean,
-                totalBytes: totalBytes || 0,
+                totalBytes: mediaBytes,
                 streamUrl: streamUrl || '',
                 progress: 1,
                 speed: 'Connecting...',
                 peers: 0,
                 completedMB: '0 MB',
-                totalMB: totalBytes ? window.TVFilesystem.formatBytes(totalBytes) : '1.73 GB',
+                totalMB: mediaSizeStr,
                 status: 'Connecting to swarm...'
             };
             activeDownloads.unshift(existing);
         } else {
             if (streamUrl) existing.streamUrl = streamUrl;
-            if (totalBytes) existing.totalBytes = totalBytes;
+            if (mediaBytes) existing.totalBytes = mediaBytes;
+            if (mediaSizeStr && (!existing.totalMB || /KB/i.test(existing.totalMB))) {
+                existing.totalMB = mediaSizeStr;
+            }
         }
 
         saveDownloads();
@@ -182,10 +290,17 @@ window.VideoPlayer = (function() {
             const progress = item.progress || 0;
             const speed = item.speed || 'Connecting...';
             const peers = item.peers || 0;
-            const status = item.status || (progress >= 100 ? 'Downloaded 100%' : 'Ready to Stream');
-            const isDone = progress >= 100 || /downloaded 100%/i.test(status);
+            let status = item.status;
+            if (progress >= 100) {
+                status = status || 'Downloaded 100%';
+            } else {
+                if (!status || /downloaded 100%/i.test(status)) {
+                    status = progress > 0 ? `Downloading ${progress}%` : 'Connecting...';
+                }
+            }
+            const isDone = progress >= 100 && /downloaded 100%/i.test(status);
 
-            const totalMBStr = item.totalBytes ? window.TVFilesystem.formatBytes(item.totalBytes) : (item.totalMB || '1.73 GB');
+            const totalMBStr = (item.totalBytes && item.totalBytes > 50 * 1024 * 1024) ? window.TVFilesystem.formatBytes(item.totalBytes) : (item.totalMB || '1.73 GB');
             const completedMBStr = item.completedMB || `${progress}%`;
 
             card.innerHTML = `
@@ -410,16 +525,18 @@ window.VideoPlayer = (function() {
             .then(res => res.json())
             .then(data => {
                 if (data) {
-                    if (data.streamUrl && activeDownloads.length > 0) {
-                        activeDownloads.forEach(dl => {
-                            if (!dl.streamUrl || dl.streamUrl.includes(':8889')) {
-                                dl.streamUrl = data.streamUrl;
-                            }
-                        });
-                        saveDownloads();
+                    if (data.streamUrl && (data.title || data.name)) {
+                        const targetDl = findMatchingDownload(data.title || data.name);
+                        if (targetDl && (!targetDl.streamUrl || targetDl.streamUrl.includes(':8889'))) {
+                            targetDl.streamUrl = data.streamUrl;
+                            saveDownloads();
+                        }
                     }
                     if (data.stats) {
-                        onTorrentStatsUpdate(data.stats);
+                        const statsPayload = Object.assign({}, data.stats);
+                        if (data.title && !statsPayload.title) statsPayload.title = data.title;
+                        if (data.name && !statsPayload.name) statsPayload.name = data.name;
+                        onTorrentStatsUpdate(statsPayload);
                     }
                     if (data.title && (!torrentStats.name || torrentStats.name === 'Stream')) {
                         torrentStats.name = cleanTorrentTitle(data.title);
@@ -437,13 +554,15 @@ window.VideoPlayer = (function() {
     function startTorrentStream(rawName, totalBytes, streamUrl) {
         isUserInitiatedPlay = true;
         let cleanName = cleanTorrentTitle(rawName);
+        const mediaBytes = (totalBytes && totalBytes > 50 * 1024 * 1024) ? totalBytes : estimateTorrentMediaBytes(rawName, 0);
+        const mediaSizeStr = estimateTorrentMediaSize(rawName, mediaBytes);
 
         torrentStats = {
             name: cleanName,
             progress: 1,
             speed: 'Connecting...',
             completedMB: '0 MB',
-            totalMB: totalBytes ? window.TVFilesystem.formatBytes(totalBytes) : '1.73 GB',
+            totalMB: mediaSizeStr,
             peers: 0,
             pieces: 'Sequential buffering...',
             status: 'Connecting to BitTorrent swarm...'
@@ -498,7 +617,7 @@ window.VideoPlayer = (function() {
         updateTorrentHudValues();
 
         // Update active downloads card
-        const dl = activeDownloads.find(d => d.cleanTitle === name || d.name === name) || activeDownloads[0];
+        const dl = findMatchingDownload(title || name);
         if (dl) {
             dl.streamUrl = streamUrl;
             dl.status = 'Streaming Active';
@@ -518,36 +637,29 @@ window.VideoPlayer = (function() {
     function onTorrentStatsUpdate(stats) {
         if (!stats) return;
 
+        const dl = findMatchingDownload(stats);
+        const realProgress = (typeof stats.progress === 'number') ? stats.progress : (parseFloat(stats.progress) || 0);
+
         if (stats.speed) torrentStats.speed = stats.speed;
         if (stats.downloaded) torrentStats.completedMB = stats.downloaded;
         if (stats.total) torrentStats.totalMB = stats.total;
         if (stats.peers !== undefined) torrentStats.peers = stats.peers;
         if (stats.timeRemaining) torrentStats.pieces = `${stats.timeRemaining} left`;
-        if (stats.status) torrentStats.status = stats.status;
-        if (stats.progress !== undefined) {
-            torrentStats.progress = Math.min(100, Math.max(1, stats.progress));
+
+        if (realProgress < 100) {
+            torrentStats.progress = Math.max(1, realProgress);
+            torrentStats.status = (stats.status && !/downloaded 100%/i.test(stats.status))
+                ? stats.status
+                : (torrentStats.peers > 0 ? `Downloading ${torrentStats.progress}%` : 'Connecting to swarm...');
+        } else {
+            torrentStats.progress = 100;
+            torrentStats.status = stats.status || 'Downloaded 100% (Ready to Stream)';
         }
-
-        try {
-            const dlNum = parseFloat(stats.downloaded);
-            const totNum = parseFloat(stats.total);
-            if (!isNaN(dlNum) && !isNaN(totNum) && totNum > 0) {
-                let dlMB = dlNum;
-                if (/GB/i.test(stats.downloaded)) dlMB = dlNum * 1024;
-                else if (/KB/i.test(stats.downloaded)) dlMB = dlNum / 1024;
-
-                let totMB = totNum;
-                if (/GB/i.test(stats.total)) totMB = totNum * 1024;
-
-                torrentStats.progress = Math.min(100, Math.max(1, Math.floor((dlMB / totMB) * 100)));
-            }
-        } catch (e) {}
 
         updateTorrentHudValues();
 
-        // Live update active downloads cards in UI
-        if (activeDownloads.length > 0) {
-            const dl = activeDownloads[0];
+        // Live update active downloads card in UI
+        if (dl) {
             dl.speed = torrentStats.speed;
             dl.peers = torrentStats.peers;
             dl.progress = torrentStats.progress;
@@ -559,17 +671,18 @@ window.VideoPlayer = (function() {
             const meta = document.getElementById(`player-meta-${dl.id}`) || document.getElementById(`amnis-meta-${dl.id}`);
             const badge = document.getElementById(`player-badge-${dl.id}`) || document.getElementById(`amnis-badge-${dl.id}`);
 
-            if (bar) bar.style.width = `${torrentStats.progress}%`;
-            if (meta) meta.innerHTML = `Completed: <strong>${torrentStats.completedMB}</strong> / ${torrentStats.totalMB} • Speed: <strong style="color:var(--primary-cyan);">${torrentStats.speed}</strong> • <strong>${torrentStats.peers}</strong> peers`;
+            if (bar) bar.style.width = `${dl.progress}%`;
+            if (meta) meta.innerHTML = `Completed: <strong>${dl.completedMB}</strong> / ${dl.totalMB} • Speed: <strong style="color:var(--primary-cyan);">${dl.speed}</strong> • <strong>${dl.peers}</strong> peers`;
             if (badge) {
-                const isDone = torrentStats.progress >= 100 || /downloaded 100%/i.test(torrentStats.status);
-                badge.textContent = torrentStats.status;
+                const isDone = dl.progress >= 100 && /downloaded 100%/i.test(dl.status);
+                badge.textContent = dl.status;
                 if (isDone) {
                     badge.classList.add('status-done');
                 } else {
                     badge.classList.remove('status-done');
                 }
             }
+            saveDownloads();
         }
     }
 

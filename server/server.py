@@ -137,73 +137,60 @@ def find_torrent_file(filename_or_query):
 
     return None
 
-def is_video_complete(video_path, torrent_name_or_query=None):
-    """Checks whether a video on disk has reached the expected length declared in its torrent file."""
-    if not video_path or not os.path.exists(video_path) or not os.path.isfile(video_path):
-        return False
-    t_file = find_torrent_file(torrent_name_or_query or os.path.basename(video_path))
-    if t_file and os.path.exists(t_file):
-        try:
-            with open(t_file, 'rb') as f:
-                content = f.read()
-            m = re.findall(rb'6:lengthi(\d+)e', content)
-            if not m:
-                m = re.findall(rb':lengthi(\d+)e', content)
-            if m:
-                expected_max = max(int(x) for x in m)
-                actual_size = os.path.getsize(video_path)
-                if actual_size < expected_max * 0.98:
-                    print(f"[TorrentEngine] Candidate video '{os.path.basename(video_path)}' is INCOMPLETE ({actual_size}/{expected_max} bytes). Forwarding to WebTorrent engine.")
-                    sys.stdout.flush()
-                    return False
-        except Exception as e:
-            print(f"[TorrentEngine] Error verifying video completeness: {e}")
-            sys.stdout.flush()
-    return True
+def get_torrent_main_file_info(torrent_path):
+    """Extracts target video file name and expected size in bytes from torrent file metadata."""
+    if not torrent_path or not os.path.exists(torrent_path):
+        return None, 0
+    try:
+        with open(torrent_path, 'rb') as f:
+            c = f.read()
+        names = re.findall(rb'4:name(\d+):', c)
+        file_name = None
+        if names:
+            n_len = int(names[0])
+            idx = c.find(b'4:name' + str(n_len).encode() + b':') + len(b'4:name' + str(n_len).encode() + b':')
+            file_name = c[idx:idx+n_len].decode('utf-8', errors='ignore')
+        lengths = re.findall(rb'6:lengthi(\d+)e', c)
+        if not lengths:
+            lengths = re.findall(rb':lengthi(\d+)e', c)
+        tot_size = max(int(l) for l in lengths) if lengths else 0
+        return file_name, tot_size
+    except Exception:
+        return None, 0
 
 def find_downloaded_video(filename_or_query):
-    """Finds a 100% completed video file matching a torrent or query in DOWNLOADS_DIR."""
+    """Finds a truly 100% completed video file matching a torrent in DOWNLOADS_DIR.
+    A BitTorrent download is ONLY considered 100% complete if its .done marker exists,
+    because BitTorrent clients pre-allocate the full file size on disk."""
     if not filename_or_query:
         return None
 
+    # 1. Match the specific torrent first
+    t_path = find_torrent_file(filename_or_query)
+    if t_path and os.path.exists(t_path):
+        exp_name, exp_size = get_torrent_main_file_info(t_path)
+        if exp_name:
+            cand = os.path.join(DOWNLOADS_DIR, exp_name)
+            done_marker = cand + '.done'
+            if os.path.exists(cand) and os.path.isfile(cand):
+                if os.path.exists(done_marker):
+                    return cand
+                else:
+                    print(f"[TorrentEngine] '{exp_name}' exists on disk but has no .done marker. Running live sequential torrent engine.")
+                    sys.stdout.flush()
+                    return None
+
+    # 2. Direct exact stem matching in DOWNLOADS_DIR
     clean_target = os.path.basename(filename_or_query).strip()
     stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
-    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
-    stem_lower = stem_clean.lower()
-
-    m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean_target)
-    target_keyword = m.group(1).strip().lower() if m else None
-    target_year = m.group(2) if m else None
-
-    # 1. Direct stem match in DOWNLOADS_DIR
     p = os.path.join(DOWNLOADS_DIR, stem)
     if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
-        if is_video_complete(p, clean_target):
-            return p
-
-    p = os.path.join(DOWNLOADS_DIR, stem_clean)
-    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
-        if is_video_complete(p, clean_target):
-            return p
-
-    # 2. Search DOWNLOADS_DIR recursively for matching video files
-    for root, dirs, files in os.walk(DOWNLOADS_DIR):
-        for f in files:
-            f_lower = f.lower()
-            if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
-                f_stem = re.sub(r'\.[a-z0-9]+$', '', f_lower).strip()
-                cand_path = os.path.join(root, f)
-                if target_keyword:
-                    if target_keyword in f_lower and (not target_year or target_year in f_lower):
-                        if is_video_complete(cand_path, clean_target):
-                            return cand_path
-                    continue
-                if f_lower == stem_lower or f_stem == stem_lower:
-                    if is_video_complete(cand_path, clean_target):
-                        return cand_path
-                if len(stem_lower) > 20 and (stem_lower[:40] in f_lower or f_lower[:40] in stem_lower):
-                    if is_video_complete(cand_path, clean_target):
-                        return cand_path
+        t_matching = find_torrent_file(stem)
+        if t_matching:
+            if os.path.exists(p + '.done'):
+                return p
+            return None
+        return p
 
     return None
 
@@ -324,6 +311,12 @@ class TorrentStreamManager:
                     encoded = urllib.parse.quote(v_name)
                     direct_url = f"http://{self.host_ip}:{PORT}/files/{encoded}"
                     self.current_stream_url = direct_url
+                    done_path = os.path.join(DOWNLOADS_DIR, v_name + '.done')
+                    try:
+                        with open(done_path, 'w') as df:
+                            df.write('1')
+                    except Exception:
+                        pass
                     print(f"[TorrentEngine] 100% Downloaded! Direct HTTP stream available: {direct_url}")
                     broadcast_message({
                         "type": "torrent_stream_started",
@@ -337,6 +330,8 @@ class TorrentStreamManager:
                     try:
                         st = json.loads(payload)
                         self.stats = {
+                            "name": st.get("name", self.current_title),
+                            "title": self.current_title,
                             "speed": st.get("downloadSpeed", "0 B/s"),
                             "downloaded": st.get("downloaded", "0 B"),
                             "total": st.get("total", "0 B"),
@@ -347,6 +342,8 @@ class TorrentStreamManager:
                         }
                         broadcast_message({
                             "type": "torrent_stats_update",
+                            "name": self.stats["name"],
+                            "title": self.current_title,
                             "speed": self.stats["speed"],
                             "downloaded": self.stats["downloaded"],
                             "total": self.stats["total"],
@@ -386,34 +383,11 @@ class TorrentStreamManager:
         self._kill_port_8889()
 
     def get_stats(self):
-        # Auto-discover completed downloaded media if streamUrl is not set
-        if not self.current_stream_url:
-            import urllib.parse
-            for root, dirs, files in os.walk(DOWNLOADS_DIR):
-                for f in files:
-                    if any(f.lower().endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm')):
-                        f_path = os.path.join(root, f)
-                        v_size = os.path.getsize(f_path)
-                        encoded = urllib.parse.quote(f)
-                        self.current_stream_url = f"http://{self.host_ip}:{PORT}/files/{encoded}"
-                        self.current_title = f
-                        self.stats = {
-                            "speed": "Completed",
-                            "downloaded": format_bytes(v_size),
-                            "total": format_bytes(v_size),
-                            "peers": 0,
-                            "progress": 100,
-                            "timeRemaining": "0s",
-                            "status": "Downloaded 100% (Ready to Stream)"
-                        }
-                        break
-                if self.current_stream_url:
-                    break
-
         return {
             "active": bool(self.process is not None or self.current_stream_url),
             "streamUrl": self.current_stream_url,
             "title": self.current_title,
+            "name": self.stats.get("name", self.current_title),
             "stats": self.stats
         }
 

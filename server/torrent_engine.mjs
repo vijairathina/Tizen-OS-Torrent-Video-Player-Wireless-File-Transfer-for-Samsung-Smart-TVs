@@ -1,6 +1,7 @@
 import WebTorrent from 'webtorrent';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -120,6 +121,13 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
     torrent.on('done', () => {
         console.log(`[ENGINE_DONE] ${torrent.name}`);
         console.log(`[ENGINE_DOWNLOADED_FILE] ${targetFile.name}`);
+        try {
+            const markerPath = path.join(downloadDir, `${targetFile.name}.done`);
+            fs.writeFileSync(markerPath, '1', 'utf-8');
+            console.log(`[ENGINE_DONE_SAVED] Marked complete: ${markerPath}`);
+        } catch (e) {
+            console.warn('[TorrentEngine] Failed to write .done marker:', e.message);
+        }
     });
 
     setInterval(() => {
