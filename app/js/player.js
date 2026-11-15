@@ -30,6 +30,9 @@ window.Player = (function() {
     let scrubRepeatCount = 0;
     let scrubCommitTimeout = null;
     let scrubSettlingTimeout = null;
+    let targetSeekSec = null;
+    let isSeekingInProgress = false;
+    let queuedSeekTarget = null;
 
     const DISPLAY_MODES = [
         'PLAYER_DISPLAY_MODE_LETTER_BOX',
@@ -256,10 +259,22 @@ window.Player = (function() {
                 onbufferingcomplete: function() {
                     updateStatusTag('Playing');
                     showBufferingOverlay(false);
+                    // Clear settling lock after buffering completes following a seek
+                    setTimeout(function() {
+                        isSettlingSeek = false;
+                    }, 400);
                 },
                 oncurrentplaytime: function(ms) {
                     if (isScrubbing || isSettlingSeek) return;
-                    currentTimeSec = Math.floor(ms / 1000);
+                    const sec = Math.floor(ms / 1000);
+                    // Discard stale pre-seek ticks to prevent progress bar rubber-banding
+                    if (targetSeekSec !== null) {
+                        if (Math.abs(sec - targetSeekSec) > 6) {
+                            return;
+                        }
+                        targetSeekSec = null;
+                    }
+                    currentTimeSec = sec;
                     if (durationSec <= 0) {
                         try {
                             const d = webapis.avplay.getDuration();
@@ -478,13 +493,13 @@ window.Player = (function() {
         scrubRepeatCount++;
 
         // Dynamic acceleration based on hold duration (key repeat count)
-        let step = 10;
+        let step = customStep || 10;
         if (scrubRepeatCount > 14) {
-            step = 60; // >1.5s hold: 60s jumps per tick
+            step = Math.max(step, 60); // >1.5s hold: 60s jumps per tick
         } else if (scrubRepeatCount > 7) {
-            step = 30; // >0.7s hold: 30s jumps per tick
+            step = Math.max(step, 30); // >0.7s hold: 30s jumps per tick
         } else if (scrubRepeatCount > 3) {
-            step = 15; // >0.3s hold: 15s jumps per tick
+            step = Math.max(step, 15); // >0.3s hold: 15s jumps per tick
         }
 
         let nextTarget = scrubTargetSec + (direction * step);
@@ -508,7 +523,7 @@ window.Player = (function() {
         clearTimeout(scrubCommitTimeout);
         scrubCommitTimeout = setTimeout(function() {
             finishScrubbing();
-        }, 280);
+        }, 360);
     }
 
     function finishScrubbing() {
@@ -526,11 +541,12 @@ window.Player = (function() {
         updateTimeline();
 
         // Lock oncurrentplaytime from jumping back to old position while hardware settles
-        clearTimeout(scrubSettlingTimeout);
+        targetSeekSec = target;
         isSettlingSeek = true;
+        clearTimeout(scrubSettlingTimeout);
         scrubSettlingTimeout = setTimeout(function() {
             isSettlingSeek = false;
-        }, 600);
+        }, 3500);
 
         // Commit seek
         if (isAVPlay) {
@@ -544,7 +560,7 @@ window.Player = (function() {
     }
 
     function seekRelative(seconds) {
-        startOrContinueScrub(seconds >= 0 ? 1 : -1);
+        startOrContinueScrub(seconds >= 0 ? 1 : -1, Math.abs(seconds));
     }
 
     function seekTo(targetSeconds) {
@@ -568,11 +584,12 @@ window.Player = (function() {
         showOSD();
         showSeekFeedback(delta, target);
 
-        clearTimeout(scrubSettlingTimeout);
+        targetSeekSec = target;
         isSettlingSeek = true;
+        clearTimeout(scrubSettlingTimeout);
         scrubSettlingTimeout = setTimeout(function() {
             isSettlingSeek = false;
-        }, 600);
+        }, 3500);
 
         if (isAVPlay) {
             performAvplaySeek(target);
@@ -589,33 +606,102 @@ window.Player = (function() {
         try {
             const state = webapis.avplay.getState();
             console.log('[Player] performAvplaySeek targetSec:', targetSec, 'state:', state);
+            if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                window.FileReceiver.sendSocketMessage(`[Player] Seeking to ${targetSec}s (state=${state})`);
+            }
+
+            if (isSeekingInProgress) {
+                queuedSeekTarget = targetSec;
+                return;
+            }
+
             if (state === 'PLAYING' || state === 'PAUSED') {
                 const targetMs = Math.round(targetSec * 1000);
+                isSeekingInProgress = true;
+                isSettlingSeek = true;
+                targetSeekSec = targetSec;
+
+                clearTimeout(scrubSettlingTimeout);
+                scrubSettlingTimeout = setTimeout(function() {
+                    isSettlingSeek = false;
+                    isSeekingInProgress = false;
+                }, 4000);
+
                 webapis.avplay.seekTo(
                     targetMs,
                     function() {
                         console.log('[Player] AVPlay seekTo success at', targetMs, 'ms');
+                        if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                            window.FileReceiver.sendSocketMessage(`[Player] AVPlay seekTo SUCCESS at ${targetSec}s`);
+                        }
                         updateStatusTag(isPlaying ? 'Playing' : 'Paused');
+                        isSeekingInProgress = false;
+                        setTimeout(function() {
+                            isSettlingSeek = false;
+                        }, 500);
+
+                        if (queuedSeekTarget !== null) {
+                            const nextTarget = queuedSeekTarget;
+                            queuedSeekTarget = null;
+                            performAvplaySeek(nextTarget);
+                        }
                     },
                     function(err) {
                         console.warn('[Player] AVPlay seekTo callback error:', err);
-                        // Fallback with jumpForward / jumpBackward if seekTo fails
+                        const errDesc = (err && (err.name || err.message)) ? (err.name || err.message) : JSON.stringify(err);
+                        if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                            window.FileReceiver.sendSocketMessage(`[Player] AVPlay seekTo failed: ${errDesc}. Attempting jump fallback...`);
+                        }
+
+                        // Fallback with jumpForward / jumpBackward (offset in MILLISECONDS)
                         try {
                             const curSec = Math.floor(webapis.avplay.getCurrentTime() / 1000);
-                            const diff = Math.round(targetSec - curSec);
-                            if (diff > 0) {
-                                webapis.avplay.jumpForward(diff, function(){}, function(){});
-                            } else if (diff < 0) {
-                                webapis.avplay.jumpBackward(Math.abs(diff), function(){}, function(){});
+                            const diffSec = Math.round(targetSec - curSec);
+                            const diffMs = Math.abs(diffSec) * 1000;
+                            if (diffSec > 0) {
+                                webapis.avplay.jumpForward(diffMs, function() {
+                                    if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                                        window.FileReceiver.sendSocketMessage(`[Player] jumpForward +${diffSec}s SUCCESS`);
+                                    }
+                                }, function(e) {
+                                    console.warn('[Player] jumpForward error:', e);
+                                });
+                            } else if (diffSec < 0) {
+                                webapis.avplay.jumpBackward(diffMs, function() {
+                                    if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                                        window.FileReceiver.sendSocketMessage(`[Player] jumpBackward -${Math.abs(diffSec)}s SUCCESS`);
+                                    }
+                                }, function(e) {
+                                    console.warn('[Player] jumpBackward error:', e);
+                                });
                             }
                         } catch (ex) {
                             console.warn('[Player] jump fallback failed:', ex);
                         }
+
+                        isSeekingInProgress = false;
+                        setTimeout(function() {
+                            isSettlingSeek = false;
+                        }, 800);
+
+                        if (queuedSeekTarget !== null) {
+                            const nextTarget = queuedSeekTarget;
+                            queuedSeekTarget = null;
+                            performAvplaySeek(nextTarget);
+                        }
                     }
                 );
+            } else if (state === 'READY') {
+                webapis.avplay.play();
+                isPlaying = true;
+                setTimeout(function() {
+                    performAvplaySeek(targetSec);
+                }, 250);
             }
         } catch (e) {
             console.error('[Player] Error calling AVPlay seekTo:', e);
+            isSeekingInProgress = false;
+            isSettlingSeek = false;
         }
     }
 
@@ -787,10 +873,14 @@ window.Player = (function() {
         if (playBtn) playBtn.addEventListener('click', togglePlayPause);
         if (aspectBtn) aspectBtn.addEventListener('click', toggleAspectRatio);
         if (infoBtn) infoBtn.addEventListener('click', function() {
-            if (window.Amnis) window.Amnis.toggleTorrentInfoHud();
+            if (window.VideoPlayer && window.VideoPlayer.toggleTorrentInfoHud) {
+                window.VideoPlayer.toggleTorrentInfoHud();
+            }
         });
         if (subsBtn) subsBtn.addEventListener('click', function() {
-            if (window.Amnis) window.Amnis.openSubtitleSearchModal();
+            if (window.VideoPlayer && window.VideoPlayer.openSubtitleSearchModal) {
+                window.VideoPlayer.openSubtitleSearchModal();
+            }
         });
         if (closeBtn) closeBtn.addEventListener('click', close);
 

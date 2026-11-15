@@ -386,6 +386,41 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+    def parse_byte_range(self, range_header, file_size):
+        """Parse RFC 7233 Range header into (start, end, length). Returns None if invalid/unspecified."""
+        if not range_header:
+            return None
+        r = range_header.strip()
+        if r.startswith('bytes='):
+            r = r[6:].strip()
+        
+        # Suffix range, e.g. bytes=-65536 (last 64KB, critical for MKV SeekHead/Cues)
+        if r.startswith('-'):
+            try:
+                suffix_len = int(r[1:].strip())
+                if suffix_len <= 0:
+                    return None
+                start = max(0, file_size - suffix_len)
+                end = file_size - 1
+                return (start, end, end - start + 1)
+            except ValueError:
+                return None
+        
+        # Standard range: bytes=start-end or bytes=start-
+        if '-' in r:
+            parts = r.split('-', 1)
+            try:
+                start = int(parts[0].strip()) if parts[0].strip() else 0
+                end = int(parts[1].strip()) if parts[1].strip() else file_size - 1
+            except ValueError:
+                return None
+            
+            if start < 0 or start >= file_size or start > end:
+                return False # 416 Not Satisfiable
+            end = min(end, file_size - 1)
+            return (start, end, end - start + 1)
+        return None
+
     def do_HEAD(self):
         path = self.path.split('?')[0]
         if path.startswith('/files/') or path.startswith('/downloads/') or path.startswith('/stream/'):
@@ -395,13 +430,30 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             if filepath and os.path.exists(filepath) and os.path.isfile(filepath):
                 file_size = os.path.getsize(filepath)
                 content_type = get_mime_type(filepath)
+                range_header = self.headers.get('Range')
+                parsed_range = self.parse_byte_range(range_header, file_size)
 
-                self.send_response(200)
-                self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', str(file_size))
+                if parsed_range is False:
+                    self.send_response(416, 'Range Not Satisfiable')
+                    self.send_header('Content-Range', f'bytes */{file_size}')
+                    self.end_headers()
+                    return
+
+                if parsed_range:
+                    start, end, length = parsed_range
+                    self.send_response(206, 'Partial Content')
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
+                    self.send_header('Content-Length', str(length))
+                else:
+                    self.send_response(200)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Length', str(file_size))
+
                 self.send_header('Accept-Ranges', 'bytes')
                 self.send_header('transferMode.dlna.org', 'Streaming')
-                self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
+                # DLNA.ORG_OP=11 explicitly enables BOTH time-seek and byte-range seek for Samsung TV AVPlay!
+                self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
                 self.end_headers()
                 return
             else:
@@ -447,13 +499,18 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 file_size = os.path.getsize(filepath)
                 range_header = self.headers.get('Range')
                 content_type = get_mime_type(filepath)
+                parsed_range = self.parse_byte_range(range_header, file_size)
 
-                if range_header:
-                    ranges = range_header.replace('bytes=', '').split('-')
-                    start = int(ranges[0]) if ranges[0] else 0
-                    end = int(ranges[1]) if ranges[1] else file_size - 1
-                    end = min(end, file_size - 1)
-                    length = end - start + 1
+                if parsed_range is False:
+                    self.send_response(416, 'Range Not Satisfiable')
+                    self.send_header('Content-Range', f'bytes */{file_size}')
+                    self.end_headers()
+                    return
+
+                if parsed_range:
+                    start, end, length = parsed_range
+                    print(f"[HTTP Stream] Range seek '{os.path.basename(filepath)}': bytes={start}-{end}/{file_size} ({length} bytes)")
+                    sys.stdout.flush()
 
                     self.send_response(206, 'Partial Content')
                     self.send_header('Content-Type', content_type)
@@ -461,7 +518,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     self.send_header('Content-Length', str(length))
                     self.send_header('Accept-Ranges', 'bytes')
                     self.send_header('transferMode.dlna.org', 'Streaming')
-                    self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
+                    self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
                     self.end_headers()
 
                     with open(filepath, 'rb') as f:
@@ -476,13 +533,15 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                         except (BrokenPipeError, ConnectionResetError):
                             pass
                 else:
+                    print(f"[HTTP Stream] Initial stream '{os.path.basename(filepath)}': {file_size} bytes")
+                    sys.stdout.flush()
                     self.send_response(200)
                     self.send_header('Content-Type', content_type)
                     self.send_header('Content-Disposition', f'inline; filename="{os.path.basename(filepath)}"')
                     self.send_header('Content-Length', str(file_size))
                     self.send_header('Accept-Ranges', 'bytes')
                     self.send_header('transferMode.dlna.org', 'Streaming')
-                    self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
+                    self.send_header('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000')
                     self.end_headers()
                     with open(filepath, 'rb') as f:
                         try:

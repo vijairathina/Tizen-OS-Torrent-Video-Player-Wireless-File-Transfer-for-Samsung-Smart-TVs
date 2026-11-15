@@ -45,7 +45,7 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('transferMode.dlna.org', 'Streaming');
-        res.setHeader('contentFeatures.dlna.org', 'DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000');
+        res.setHeader('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000');
 
         if (req.method === 'HEAD') {
             res.writeHead(200, {
@@ -57,9 +57,23 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
         }
 
         if (range) {
-            const parts = range.replace(/bytes=/, '').split('-');
-            const start = parseInt(parts[0], 10);
-            const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+            const rStr = range.replace(/bytes=/, '').trim();
+            let start = 0;
+            let end = total - 1;
+
+            if (rStr.startsWith('-')) {
+                // Suffix range: bytes=-65536
+                const suffix = parseInt(rStr.slice(1).trim(), 10) || 0;
+                start = Math.max(0, total - suffix);
+                end = total - 1;
+            } else if (rStr.includes('-')) {
+                const parts = rStr.split('-');
+                start = parseInt(parts[0].trim(), 10) || 0;
+                end = parts[1] && parts[1].trim() ? parseInt(parts[1].trim(), 10) : total - 1;
+            }
+
+            start = Math.max(0, Math.min(start, total - 1));
+            end = Math.max(start, Math.min(end, total - 1));
             const chunksize = (end - start) + 1;
 
             res.writeHead(206, {
