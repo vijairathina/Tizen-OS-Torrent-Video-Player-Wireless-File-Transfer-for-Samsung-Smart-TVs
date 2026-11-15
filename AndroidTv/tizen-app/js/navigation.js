@@ -122,15 +122,49 @@
         case window.TVKeys.KEY_RETURN:
         case window.TVKeys.KEY_BACK:
           window.TVKeys.playClickSound('back');
-          if (this.isModalActive && window.APKInstaller) {
-            window.APKInstaller.closeModal();
+          if (window.ActivityRunner && window.ActivityRunner.isRunning) {
+            var vlcOverlay = document.getElementById('vlc-player-overlay');
+            if (vlcOverlay && vlcOverlay.style.display !== 'none') {
+              window.ActivityRunner.destroyPlayer();
+              vlcOverlay.style.display = 'none';
+              window.SpatialNav.focusFirstAvailable();
+            } else {
+              window.ActivityRunner.exit();
+            }
+            handled = true;
+          } else if (this.isModalActive) {
+            var googleModal = document.getElementById('google-login-modal');
+            if (googleModal && googleModal.classList.contains('active')) {
+              if (window.AppStore) window.AppStore.closeGoogleLoginModal();
+            } else if (window.APKInstaller) {
+              window.APKInstaller.closeModal();
+            }
             handled = true;
           } else if (window.AndroidApp && window.AndroidApp.currentTab !== 'tab-home') {
             window.AndroidApp.switchTab('tab-home');
             handled = true;
           } else {
-            // Already at home: Show exit prompt or confirm
+            // Already at home
             console.log('[SpatialNav] Back at home screen');
+          }
+          break;
+
+        case window.TVKeys.KEY_PLAY:
+        case window.TVKeys.KEY_PAUSE:
+        case window.TVKeys.KEY_PLAY_PAUSE:
+          if (window.ActivityRunner && window.ActivityRunner.playerInstance) {
+            var p = window.ActivityRunner.playerInstance;
+            if (p.paused) p.play(); else p.pause();
+            handled = true;
+          }
+          break;
+
+        case window.TVKeys.KEY_STOP:
+          if (window.ActivityRunner && window.ActivityRunner.playerInstance) {
+            window.ActivityRunner.destroyPlayer();
+            var ov = document.getElementById('vlc-player-overlay');
+            if (ov) ov.style.display = 'none';
+            handled = true;
           }
           break;
       }

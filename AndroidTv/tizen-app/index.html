@@ -12,7 +12,7 @@
     <div class="tv-background-grid"></div>
   </div>
 
-  <div class="app-container">
+  <div class="app-container" id="tv-launcher-shell">
     <!-- Header / Top Status Bar -->
     <header class="tv-header">
       <div class="brand-section">
@@ -141,6 +141,7 @@
             <div class="section-subtitle">Curated TV applications verified for Samsung 32-bit ARMv7 hardware</div>
           </div>
         </div>
+        <div id="play-store-account-banner" style="margin-bottom: 24px;"></div>
         <div class="app-grid" id="play-store-grid"></div>
       </section>
 
@@ -319,6 +320,83 @@
     </div>
   </div>
 
+  <!-- GOOGLE ACCOUNT SIGN-IN MODAL -->
+  <div class="modal-overlay" id="google-login-modal">
+    <div class="apk-install-modal" style="width: 820px;">
+      <div class="apk-modal-header">
+        <img class="apk-modal-icon" src="assets/icons/google.png" alt="Google">
+        <div>
+          <div class="apk-modal-title">Sign in with Google</div>
+          <div class="apk-modal-pkg">Google Play Services &amp; Account Sync</div>
+        </div>
+      </div>
+
+      <!-- Two Options: TV Device Pairing vs Direct Account -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+        <!-- Option 1: TV Device Pairing Flow -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center;">
+          <div style="font-size: 15px; font-weight: 700; color: #3DDC84; margin-bottom: 12px;">📱 Smart TV Device Pairing</div>
+          <p style="font-size: 13px; color: #9AA4B2; margin-bottom: 16px;">1. On your phone or computer, open:<br><strong style="color:#00E5FF;font-family:monospace;">google.com/device</strong></p>
+          <div style="background: #090C10; padding: 14px 24px; border-radius: 10px; border: 1px dashed rgba(61,220,132,0.4); margin-bottom: 16px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: #606B7B;">Enter Pairing Code</div>
+            <div style="font-size: 26px; font-weight: 800; letter-spacing: 4px; color: #FFF; font-family: monospace;">GTV-7284</div>
+          </div>
+          <button class="tv-btn tv-btn-primary focusable" id="btn-confirm-device-pair" style="width: 100%; padding: 10px 16px; font-size: 14px;" tabindex="0">
+            Confirm Pairing from Phone
+          </button>
+        </div>
+
+        <!-- Option 2: Direct Email / TV Profile -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 24px; display: flex; flex-direction: column;">
+          <div style="font-size: 15px; font-weight: 700; color: #00E5FF; margin-bottom: 12px;">✉️ Direct Account Sign-In</div>
+          <label style="font-size: 12px; color: #9AA4B2; margin-bottom: 4px;">Google Email</label>
+          <input type="email" id="google-input-email" class="browser-input focusable" style="background:#090C10; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 14px; margin-bottom:12px; color:#FFF;" value="user@gmail.com" tabindex="0">
+
+          <label style="font-size: 12px; color: #9AA4B2; margin-bottom: 4px;">Password</label>
+          <input type="password" id="google-input-password" class="browser-input focusable" style="background:#090C10; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 14px; margin-bottom:16px; color:#FFF;" value="••••••••••••" tabindex="0">
+
+          <button class="tv-btn tv-btn-primary focusable" id="btn-submit-direct-login" style="margin-bottom: 10px; padding: 10px 16px; font-size: 14px;" tabindex="0">
+            Sign In with Email
+          </button>
+          <button class="tv-btn tv-btn-secondary focusable" id="btn-quick-google-demo" style="padding: 8px 14px; font-size: 13px;" tabindex="0">
+            ⚡ Quick Connect (Smart TV Profile)
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="tv-btn tv-btn-secondary focusable" id="btn-close-google-modal" tabindex="0">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANDROID RUNTIME EXECUTION SCREEN (ACTIVE APPLICATION WINDOW) -->
+  <div class="runtime-screen" id="android-runtime-screen" style="display:none;">
+    <div class="runtime-top-bar">
+      <div class="runtime-bar-left">
+        <button class="runtime-btn-back focusable" id="btn-runtime-back" onclick="ActivityRunner.exit()" tabindex="0">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          <span>Launcher</span>
+        </button>
+        <div class="runtime-app-identity">
+          <img class="runtime-app-icon-img" id="runtime-app-icon" src="icon.png" alt="App Icon">
+          <div class="runtime-app-title-text" id="runtime-app-title">Android App</div>
+        </div>
+      </div>
+
+      <div class="runtime-bar-right">
+        <div class="runtime-telemetry-tag">60 FPS • AVPlay 4K</div>
+        <div class="runtime-telemetry-tag" style="color:#00E5FF;border-color:rgba(0,229,255,0.3);background:rgba(0,229,255,0.1);">ARMv7 Resumed</div>
+        <button class="runtime-btn-close focusable" id="btn-runtime-close" onclick="ActivityRunner.exit()" tabindex="0">
+          ✕ Exit App
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Android Viewport Content -->
+    <div class="runtime-viewport-content" id="runtime-viewport-content"></div>
+  </div>
+
   <!-- Application Subsystem Scripts -->
   <script src="js/tv-keys.js"></script>
   <script src="js/navigation.js"></script>
@@ -327,6 +405,7 @@
   <script src="js/apk-installer.js"></script>
   <script src="js/runtime-manager.js"></script>
   <script src="js/app-store.js"></script>
+  <script src="js/activity-runner.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

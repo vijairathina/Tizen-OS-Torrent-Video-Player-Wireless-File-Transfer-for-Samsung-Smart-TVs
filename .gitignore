@@ -4,20 +4,25 @@ __pycache__/
 *$py.class
 
 # Build artifacts
-build/
+build/*
+!build/TVFileHub.wgt
 *.wgt
+!build/TVFileHub.wgt
 
-# Server temporary files
+# Server downloads & uploads (no test movies or media)
+server/downloads/
 server/uploads/*
-!server/uploads/sample.mp4
-!server/uploads/The_jackfruit_is_holding_on_to_the_tree.jpg
+!server/uploads/.gitkeep
+*.done
 
 # Media files
 *.mkv
 *.mp4
 *.avi
 *.mov
+*.webm
 *.torrent
+*.ts
 
 # Node dependencies
 node_modules/

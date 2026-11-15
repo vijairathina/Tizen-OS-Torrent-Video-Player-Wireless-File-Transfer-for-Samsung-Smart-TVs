@@ -898,3 +898,632 @@ html, body {
   50% { box-shadow: 0 0 16px var(--accent-android); }
   100% { box-shadow: 0 0 4px var(--accent-android); }
 }
+
+/* ==========================================================================
+   Android Runtime Execution Screen (Active App Window)
+   ========================================================================== */
+.runtime-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000000;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+}
+
+.runtime-top-bar {
+  height: 60px;
+  background: rgba(14, 18, 26, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 600;
+}
+
+.runtime-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.runtime-btn-back {
+  padding: 8px 16px;
+  border-radius: var(--border-radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.runtime-app-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.runtime-app-icon-img {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--border-radius-sm);
+}
+
+.runtime-app-title-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.runtime-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.runtime-telemetry-tag {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--accent-android);
+  background: rgba(61, 220, 132, 0.1);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-pill);
+  border: 1px solid rgba(61, 220, 132, 0.2);
+}
+
+.runtime-btn-close {
+  padding: 8px 16px;
+  border-radius: var(--border-radius-pill);
+  background: rgba(255, 61, 113, 0.15);
+  border: 1px solid rgba(255, 61, 113, 0.3);
+  color: #FF3D71;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.runtime-viewport-content {
+  flex: 1;
+  width: 100%;
+  height: calc(100vh - 60px);
+  position: relative;
+  overflow: hidden;
+  background: #090C10;
+}
+
+/* ==========================================================================
+   VLC for Android UI Styles
+   ========================================================================== */
+.vlc-app-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #0C0F14;
+}
+
+.vlc-sidebar {
+  width: 260px;
+  background: #11151E;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vlc-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #FF8800;
+  margin-bottom: 20px;
+  padding: 0 8px;
+}
+
+.vlc-nav-btn {
+  padding: 12px 18px;
+  border-radius: var(--border-radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.vlc-nav-btn.active {
+  background: rgba(255, 136, 0, 0.15);
+  color: #FF8800;
+  border-color: rgba(255, 136, 0, 0.3);
+}
+
+.vlc-content-area {
+  flex: 1;
+  padding: 32px 40px;
+  overflow-y: auto;
+}
+
+.vlc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.vlc-meta-pill {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: #3DDC84;
+  background: rgba(61, 220, 132, 0.1);
+  padding: 6px 14px;
+  border-radius: var(--border-radius-pill);
+}
+
+.vlc-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.vlc-media-card {
+  background: #161B26;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.vlc-thumb-placeholder {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.vlc-duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.vlc-card-body {
+  padding: 16px;
+}
+
+.vlc-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vlc-card-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* VLC Fullscreen Player */
+.vlc-player-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  z-index: 1000;
+}
+
+.vlc-video-tag {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.vlc-osd {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.85) 100%);
+  pointer-events: auto;
+}
+
+.vlc-osd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vlc-osd-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFF;
+}
+
+.vlc-osd-btn {
+  padding: 10px 20px;
+  border-radius: var(--border-radius-pill);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFF;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vlc-seekbar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.vlc-time-text {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #FFF;
+  min-width: 50px;
+}
+
+.vlc-seekbar-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.vlc-seekbar-fill {
+  height: 100%;
+  width: 0%;
+  background: #FF8800;
+  border-radius: 4px;
+  box-shadow: 0 0 10px #FF8800;
+}
+
+.vlc-osd-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.vlc-ctrl-btn {
+  padding: 12px 24px;
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFF;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   SmartTube TV & YouTube Styles
+   ========================================================================== */
+.st-app-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #0A0A0A;
+}
+
+.st-sidebar {
+  width: 240px;
+  background: #121212;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #FFF;
+  margin-bottom: 20px;
+  padding: 0 8px;
+}
+
+.st-nav-btn {
+  padding: 12px 18px;
+  border-radius: var(--border-radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-nav-btn.active {
+  background: rgba(255, 0, 0, 0.15);
+  color: #FF0000;
+}
+
+.st-content-area {
+  flex: 1;
+  padding: 32px 40px;
+  overflow-y: auto;
+}
+
+.st-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.st-video-card {
+  background: #181818;
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.st-thumb {
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.st-video-info {
+  padding: 16px;
+}
+
+.st-video-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.st-channel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Android Chromium Browser Styles
+   ========================================================================== */
+.browser-app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.browser-toolbar {
+  height: 54px;
+  background: #141822;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.browser-btn {
+  padding: 6px 14px;
+  border-radius: var(--border-radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: #FFF;
+  cursor: pointer;
+}
+
+.browser-url-bar {
+  flex: 1;
+  height: 38px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: var(--border-radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.browser-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #FFF;
+  font-size: 14px;
+  font-family: var(--font-mono);
+}
+
+.browser-webview-container {
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 54px);
+  background: #FFF;
+}
+
+.browser-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ==========================================================================
+   Android Settings Styles
+   ========================================================================== */
+.settings-app-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #0E121A;
+}
+
+.settings-sidebar {
+  width: 320px;
+  background: #141924;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 32px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-nav-btn {
+  padding: 14px 20px;
+  border-radius: var(--border-radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-nav-btn.active {
+  background: rgba(61, 220, 132, 0.15);
+  color: var(--accent-android);
+}
+
+.settings-detail-pane {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-label {
+  color: var(--text-secondary);
+}
+
+.settings-val {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: #FFF;
+}
+
+/* ==========================================================================
+   Generic Application Shell
+   ========================================================================== */
+.generic-app-shell {
+  padding: 48px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.generic-app-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+/* ==========================================================================
+   Google Account Card & Profile Styles
+   ========================================================================== */
+.google-account-card {
+  background: linear-gradient(135deg, rgba(27, 33, 45, 0.9) 0%, rgba(18, 22, 31, 0.95) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-lg);
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.google-account-card.connected {
+  border-color: rgba(61, 220, 132, 0.35);
+  background: linear-gradient(135deg, rgba(20, 36, 28, 0.9) 0%, rgba(14, 24, 20, 0.95) 100%);
+}
+
+.google-card-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.google-g-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--border-radius-sm);
+}
+
+.google-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.google-card-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 520px;
+}
+
+.google-user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.google-user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-android);
+}
+
+.google-user-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.google-user-email {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.google-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+

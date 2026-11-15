@@ -137,6 +137,7 @@
             minSdk: 21,
             targetSdk: 33,
             arch: 'armeabi-v7a (32-bit ARM)',
+            icon: 'assets/icons/kodi.png',
             isCompatible: true
           },
           {
@@ -150,6 +151,7 @@
             minSdk: 23,
             targetSdk: 34,
             arch: 'arm64-v8a (64-bit ARM)',
+            icon: 'assets/icons/default_app.png',
             isCompatible: false,
             compatReason: 'Requires 64-bit ARM CPU. TV is 32-bit ARMv7.'
           }
@@ -168,6 +170,7 @@
           minSdk: 17,
           targetSdk: 33,
           arch: 'armeabi-v7a (32-bit ARM)',
+          icon: 'assets/icons/vlc.png',
           isCompatible: true
         },
         {
@@ -181,6 +184,7 @@
           minSdk: 21,
           targetSdk: 33,
           arch: 'armeabi-v7a (32-bit ARM)',
+          icon: 'assets/icons/retroarch.png',
           isCompatible: true
         },
         {
@@ -194,6 +198,7 @@
           minSdk: 19,
           targetSdk: 33,
           arch: 'Universal (Pure DEX bytecode)',
+          icon: 'assets/icons/youtube.png',
           isCompatible: true
         },
         {
@@ -207,6 +212,7 @@
           minSdk: 26,
           targetSdk: 34,
           arch: 'arm64-v8a (64-bit ARM)',
+          icon: 'assets/icons/default_app.png',
           isCompatible: false,
           compatReason: 'Requires 64-bit ARM CPU. TV is 32-bit ARMv7.'
         }

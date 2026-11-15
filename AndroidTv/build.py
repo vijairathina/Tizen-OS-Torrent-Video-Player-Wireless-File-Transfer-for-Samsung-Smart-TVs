@@ -27,6 +27,7 @@ REQUIRED_FILES = [
     os.path.join('js', 'apk-installer.js'),
     os.path.join('js', 'runtime-manager.js'),
     os.path.join('js', 'app-store.js'),
+    os.path.join('js', 'activity-runner.js'),
     os.path.join('js', 'app.js')
 ]
 

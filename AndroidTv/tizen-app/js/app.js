@@ -23,7 +23,7 @@
       window.SpatialNav.init();
       window.APKInstaller.init();
       window.RuntimeManager.init();
-      window.AppStore.renderCatalog();
+      window.AppStore.init();
       window.APKInstaller.renderInstalledApps();
 
       // 4. Initialize USB Storage & scan default drive
@@ -220,6 +220,37 @@
       if (quickStoreBtn) {
         quickStoreBtn.onclick = function () {
           AndroidApp.switchTab('tab-store');
+        };
+      }
+
+      // Google Login Modal Handlers
+      var btnCloseGoogle = document.getElementById('btn-close-google-modal');
+      if (btnCloseGoogle) {
+        btnCloseGoogle.onclick = function () {
+          window.AppStore.closeGoogleLoginModal();
+        };
+      }
+
+      var btnConfirmPair = document.getElementById('btn-confirm-device-pair');
+      if (btnConfirmPair) {
+        btnConfirmPair.onclick = function () {
+          window.AppStore.connectGoogleAccount('demo.user@example.com', 'Demo User');
+        };
+      }
+
+      var btnSubmitDirect = document.getElementById('btn-submit-direct-login');
+      if (btnSubmitDirect) {
+        btnSubmitDirect.onclick = function () {
+          var emailInput = document.getElementById('google-input-email');
+          var email = (emailInput && emailInput.value.trim()) || 'demo.user@example.com';
+          window.AppStore.connectGoogleAccount(email, email.split('@')[0]);
+        };
+      }
+
+      var btnQuickGoogle = document.getElementById('btn-quick-google-demo');
+      if (btnQuickGoogle) {
+        btnQuickGoogle.onclick = function () {
+          window.AppStore.connectGoogleAccount('smart.tv@example.com', 'Smart TV');
         };
       }
     }
