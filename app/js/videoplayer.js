@@ -660,6 +660,30 @@ window.VideoPlayer = (function() {
         if (btnNorm) btnNorm.classList.toggle('active', currentFontSize === 'normal');
         if (btnLarge) btnLarge.classList.toggle('active', currentFontSize === 'large');
         if (btnXlarge) btnXlarge.classList.toggle('active', currentFontSize === 'xlarge');
+
+        const autoTorrentEnabled = isAutoTorrentDownloadEnabled();
+        const btnAutoOn = document.getElementById('btn-auto-torrent-on');
+        const btnAutoOff = document.getElementById('btn-auto-torrent-off');
+        if (btnAutoOn) btnAutoOn.classList.toggle('active', autoTorrentEnabled);
+        if (btnAutoOff) btnAutoOff.classList.toggle('active', !autoTorrentEnabled);
+    }
+
+    function isAutoTorrentDownloadEnabled() {
+        try {
+            return localStorage.getItem('tvhub_auto_torrent_download') !== 'false';
+        } catch (e) {
+            return true;
+        }
+    }
+
+    function setAutoTorrentDownload(enabled) {
+        try {
+            localStorage.setItem('tvhub_auto_torrent_download', enabled ? 'true' : 'false');
+        } catch (e) {}
+        updateSettingsButtonsUI();
+        if (window.FileReceiver && window.FileReceiver.showToast) {
+            window.FileReceiver.showToast(enabled ? '⚡ Auto Torrent Background Download: ON' : '⏸️ Auto Torrent Background Download: OFF');
+        }
     }
 
     /* Storage Preference in Settings */
@@ -842,6 +866,11 @@ window.VideoPlayer = (function() {
         if (btnLarge) btnLarge.addEventListener('click', () => applyFontSize('large'));
         if (btnXlarge) btnXlarge.addEventListener('click', () => applyFontSize('xlarge'));
 
+        const btnAutoOn = document.getElementById('btn-auto-torrent-on');
+        const btnAutoOff = document.getElementById('btn-auto-torrent-off');
+        if (btnAutoOn) btnAutoOn.addEventListener('click', () => setAutoTorrentDownload(true));
+        if (btnAutoOff) btnAutoOff.addEventListener('click', () => setAutoTorrentDownload(false));
+
         if (urlPlayBtn) urlPlayBtn.addEventListener('click', playEnteredUrl);
         if (urlCancelBtn) urlCancelBtn.addEventListener('click', closeUrlDialog);
         if (hudPlayBtn) hudPlayBtn.addEventListener('click', function() {
@@ -879,6 +908,9 @@ window.VideoPlayer = (function() {
         registerTorrentDownload: registerTorrentDownload,
         renderDownloadsList: renderDownloadsList,
         renderStorageSettingsOptions: renderStorageSettingsOptions,
+        isAutoTorrentDownloadEnabled: isAutoTorrentDownloadEnabled,
+        setAutoTorrentDownload: setAutoTorrentDownload,
+        cleanTorrentTitle: cleanTorrentTitle,
         playPreset: playPreset
     };
 })();

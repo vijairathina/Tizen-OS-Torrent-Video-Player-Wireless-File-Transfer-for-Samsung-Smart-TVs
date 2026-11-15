@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TV File Hub &amp; Video Player</title>
-    <link rel="stylesheet" href="css/style.css?v=1.0.6">
+    <link rel="stylesheet" href="css/style.css?v=1.0.7">
 </head>
 <body>
     <div id="app-container">
@@ -589,6 +589,24 @@
                     </div>
                 </div>
 
+                <!-- Auto Torrent Background Download Option -->
+                <div class="settings-group">
+                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">⚡ Auto Torrent Background Download:</div>
+                    <div class="settings-options-row" style="display:flex; gap:12px;">
+                        <button class="settings-pill focusable active" id="btn-auto-torrent-on" tabindex="0">
+                            <span>🚀</span>
+                            <span>Auto Download (ON)</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-auto-torrent-off" tabindex="0">
+                            <span>⏸️</span>
+                            <span>Manual (OFF)</span>
+                        </button>
+                    </div>
+                    <div style="font-size:13px; color:var(--text-muted); margin-top:6px;">
+                        When ON, receiving a .torrent file immediately adds it to Video Player and starts downloading in the background.
+                    </div>
+                </div>
+
                 <!-- Theme Option: Day / Night -->
                 <div class="settings-group">
                     <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">🎨 App Theme Mode:</div>
@@ -698,14 +716,14 @@
     <div id="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="js/qrcode.min.js?v=1.0.6"></script>
-    <script src="js/navigation.js?v=1.0.6"></script>
-    <script src="js/filesystem.js?v=1.0.6"></script>
-    <script src="js/player.js?v=1.0.6"></script>
-    <script src="js/videoplayer.js?v=1.0.6"></script>
-    <script src="js/filemanager.js?v=1.0.6"></script>
-    <script src="js/receiver.js?v=1.0.6"></script>
-    <script src="js/home.js?v=1.0.6"></script>
-    <script src="js/app.js?v=1.0.6"></script>
+    <script src="js/qrcode.min.js?v=1.0.7"></script>
+    <script src="js/navigation.js?v=1.0.7"></script>
+    <script src="js/filesystem.js?v=1.0.7"></script>
+    <script src="js/player.js?v=1.0.7"></script>
+    <script src="js/videoplayer.js?v=1.0.7"></script>
+    <script src="js/filemanager.js?v=1.0.7"></script>
+    <script src="js/receiver.js?v=1.0.7"></script>
+    <script src="js/home.js?v=1.0.7"></script>
+    <script src="js/app.js?v=1.0.7"></script>
 </body>
 </html>

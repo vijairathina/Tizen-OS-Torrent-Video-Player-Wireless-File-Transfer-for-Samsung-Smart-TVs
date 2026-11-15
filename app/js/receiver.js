@@ -521,9 +521,30 @@ window.FileReceiver = (function() {
                         const loc = isUsb ? 'USB' : (wasFallback ? 'Internal Storage (USB read-only)' : 'Internal Storage');
                         showToast(`Saved to ${loc}: ${finalName}`);
 
-                        // If user sent a .torrent file, auto-prompt to play in Video Player
+                        // If user sent a .torrent file
                         if (finalName.toLowerCase().endsWith('.torrent')) {
-                            showToast(`Torrent Ready! Click 'Play in Video Player' to start streaming.`);
+                            const isAutoDownload = (!window.VideoPlayer || !window.VideoPlayer.isAutoTorrentDownloadEnabled) ?
+                                (localStorage.getItem('tvhub_auto_torrent_download') !== 'false') :
+                                window.VideoPlayer.isAutoTorrentDownloadEnabled();
+
+                            // 1. Automatically register with Video Player active downloads list
+                            if (window.VideoPlayer && window.VideoPlayer.registerTorrentDownload) {
+                                window.VideoPlayer.registerTorrentDownload(finalName, finalSize, fetchUrl);
+                            }
+
+                            // 2. If Auto-Download is ON, start background downloading on server immediately
+                            if (isAutoDownload) {
+                                fetch(`http://${serverHostIP}:${transferPort}/start_torrent?file=${encodeURIComponent(finalName)}&downloadOnly=true`)
+                                    .catch(() => {});
+                                showToast(`⚡ Auto-downloading in background: ${cleanTorrentTitle(finalName)}`);
+                            } else {
+                                showToast(`Torrent Ready! Click 'Play in Video Player' to start streaming.`);
+                            }
+
+                            // 3. Refresh Home screen so the new torrent appears in Spotlight & carousel
+                            if (window.HomeLauncher && window.HomeLauncher.refreshData) {
+                                window.HomeLauncher.refreshData();
+                            }
                         }
 
                         if (window.FileManager) {
@@ -668,6 +689,14 @@ window.FileReceiver = (function() {
         const tab = document.getElementById('tab-receiver');
         if (dot) dot.style.display = 'none';
         if (tab) tab.classList.remove('tab-alert-pulse');
+    }
+
+    function cleanTorrentTitle(rawName) {
+        if (!rawName) return 'Torrent Stream';
+        let clean = rawName.replace(/^www\.[a-zA-Z0-9-]+\.[a-zA-Z]+\s*-\s*/i, '');
+        clean = clean.replace(/\.torrent$/i, '');
+        clean = clean.replace(/\.mkv$/i, '');
+        return clean.trim();
     }
 
     return {

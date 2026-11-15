@@ -470,7 +470,7 @@ window.Player = (function() {
         showOSD();
     }
 
-    function startOrContinueScrub(direction) {
+    function startOrContinueScrub(direction, customStep) {
         if (!isPlayerOpen) return;
 
         if (durationSec <= 0 && isAVPlay) {
@@ -616,7 +616,7 @@ window.Player = (function() {
             }
 
             if (state === 'PLAYING' || state === 'PAUSED') {
-                const targetMs = Math.round(targetSec * 1000);
+                const targetMs = Math.max(100, Math.round(targetSec * 1000));
                 isSeekingInProgress = true;
                 isSettlingSeek = true;
                 targetSeekSec = targetSec;

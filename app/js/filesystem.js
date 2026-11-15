@@ -283,14 +283,14 @@ window.TVFilesystem = (function() {
         let clean = filename.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
         // Collapse consecutive underscores or spaces
         clean = clean.replace(/_+/g, '_').replace(/\s+/g, ' ');
-        // If length exceeds 100 characters, truncate basename while keeping extension
-        if (clean.length > 100) {
+        // If length exceeds 220 characters, truncate basename while keeping extension
+        if (clean.length > 220) {
             const dot = clean.lastIndexOf('.');
             if (dot !== -1 && clean.length - dot <= 12) {
                 const ext = clean.substring(dot);
-                clean = clean.substring(0, 100 - ext.length) + ext;
+                clean = clean.substring(0, 220 - ext.length) + ext;
             } else {
-                clean = clean.substring(0, 100);
+                clean = clean.substring(0, 220);
             }
         }
         return clean || ('file_' + Date.now());

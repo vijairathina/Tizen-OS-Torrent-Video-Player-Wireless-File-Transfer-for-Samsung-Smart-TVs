@@ -98,6 +98,10 @@ def find_downloaded_video(filename_or_query):
     stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
     stem_lower = stem_clean.lower()
 
+    m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean_target)
+    target_keyword = m.group(1).strip().lower() if m else None
+    target_year = m.group(2) if m else None
+
     # 1. Direct stem match in DOWNLOADS_DIR
     p = os.path.join(DOWNLOADS_DIR, stem)
     if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
@@ -112,8 +116,64 @@ def find_downloaded_video(filename_or_query):
         for f in files:
             f_lower = f.lower()
             if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
-                if f_lower == stem_lower or (stem_lower and (stem_lower in f_lower or f_lower in stem_lower)):
+                f_stem = re.sub(r'\.[a-z0-9]+$', '', f_lower).strip()
+                if target_keyword:
+                    if target_keyword in f_lower and (not target_year or target_year in f_lower):
+                        return os.path.join(root, f)
+                    continue
+                if f_lower == stem_lower or f_stem == stem_lower:
                     return os.path.join(root, f)
+                if len(stem_lower) > 20 and (stem_lower[:40] in f_lower or f_lower[:40] in stem_lower):
+                    return os.path.join(root, f)
+
+    return None
+
+def find_torrent_file(filename_or_query):
+    """Finds exact, prefix, or keyword-matched torrent file in UPLOADS_DIR. Never returns an unrelated movie."""
+    if not filename_or_query:
+        return None
+
+    clean = os.path.basename(filename_or_query).strip()
+    p = os.path.join(UPLOADS_DIR, clean)
+    if os.path.exists(p) and os.path.isfile(p):
+        return p
+
+    stem = re.sub(r'\.torrent$', '', clean, flags=re.IGNORECASE).strip()
+    target_lower = clean.lower()
+    stem_lower = stem.lower()
+
+    torrents = [f for f in os.listdir(UPLOADS_DIR) if f.lower().endswith('.torrent')]
+
+    # 1. Exact case-insensitive match
+    for f in torrents:
+        if f.lower() == target_lower or f.lower() == stem_lower + '.torrent':
+            return os.path.join(UPLOADS_DIR, f)
+
+    # 2. Prefix / substring match (handles truncated filenames)
+    for f in torrents:
+        f_stem = re.sub(r'\.torrent$', '', f, flags=re.IGNORECASE).lower()
+        if (len(stem_lower) >= 20 and (stem_lower.startswith(f_stem[:30]) or f_stem.startswith(stem_lower[:30]))) or \
+           (stem_lower in f_stem or f_stem in stem_lower):
+            return os.path.join(UPLOADS_DIR, f)
+
+    # 3. Movie title keyword match, e.g. "DC", "Scene", "Sandakari", "Jailer 2"
+    m = re.search(r'-\s*([A-Za-z0-9\s]+?)\s*\((\d{4})\)', clean)
+    if m:
+        keyword = m.group(1).strip().lower()
+        year = m.group(2)
+        for f in torrents:
+            if keyword in f.lower() and year in f:
+                return os.path.join(UPLOADS_DIR, f)
+
+    # 4. Fallback search by any distinct movie title word
+    words = [w for w in re.split(r'[^a-zA-Z0-9]+', stem_lower) if len(w) >= 3 and w not in (
+        'tamil', 'hindi', 'telugu', '1080p', '720p', 'hevc', 'x264', 'x265', 'true',
+        'web', 'dl', 'hdts', 'hdrip', 'atmos', 'esub', 'clean', 'www', '1tamilmv', 'insure', 'meme', 'torrent')]
+    if words:
+        for f in torrents:
+            f_lower = f.lower()
+            if all(w in f_lower for w in words):
+                return os.path.join(UPLOADS_DIR, f)
 
     return None
 
@@ -565,13 +625,26 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
         # 5. Live BitTorrent Streaming Engine APIs (Video Player Integration)
         elif path == '/start_torrent':
             import urllib.parse
-            qs = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            raw_query = self.path.split('?', 1)[1] if '?' in self.path else ''
+            qs = urllib.parse.parse_qs(raw_query)
             fnames = qs.get('file', [])
             magnets = qs.get('magnet', [])
+            download_only = 'downloadonly=true' in raw_query.lower()
+
+            # Handle unencoded '&' in filename parameter
+            if 'file=' in raw_query:
+                file_part = raw_query.split('file=', 1)[1]
+                file_part = re.split(r'&(?:magnet|downloadOnly)=', file_part, flags=re.I)[0]
+                unquoted = urllib.parse.unquote(file_part).strip()
+                if unquoted:
+                    fnames = [unquoted]
+
             if fnames:
-                fname = os.path.basename(fnames[0])
-                
-                # Check if video is already downloaded in DOWNLOADS_DIR
+                fname = os.path.basename(fnames[0]).strip()
+                print(f"[TorrentEngine] /start_torrent requested for: {fname} (downloadOnly={download_only})")
+                sys.stdout.flush()
+
+                # 1. Check if video is already downloaded in DOWNLOADS_DIR for this specific title
                 media_path = find_downloaded_video(fname)
                 if media_path and not media_path.lower().endswith('.torrent'):
                     stream_url = TORRENT_MANAGER.start_torrent(media_path, title=os.path.basename(media_path))
@@ -581,50 +654,22 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': os.path.basename(media_path), 'isDownloaded': True}).encode('utf-8'))
                     return
 
-                # Otherwise check for torrent file to start WebTorrent engine
-                fpath = os.path.join(UPLOADS_DIR, fname)
-                if not os.path.exists(fpath):
-                    clean_fname = re.sub(r'\s*\(\d+\)\.torrent$', '.torrent', fname, flags=re.IGNORECASE)
-                    alt_path = os.path.join(UPLOADS_DIR, clean_fname)
-                    if os.path.exists(alt_path):
-                        fpath = alt_path
-                        fname = clean_fname
-
-                if not os.path.exists(fpath):
-                    lower_target = fname.lower()
-                    for f in os.listdir(UPLOADS_DIR):
-                        if f.lower() == lower_target or (f.lower().endswith('.torrent') and ('jailer' in lower_target and 'jailer' in f.lower())):
-                            fpath = os.path.join(UPLOADS_DIR, f)
-                            fname = f
-                            break
-
-                if not os.path.exists(fpath):
-                    torrents = [f for f in os.listdir(UPLOADS_DIR) if f.lower().endswith('.torrent')]
-                    if torrents:
-                        fpath = os.path.join(UPLOADS_DIR, torrents[0])
-                        fname = torrents[0]
-
-                if os.path.exists(fpath):
-                    stream_url = TORRENT_MANAGER.start_torrent(fpath, title=fname)
+                # 2. Check for matching torrent file in UPLOADS_DIR
+                torrent_path = find_torrent_file(fname)
+                if torrent_path and os.path.exists(torrent_path):
+                    matched_name = os.path.basename(torrent_path)
+                    print(f"[TorrentEngine] Matched torrent file: {matched_name}")
+                    sys.stdout.flush()
+                    stream_url = TORRENT_MANAGER.start_torrent(torrent_path, title=matched_name)
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': fname}).encode('utf-8'))
+                    self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': matched_name}).encode('utf-8'))
                     return
                 else:
-                    # Final check: is there ANY video file in DOWNLOADS_DIR we can serve?
-                    for root, dirs, files in os.walk(DOWNLOADS_DIR):
-                        for f in files:
-                            if any(f.lower().endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm')):
-                                f_path = os.path.join(root, f)
-                                stream_url = TORRENT_MANAGER.start_torrent(f_path, title=f)
-                                self.send_response(200)
-                                self.send_header('Content-Type', 'application/json')
-                                self.end_headers()
-                                self.wfile.write(json.dumps({'status': 'started', 'streamUrl': stream_url, 'filename': f, 'isDownloaded': True}).encode('utf-8'))
-                                return
-
-                    self.send_error(404, f'Torrent or video file not found: {fname}')
+                    print(f"[TorrentEngine] ERROR: No matching torrent found for '{fname}' in uploads")
+                    sys.stdout.flush()
+                    self.send_error(404, f'Torrent file not found for: {fname}')
                     return
             elif magnets:
                 stream_url = TORRENT_MANAGER.start_torrent(magnets[0], title="Magnet Stream")
@@ -806,9 +851,9 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                                     fname = cmd_data.get('filename')
                                     magnet = cmd_data.get('magnet')
                                     if fname:
-                                        fpath = os.path.join(UPLOADS_DIR, fname)
-                                        if os.path.exists(fpath):
-                                            TORRENT_MANAGER.start_torrent(fpath, title=fname)
+                                        t_path = find_torrent_file(fname)
+                                        if t_path and os.path.exists(t_path):
+                                            TORRENT_MANAGER.start_torrent(t_path, title=os.path.basename(t_path))
                                     elif magnet:
                                         TORRENT_MANAGER.start_torrent(magnet, title="Magnet Stream")
                                 elif ctype == 'stop_torrent':
