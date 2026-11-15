@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samsung TV File Sender</title>
+    <style>
+        :root {
+            --bg-dark: #0f0c13;
+            --bg-card: rgba(28, 22, 38, 0.85);
+            --primary: #7b2cbf;
+            --cyan: #00f2fe;
+            --text: #ffffff;
+            --text-muted: #9e97a9;
+            --border: rgba(255, 255, 255, 0.1);
+            --gradient: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(123, 44, 191, 0.25) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 242, 254, 0.18) 0%, transparent 40%);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 580px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(16px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            font-weight: 700;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .target-tv-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 20px;
+            color: #10b981;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        /* Drop Zone */
+        .dropzone {
+            border: 2px dashed rgba(0, 242, 254, 0.4);
+            border-radius: 18px;
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(0, 0, 0, 0.2);
+            margin-bottom: 24px;
+        }
+
+        .dropzone.dragover {
+            border-color: var(--cyan);
+            background: rgba(0, 242, 254, 0.08);
+            transform: scale(1.02);
+        }
+
+        .dropzone-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .dropzone-text {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .dropzone-subtext {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* Selected Files List */
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 260px;
+            overflow-y: auto;
+            margin-bottom: 24px;
+        }
+
+        .file-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .file-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .file-name {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 75%;
+        }
+
+        .file-size {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--gradient);
+            width: 0%;
+            transition: width 0.15s ease;
+        }
+
+        /* Send Button */
+        .btn-send {
+            width: 100%;
+            padding: 16px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 14px;
+            color: #000000;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0, 242, 254, 0.3);
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .btn-send:hover {
+            transform: translateY(-2px);
+            opacity: 0.95;
+        }
+
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .footer {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TV File Hub</h1>
+            <p>Send videos, audio, images &amp; files to Samsung Smart TV</p>
+            <div class="target-tv-badge">
+                <span>●</span>
+                <span>Target: Samsung TV (USB /TVFileHub/Received/)</span>
+            </div>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon">📤</div>
+            <div class="dropzone-text">Tap to Select Files or Drag &amp; Drop</div>
+            <div class="dropzone-subtext">Supports Multiple Files (Videos, Audios, Photos, Subtitles)</div>
+            <input type="file" id="file-input" multiple>
+        </div>
+
+        <div class="file-list" id="file-list"></div>
+
+        <button class="btn-send" id="btn-send" disabled>Select Files to Send</button>
+
+        <div class="footer">
+            Local Wi-Fi Peer Transfer • Fast &amp; Secure
+        </div>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const fileList = document.getElementById('file-list');
+        const btnSend = document.getElementById('btn-send');
+
+        let selectedFiles = [];
+
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                addFiles(Array.from(e.dataTransfer.files));
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                addFiles(Array.from(fileInput.files));
+            }
+        });
+
+        function addFiles(files) {
+            files.forEach(f => {
+                if (!selectedFiles.some(existing => existing.name === f.name && existing.size === f.size)) {
+                    selectedFiles.push(f);
+                }
+            });
+            renderFiles();
+        }
+
+        function renderFiles() {
+            fileList.innerHTML = '';
+            if (selectedFiles.length === 0) {
+                btnSend.disabled = true;
+                btnSend.textContent = 'Select Files to Send';
+                return;
+            }
+
+            btnSend.disabled = false;
+            btnSend.textContent = `Send ${selectedFiles.length} ${selectedFiles.length === 1 ? 'File' : 'Files'} to Samsung TV`;
+
+            selectedFiles.forEach((file, index) => {
+                const card = document.createElement('div');
+                card.className = 'file-card';
+                card.id = `file-card-${index}`;
+                card.innerHTML = `
+                    <div class="file-card-top">
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-size">${formatBytes(file.size)}</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="progress-${index}"></div>
+                    </div>
+                `;
+                fileList.appendChild(card);
+            });
+        }
+
+        btnSend.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+
+            btnSend.disabled = true;
+            btnSend.textContent = 'Sending to TV...';
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const progressBar = document.getElementById(`progress-${i}`);
+                await uploadFile(file, progressBar);
+            }
+
+            btnSend.textContent = 'All Files Transferred Successfully! ✓';
+            setTimeout(() => {
+                selectedFiles = [];
+                renderFiles();
+            }, 3000);
+        });
+
+        function uploadFile(file, progressBar) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const formData = new FormData();
+                formData.append('file', file);
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.floor((e.loaded / e.total) * 100);
+                        if (progressBar) progressBar.style.width = `${percent}%`;
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        if (progressBar) progressBar.style.width = '100%';
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error('Upload failed with status ' + xhr.status));
+                    }
+                });
+
+                xhr.addEventListener('error', () => reject(new Error('Network error')));
+                xhr.open('POST', '/upload', true);
+                xhr.send(formData);
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes <= 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,874 @@
+/**
+ * Samsung AVPlay (`webapis.avplay`) and HTML5 Video Engine
+ * Hardware accelerated video playback, SRT/VTT subtitle rendering, and TV OSD controls.
+ */
+
+window.Player = (function() {
+    'use strict';
+
+    let isPlayerOpen = false;
+    let isAVPlay = false;
+    let currentMediaUrl = '';
+    let currentTitle = '';
+    let durationSec = 0;
+    let currentTimeSec = 0;
+    let isPlaying = false;
+    let osdTimeout = null;
+    let seekDebounceTimeout = null;
+    let seekFeedbackTimeout = null;
+    let subtitles = [];
+    let currentSubtitleIndex = -1;
+    let videoResumeKey = '';
+    let pendingResumeTime = 0;
+    let lastResumeSaveTime = 0;
+    let resumeToastTimeout = null;
+    let torrentPollInterval = null;
+    let isScrubbing = false;
+    let isSettlingSeek = false;
+    let scrubTargetSec = 0;
+    let scrubStartSec = 0;
+    let scrubRepeatCount = 0;
+    let scrubCommitTimeout = null;
+    let scrubSettlingTimeout = null;
+
+    const DISPLAY_MODES = [
+        'PLAYER_DISPLAY_MODE_LETTER_BOX',
+        'PLAYER_DISPLAY_MODE_FULL_SCREEN',
+        'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO'
+    ];
+    let currentDisplayModeIdx = 0;
+
+    function getResumePoints() {
+        try {
+            return JSON.parse(localStorage.getItem('tvhub_resume_points')) || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveResumePosition(force) {
+        if (!videoResumeKey || currentTimeSec < 5) return;
+        const now = Date.now();
+        if (!force && (now - lastResumeSaveTime < 4000)) return;
+        lastResumeSaveTime = now;
+
+        try {
+            const map = getResumePoints();
+            if (durationSec > 30 && (durationSec - currentTimeSec) < 15) {
+                delete map[videoResumeKey];
+            } else {
+                map[videoResumeKey] = {
+                    time: currentTimeSec,
+                    duration: durationSec,
+                    updatedAt: now
+                };
+            }
+            localStorage.setItem('tvhub_resume_points', JSON.stringify(map));
+        } catch (e) {}
+    }
+
+    function getSavedResumePosition(key) {
+        try {
+            const map = getResumePoints();
+            return (map[key] && map[key].time) ? map[key].time : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    function showResumeToast(timeSec) {
+        const toast = document.getElementById('player-resume-toast');
+        const text = document.getElementById('player-resume-text');
+        if (!toast || !text) return;
+
+        text.textContent = `Resuming from ${formatTime(timeSec)}`;
+        toast.style.display = 'flex';
+        clearTimeout(resumeToastTimeout);
+        resumeToastTimeout = setTimeout(function() {
+            toast.style.display = 'none';
+        }, 4000);
+    }
+
+    function showBufferingOverlay(show, percent, label) {
+        const overlay = document.getElementById('player-buffering-overlay');
+        const pctEl = document.getElementById('buffering-percent');
+        const labelEl = document.getElementById('buffering-label');
+        if (!overlay) return;
+
+        if (show) {
+            overlay.style.display = 'flex';
+            if (pctEl && typeof percent !== 'undefined' && percent !== null) {
+                pctEl.textContent = `${Math.round(percent)}%`;
+            }
+            if (labelEl && label) {
+                labelEl.textContent = label;
+            }
+        } else {
+            overlay.style.display = 'none';
+        }
+    }
+
+    function updateDownloadBadge(show, text) {
+        const badge = document.getElementById('player-dl-badge');
+        const badgeText = document.getElementById('player-dl-badge-text');
+        if (!badge || !badgeText) return;
+
+        if (show && text) {
+            badgeText.textContent = text;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function startTorrentProgressPolling() {
+        clearInterval(torrentPollInterval);
+        checkTorrentProgress();
+        torrentPollInterval = setInterval(checkTorrentProgress, 2000);
+    }
+
+    function stopTorrentProgressPolling() {
+        clearInterval(torrentPollInterval);
+        torrentPollInterval = null;
+        updateDownloadBadge(false);
+    }
+
+    function checkTorrentProgress() {
+        if (!isPlayerOpen) return;
+        fetch('http://192.168.0.13:8080/torrent_stats')
+            .then(res => res.json())
+            .then(data => {
+                if (!isPlayerOpen || !data || !data.active || !data.stats) {
+                    updateDownloadBadge(false);
+                    return;
+                }
+                const s = data.stats;
+                const prog = typeof s.progress === 'number' ? s.progress : parseFloat(s.progress || 0);
+                const speed = s.speed || '';
+                const dlInfoEl = document.getElementById('buffering-dl-info');
+                const dlTextEl = document.getElementById('buffering-dl-text');
+
+                if (prog < 100) {
+                    const dlStr = `Downloading: ${Math.round(prog)}% (${speed})`;
+                    if (dlTextEl) dlTextEl.textContent = dlStr;
+                    if (dlInfoEl) dlInfoEl.style.display = 'flex';
+                    updateDownloadBadge(true, `⚡ ${dlStr}`);
+                } else {
+                    if (dlInfoEl) dlInfoEl.style.display = 'none';
+                    updateDownloadBadge(false);
+                }
+            })
+            .catch(() => {});
+    }
+
+    function init() {
+        checkAVPlaySupport();
+        setupOsdEvents();
+    }
+
+    function checkAVPlaySupport() {
+        if (typeof webapis !== 'undefined' && webapis.avplay) {
+            isAVPlay = true;
+            console.log('[Player] Samsung AVPlay hardware acceleration detected.');
+        } else {
+            isAVPlay = false;
+            console.log('[Player] Using HTML5 video fallback.');
+        }
+    }
+
+    function stopAndCloseAVPlay() {
+        if (typeof webapis !== 'undefined' && webapis.avplay) {
+            try {
+                const state = webapis.avplay.getState();
+                if (state && state !== 'NONE' && state !== 'IDLE') {
+                    webapis.avplay.stop();
+                }
+                webapis.avplay.close();
+            } catch (e) {
+                console.warn('[Player] stopAndCloseAVPlay cleanup:', e);
+            }
+        }
+    }
+
+    function openMedia(mediaUrl, title, subtitleUrl) {
+        checkAVPlaySupport();
+        currentMediaUrl = mediaUrl;
+        currentTitle = title || 'Video Stream';
+        videoResumeKey = (title || mediaUrl).trim();
+        isPlayerOpen = true;
+
+        // Check for saved resume point
+        const savedTime = getSavedResumePosition(videoResumeKey);
+        pendingResumeTime = (savedTime > 8) ? savedTime : 0;
+
+        document.body.classList.add('media-playing-mode');
+
+        const container = document.getElementById('player-container');
+        const titleEl = document.getElementById('video-title-display');
+        const fallbackVid = document.getElementById('fallback-video');
+
+        if (container) container.classList.add('player-active');
+        if (titleEl) titleEl.textContent = currentTitle;
+
+        if (subtitleUrl) {
+            loadSubtitle(subtitleUrl);
+        } else {
+            clearSubtitles();
+        }
+
+        // Show buffering indicator on initial stream load
+        showBufferingOverlay(true, 0, 'Loading Video Stream...');
+        startTorrentProgressPolling();
+
+        showOSD();
+
+        if (window.Navigation) {
+            setTimeout(function() {
+                const playBtn = document.getElementById('osd-play-btn');
+                if (playBtn) window.Navigation.setFocus(playBtn);
+            }, 120);
+        }
+
+        if (isAVPlay) {
+            startAVPlay(mediaUrl);
+            if (fallbackVid) fallbackVid.style.display = 'none';
+        } else {
+            startFallbackVideo(mediaUrl);
+        }
+    }
+
+    function startAVPlay(url) {
+        try {
+            stopAndCloseAVPlay();
+            webapis.avplay.open(url);
+            webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
+            webapis.avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
+
+            webapis.avplay.setListener({
+                onbufferingstart: function() {
+                    updateStatusTag('Buffering...');
+                    showBufferingOverlay(true, 0, 'Buffering video...');
+                },
+                onbufferingprogress: function(percent) {
+                    updateStatusTag(`Buffering ${percent}%`);
+                    showBufferingOverlay(true, percent, 'Buffering video...');
+                },
+                onbufferingcomplete: function() {
+                    updateStatusTag('Playing');
+                    showBufferingOverlay(false);
+                },
+                oncurrentplaytime: function(ms) {
+                    if (isScrubbing || isSettlingSeek) return;
+                    currentTimeSec = Math.floor(ms / 1000);
+                    if (durationSec <= 0) {
+                        try {
+                            const d = webapis.avplay.getDuration();
+                            if (d && d > 0) durationSec = Math.floor(d / 1000);
+                        } catch (e) {}
+                    }
+                    updateTimeline();
+                    checkSubtitles(currentTimeSec);
+                    saveResumePosition(false);
+                },
+                onstreamcompleted: function() {
+                    console.log('[Player] Playback completed');
+                    try {
+                        const map = getResumePoints();
+                        delete map[videoResumeKey];
+                        localStorage.setItem('tvhub_resume_points', JSON.stringify(map));
+                    } catch (e) {}
+                    close();
+                },
+                onerror: function(error) {
+                    console.error('[Player] AVPlay error:', error);
+                    updateStatusTag('Playback Error');
+                    showBufferingOverlay(false);
+                }
+            });
+
+            webapis.avplay.prepareAsync(function() {
+                try {
+                    const d = webapis.avplay.getDuration();
+                    if (d && d > 0) durationSec = Math.floor(d / 1000);
+                } catch (e) {}
+                webapis.avplay.play();
+                isPlaying = true;
+                updatePlayPauseIcon();
+                updateStatusTag('Playing');
+
+                // Check and execute auto-resume if saved timestamp exists
+                if (pendingResumeTime > 0) {
+                    const resumeTarget = pendingResumeTime;
+                    pendingResumeTime = 0;
+                    console.log('[Player] Resuming playback from', resumeTarget, 'seconds');
+                    setTimeout(function() {
+                        seekTo(resumeTarget);
+                        showResumeToast(resumeTarget);
+                    }, 350);
+                }
+            }, function(err) {
+                console.error('[Player] AVPlay prepare failed:', err);
+                updateStatusTag('AVPlay failed, using HTML5 fallback');
+                startFallbackVideo(url);
+            });
+        } catch (e) {
+            console.error('[Player] Exception starting AVPlay:', e);
+            startFallbackVideo(url);
+        }
+    }
+
+    function startFallbackVideo(url) {
+        const vid = document.getElementById('fallback-video');
+        if (!vid) return;
+
+        vid.style.display = 'block';
+        vid.src = url;
+
+        vid.onloadedmetadata = function() {
+            durationSec = Math.floor(vid.duration);
+            updateTimeline();
+            if (pendingResumeTime > 0) {
+                const resumeTarget = pendingResumeTime;
+                pendingResumeTime = 0;
+                vid.currentTime = resumeTarget;
+                currentTimeSec = resumeTarget;
+                updateTimeline();
+                showResumeToast(resumeTarget);
+            }
+        };
+
+        vid.ontimeupdate = function() {
+            if (isScrubbing || isSettlingSeek) return;
+            currentTimeSec = Math.floor(vid.currentTime);
+            updateTimeline();
+            checkSubtitles(currentTimeSec);
+            saveResumePosition(false);
+        };
+
+        vid.onwaiting = function() {
+            updateStatusTag('Buffering...');
+            showBufferingOverlay(true, 0, 'Buffering video...');
+        };
+
+        vid.onprogress = function() {
+            if (vid.duration > 0 && vid.buffered.length > 0) {
+                const p = Math.round((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
+                showBufferingOverlay(true, p, 'Buffering video...');
+            }
+        };
+
+        vid.onplaying = function() {
+            updateStatusTag('Playing');
+            showBufferingOverlay(false);
+            isPlaying = true;
+            updatePlayPauseIcon();
+        };
+
+        vid.onpause = function() {
+            updateStatusTag('Paused');
+            isPlaying = false;
+            updatePlayPauseIcon();
+            saveResumePosition(true);
+        };
+
+        vid.onended = function() {
+            try {
+                const map = getResumePoints();
+                delete map[videoResumeKey];
+                localStorage.setItem('tvhub_resume_points', JSON.stringify(map));
+            } catch (e) {}
+            close();
+        };
+
+        vid.play().catch(e => console.warn('[Player] HTML5 video autoplay restricted:', e));
+    }
+
+    function play() {
+        if (!isPlayerOpen) return;
+        if (isAVPlay) {
+            try {
+                webapis.avplay.play();
+                isPlaying = true;
+                updatePlayPauseIcon();
+                updateStatusTag('Playing');
+            } catch (e) {}
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) vid.play();
+        }
+    }
+
+    function pause() {
+        if (!isPlayerOpen) return;
+        saveResumePosition(true);
+        if (isAVPlay) {
+            try {
+                webapis.avplay.pause();
+                isPlaying = false;
+                updatePlayPauseIcon();
+                updateStatusTag('Paused');
+            } catch (e) {}
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) vid.pause();
+        }
+    }
+
+    function togglePlayPause() {
+        if (isPlaying) {
+            pause();
+        } else {
+            play();
+        }
+        showOSD();
+    }
+
+    function startOrContinueScrub(direction) {
+        if (!isPlayerOpen) return;
+
+        if (durationSec <= 0 && isAVPlay) {
+            try {
+                const d = webapis.avplay.getDuration();
+                if (d && d > 0) durationSec = Math.floor(d / 1000);
+            } catch (e) {}
+        }
+
+        const timelineBox = document.getElementById('osd-timeline-box');
+
+        if (!isScrubbing) {
+            isScrubbing = true;
+            scrubStartSec = currentTimeSec;
+            scrubTargetSec = currentTimeSec;
+            scrubRepeatCount = 0;
+            if (timelineBox) timelineBox.classList.add('is-scrubbing');
+        }
+
+        scrubRepeatCount++;
+
+        // Dynamic acceleration based on hold duration (key repeat count)
+        let step = 10;
+        if (scrubRepeatCount > 14) {
+            step = 60; // >1.5s hold: 60s jumps per tick
+        } else if (scrubRepeatCount > 7) {
+            step = 30; // >0.7s hold: 30s jumps per tick
+        } else if (scrubRepeatCount > 3) {
+            step = 15; // >0.3s hold: 15s jumps per tick
+        }
+
+        let nextTarget = scrubTargetSec + (direction * step);
+        if (durationSec > 0) {
+            nextTarget = Math.max(0, Math.min(durationSec, nextTarget));
+        } else {
+            nextTarget = Math.max(0, nextTarget);
+        }
+
+        scrubTargetSec = nextTarget;
+        currentTimeSec = nextTarget;
+
+        // Immediately update scrubber UI without transition delay
+        updateTimeline();
+        showOSD();
+
+        const totalDelta = scrubTargetSec - scrubStartSec;
+        showSeekFeedback(totalDelta, scrubTargetSec);
+
+        // Fallback auto-commit debounce if keyup is not received
+        clearTimeout(scrubCommitTimeout);
+        scrubCommitTimeout = setTimeout(function() {
+            finishScrubbing();
+        }, 280);
+    }
+
+    function finishScrubbing() {
+        if (!isScrubbing) return;
+
+        clearTimeout(scrubCommitTimeout);
+        const target = scrubTargetSec;
+        isScrubbing = false;
+        scrubRepeatCount = 0;
+
+        const timelineBox = document.getElementById('osd-timeline-box');
+        if (timelineBox) timelineBox.classList.remove('is-scrubbing');
+
+        currentTimeSec = target;
+        updateTimeline();
+
+        // Lock oncurrentplaytime from jumping back to old position while hardware settles
+        clearTimeout(scrubSettlingTimeout);
+        isSettlingSeek = true;
+        scrubSettlingTimeout = setTimeout(function() {
+            isSettlingSeek = false;
+        }, 600);
+
+        // Commit seek
+        if (isAVPlay) {
+            performAvplaySeek(target);
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) {
+                try { vid.currentTime = target; } catch (e) {}
+            }
+        }
+    }
+
+    function seekRelative(seconds) {
+        startOrContinueScrub(seconds >= 0 ? 1 : -1);
+    }
+
+    function seekTo(targetSeconds) {
+        if (!isPlayerOpen) return;
+
+        if (durationSec <= 0 && isAVPlay) {
+            try {
+                const d = webapis.avplay.getDuration();
+                if (d && d > 0) durationSec = Math.floor(d / 1000);
+            } catch (e) {}
+        }
+
+        let target = Math.max(0, targetSeconds);
+        if (durationSec > 0) {
+            target = Math.min(durationSec, target);
+        }
+
+        const delta = target - currentTimeSec;
+        currentTimeSec = target;
+        updateTimeline();
+        showOSD();
+        showSeekFeedback(delta, target);
+
+        clearTimeout(scrubSettlingTimeout);
+        isSettlingSeek = true;
+        scrubSettlingTimeout = setTimeout(function() {
+            isSettlingSeek = false;
+        }, 600);
+
+        if (isAVPlay) {
+            performAvplaySeek(target);
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) {
+                try { vid.currentTime = target; } catch (e) {}
+            }
+        }
+    }
+
+    function performAvplaySeek(targetSec) {
+        if (!isAVPlay) return;
+        try {
+            const state = webapis.avplay.getState();
+            console.log('[Player] performAvplaySeek targetSec:', targetSec, 'state:', state);
+            if (state === 'PLAYING' || state === 'PAUSED') {
+                const targetMs = Math.round(targetSec * 1000);
+                webapis.avplay.seekTo(
+                    targetMs,
+                    function() {
+                        console.log('[Player] AVPlay seekTo success at', targetMs, 'ms');
+                        updateStatusTag(isPlaying ? 'Playing' : 'Paused');
+                    },
+                    function(err) {
+                        console.warn('[Player] AVPlay seekTo callback error:', err);
+                        // Fallback with jumpForward / jumpBackward if seekTo fails
+                        try {
+                            const curSec = Math.floor(webapis.avplay.getCurrentTime() / 1000);
+                            const diff = Math.round(targetSec - curSec);
+                            if (diff > 0) {
+                                webapis.avplay.jumpForward(diff, function(){}, function(){});
+                            } else if (diff < 0) {
+                                webapis.avplay.jumpBackward(Math.abs(diff), function(){}, function(){});
+                            }
+                        } catch (ex) {
+                            console.warn('[Player] jump fallback failed:', ex);
+                        }
+                    }
+                );
+            }
+        } catch (e) {
+            console.error('[Player] Error calling AVPlay seekTo:', e);
+        }
+    }
+
+    function formatDeltaTime(sec) {
+        const sign = sec >= 0 ? '+' : '-';
+        const abs = Math.abs(Math.round(sec));
+        if (abs < 60) {
+            return `${sign}${abs}s`;
+        }
+        const m = Math.floor(abs / 60);
+        const s = abs % 60;
+        return `${sign}${m}m ${s < 10 ? '0' : ''}${s}s`;
+    }
+
+    function showSeekFeedback(deltaSec, targetSec) {
+        const feedbackEl = document.getElementById('osd-seek-feedback');
+        const statusTag = document.getElementById('osd-status-tag');
+        const dirSymbol = deltaSec >= 0 ? '⏩ ' : '⏪ ';
+        const msg = `${dirSymbol}${formatDeltaTime(deltaSec)} (${formatTime(targetSec)})`;
+
+        if (feedbackEl) {
+            feedbackEl.textContent = msg;
+            feedbackEl.style.display = 'inline-flex';
+            clearTimeout(seekFeedbackTimeout);
+            seekFeedbackTimeout = setTimeout(function() {
+                feedbackEl.style.display = 'none';
+            }, 1800);
+        }
+        if (statusTag) {
+            statusTag.textContent = msg;
+            setTimeout(function() {
+                if (statusTag.textContent === msg) {
+                    updateStatusTag(isPlaying ? 'Playing' : 'Paused');
+                }
+            }, 1800);
+        }
+    }
+
+    function toggleAspectRatio() {
+        currentDisplayModeIdx = (currentDisplayModeIdx + 1) % DISPLAY_MODES.length;
+        const mode = DISPLAY_MODES[currentDisplayModeIdx];
+
+        if (isAVPlay) {
+            try {
+                webapis.avplay.setDisplayMethod(mode);
+            } catch (e) {}
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) {
+                vid.style.objectFit = currentDisplayModeIdx === 1 ? 'fill' : 'contain';
+            }
+        }
+
+        const tag = mode.replace('PLAYER_DISPLAY_MODE_', '');
+        window.FileReceiver.showToast(`Aspect Ratio: ${tag}`);
+    }
+
+    function close() {
+        if (!isPlayerOpen) return;
+
+        saveResumePosition(true);
+        stopTorrentProgressPolling();
+        showBufferingOverlay(false);
+
+        const toast = document.getElementById('player-resume-toast');
+        if (toast) toast.style.display = 'none';
+
+        document.body.classList.remove('media-playing-mode');
+
+        if (isAVPlay) {
+            stopAndCloseAVPlay();
+        } else {
+            const vid = document.getElementById('fallback-video');
+            if (vid) {
+                vid.pause();
+                vid.src = '';
+            }
+        }
+
+        const container = document.getElementById('player-container');
+        if (container) container.classList.remove('player-active');
+
+        const osd = document.getElementById('player-osd');
+        if (osd) osd.classList.remove('osd-visible');
+        clearTimeout(osdTimeout);
+        clearTimeout(seekDebounceTimeout);
+        clearTimeout(seekFeedbackTimeout);
+        clearTimeout(resumeToastTimeout);
+        clearTimeout(scrubCommitTimeout);
+        clearTimeout(scrubSettlingTimeout);
+        isScrubbing = false;
+        isSettlingSeek = false;
+        scrubRepeatCount = 0;
+        const timelineBox = document.getElementById('osd-timeline-box');
+        if (timelineBox) timelineBox.classList.remove('is-scrubbing');
+
+        clearSubtitles();
+        isPlayerOpen = false;
+        isPlaying = false;
+        durationSec = 0;
+        currentTimeSec = 0;
+        videoResumeKey = '';
+        pendingResumeTime = 0;
+
+        // Restore navigation focus on previous app element
+        if (window.Navigation) {
+            window.Navigation.focusInitialElement();
+        }
+    }
+
+    function updateTimeline() {
+        const currentEl = document.getElementById('osd-current-time');
+        const durationEl = document.getElementById('osd-duration-time');
+        const fillEl = document.getElementById('osd-scrubber-fill');
+        const thumbEl = document.getElementById('osd-scrubber-thumb');
+
+        if (currentEl) currentEl.textContent = formatTime(currentTimeSec);
+        if (durationEl) durationEl.textContent = formatTime(durationSec);
+
+        if (durationSec > 0) {
+            const percent = Math.min(100, Math.max(0, (currentTimeSec / durationSec) * 100));
+            if (fillEl) fillEl.style.width = `${percent}%`;
+            if (thumbEl) thumbEl.style.left = `${percent}%`;
+        } else {
+            if (fillEl) fillEl.style.width = '0%';
+            if (thumbEl) thumbEl.style.left = '0%';
+        }
+    }
+
+    function updatePlayPauseIcon() {
+        const btn = document.getElementById('osd-play-btn');
+        if (btn) {
+            btn.innerHTML = isPlaying ? '❚❚' : '▶';
+        }
+    }
+
+    function updateStatusTag(status) {
+        const tag = document.getElementById('osd-status-tag');
+        if (tag) tag.textContent = status;
+    }
+
+    function showOSD() {
+        const osd = document.getElementById('player-osd');
+        if (!osd) return;
+
+        osd.classList.add('osd-visible');
+        clearTimeout(osdTimeout);
+        osdTimeout = setTimeout(function() {
+            if (isPlaying) {
+                osd.classList.remove('osd-visible');
+            }
+        }, 5000);
+    }
+
+    function isOsdVisible() {
+        const osd = document.getElementById('player-osd');
+        return osd ? osd.classList.contains('osd-visible') : false;
+    }
+
+    function setupOsdEvents() {
+        const playBtn = document.getElementById('osd-play-btn');
+        const aspectBtn = document.getElementById('osd-aspect-btn');
+        const infoBtn = document.getElementById('osd-info-btn');
+        const subsBtn = document.getElementById('osd-subs-btn');
+        const closeBtn = document.getElementById('osd-close-btn');
+        const timelineBox = document.getElementById('osd-timeline-box');
+        const scrubberTrack = document.querySelector('.osd-scrubber-track');
+
+        if (playBtn) playBtn.addEventListener('click', togglePlayPause);
+        if (aspectBtn) aspectBtn.addEventListener('click', toggleAspectRatio);
+        if (infoBtn) infoBtn.addEventListener('click', function() {
+            if (window.Amnis) window.Amnis.toggleTorrentInfoHud();
+        });
+        if (subsBtn) subsBtn.addEventListener('click', function() {
+            if (window.Amnis) window.Amnis.openSubtitleSearchModal();
+        });
+        if (closeBtn) closeBtn.addEventListener('click', close);
+
+        if (timelineBox && scrubberTrack) {
+            timelineBox.addEventListener('click', function(e) {
+                if (durationSec <= 0) return;
+                const rect = scrubberTrack.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                if (rect.width > 0) {
+                    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                    seekTo(Math.round(ratio * durationSec));
+                }
+            });
+        }
+
+        const container = document.getElementById('player-container');
+        if (container) {
+            container.addEventListener('mousemove', showOSD);
+            container.addEventListener('click', function(e) {
+                if (e.target === container || e.target.id === 'fallback-video' || e.target.id === 'subtitles-layer') {
+                    if (isOsdVisible()) {
+                        togglePlayPause();
+                    } else {
+                        showOSD();
+                    }
+                }
+            });
+        }
+    }
+
+    /* Subtitle Parsing and Rendering */
+    function loadSubtitle(url) {
+        fetch(url)
+            .then(res => res.text())
+            .then(text => {
+                subtitles = parseSRT(text);
+                console.log(`[Player] Loaded ${subtitles.length} subtitle cues.`);
+                window.FileReceiver.showToast(`Subtitles loaded (${subtitles.length} cues)`);
+            })
+            .catch(err => {
+                console.warn('[Player] Subtitle load failed:', err);
+            });
+    }
+
+    function parseSRT(data) {
+        const cues = [];
+        const regex = /(\d+)\r?\n(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})\r?\n([\s\S]*?)(?=\r?\n\r?\n|\r?\n*$)/g;
+        let match;
+        while ((match = regex.exec(data)) !== null) {
+            cues.push({
+                start: parseTimestamp(match[2]),
+                end: parseTimestamp(match[3]),
+                text: match[4].replace(/\r?\n/g, '<br>')
+            });
+        }
+        return cues;
+    }
+
+    function parseTimestamp(ts) {
+        const parts = ts.split(/[:,\.]/);
+        return parseInt(parts[0], 10) * 3600 +
+               parseInt(parts[1], 10) * 60 +
+               parseInt(parts[2], 10) +
+               parseInt(parts[3], 10) / 1000;
+    }
+
+    function checkSubtitles(timeSec) {
+        const layer = document.getElementById('subtitles-layer');
+        if (!layer || subtitles.length === 0) return;
+
+        const currentCue = subtitles.find(c => timeSec >= c.start && timeSec <= c.end);
+        if (currentCue) {
+            layer.innerHTML = `<span>${currentCue.text}</span>`;
+        } else {
+            layer.innerHTML = '';
+        }
+    }
+
+    function clearSubtitles() {
+        subtitles = [];
+        const layer = document.getElementById('subtitles-layer');
+        if (layer) layer.innerHTML = '';
+    }
+
+    function formatTime(sec) {
+        if (!sec || isNaN(sec) || sec < 0) return '00:00';
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        if (h > 0) {
+            return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+        return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    return {
+        init: init,
+        openMedia: openMedia,
+        play: play,
+        pause: pause,
+        togglePlayPause: togglePlayPause,
+        seekRelative: seekRelative,
+        seekTo: seekTo,
+        finishScrubbing: finishScrubbing,
+        isScrubbingActive: function() { return isScrubbing; },
+        showOSD: showOSD,
+        isOsdVisible: isOsdVisible,
+        close: close,
+        isActive: function() { return isPlayerOpen; },
+        getCurrentTitle: function() { return currentTitle; },
+        loadSubtitle: loadSubtitle
+    };
+})();

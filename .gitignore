@@ -1,0 +1,33 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build artifacts
+build/
+*.wgt
+
+# Server temporary files
+server/uploads/*
+!server/uploads/sample.mp4
+!server/uploads/The_jackfruit_is_holding_on_to_the_tree.jpg
+
+# Media files
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.torrent
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.system_generated/
+.tempmediaStorage/
+scratch/

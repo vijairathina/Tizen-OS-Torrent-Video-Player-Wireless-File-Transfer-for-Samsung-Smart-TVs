@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TV File Hub &amp; Video Player</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Top Navigation Header -->
+        <header class="app-header">
+            <div class="brand-section">
+                <img src="icon.png" alt="Logo" class="brand-logo">
+                <div>
+                    <div class="brand-title">TV FILE HUB</div>
+                    <div class="brand-subtitle">&amp; Video Player</div>
+                </div>
+            </div>
+
+            <nav class="app-nav">
+                <button class="nav-tab focusable active" id="tab-player" tabindex="0">
+                    <span>🎬</span>
+                    <span>Video Player</span>
+                </button>
+                <button class="nav-tab focusable" id="tab-receiver" tabindex="0">
+                    <span>📡</span>
+                    <span>File Receiver</span>
+                    <span class="receiver-badge-dot" id="receiver-badge-dot" style="display:none;"></span>
+                </button>
+                <button class="nav-tab focusable" id="tab-filemanager" tabindex="0">
+                    <span>📁</span>
+                    <span>File Manager</span>
+                </button>
+            </nav>
+
+            <div class="header-status">
+                <div class="status-badge" id="usb-status-badge">
+                    <span class="status-dot"></span>
+                    <span>Checking USB...</span>
+                </div>
+                <div class="status-badge" id="wifi-status-badge">
+                    <span class="status-dot active"></span>
+                    <span>Wi-Fi Online</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace Views -->
+        <main class="app-main">
+            <!-- ========================================================
+                 MODULE 1: FILE RECEIVER VIEW
+                 ======================================================== -->
+            <section class="app-view" id="view-receiver">
+                <div class="receiver-grid">
+                    <!-- Left Connection & QR Panel -->
+                    <div class="receiver-panel">
+                        <div class="panel-title">
+                            <span>📱</span>
+                            <span>Wireless Transfer</span>
+                        </div>
+
+                        <div class="qr-card">
+                            <div id="qrcode-container"></div>
+                            <div class="qr-caption">Scan with Phone or PC Camera to open Web Sender</div>
+                        </div>
+
+                        <div class="connection-info-box">
+                            <div class="info-row">
+                                <span class="info-label">TV IP Address:</span>
+                                <span class="info-value" id="tv-ip-display">192.168.0.12</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Transfer Port:</span>
+                                <span class="info-value" id="tv-port-display">8080</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Direct Web URL:</span>
+                                <span class="info-value" id="tv-url-display">http://192.168.0.13:8080</span>
+                            </div>
+                        </div>
+
+                        <div class="usb-target-box" id="receiver-usb-target">
+                            <div class="usb-target-title">
+                                <span>💾</span>
+                                <span>Target USB Drive</span>
+                            </div>
+                            <div class="usb-target-path">Detecting storage...</div>
+                        </div>
+                    </div>
+
+                    <!-- Right Incoming Queue Panel -->
+                    <div class="receiver-panel">
+                        <div class="queue-header">
+                            <div class="panel-title" style="margin-bottom:0;">
+                                <span>📥</span>
+                                <span>Received Files</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <div class="queue-stats" id="queue-stats-display">0 files saved</div>
+                                <button class="action-btn-clean focusable" id="receiver-clear-list-btn" tabindex="0" title="Clear list history only" style="font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer;">🧹 Clear List</button>
+                                <button class="action-btn-delete focusable" id="receiver-delete-all-btn" tabindex="0" title="Delete all received files from storage and clear list" style="font-size:12px; padding:6px 14px; border-radius:8px; cursor:pointer;">🗑️ Delete All</button>
+                            </div>
+                        </div>
+
+                        <div class="queue-list" id="transfer-queue-list">
+                            <!-- Empty State placeholder -->
+                            <div class="empty-state" id="receiver-empty-state">
+                                <div class="empty-state-icon">📡</div>
+                                <div style="font-size:20px; font-weight:600; color:#fff;">Ready to receive files</div>
+                                <div style="font-size:15px; color:var(--text-muted); max-width:400px; text-align:center;">
+                                    Connect an Android phone or PC to the same Wi-Fi, open the link above, and upload files.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================
+                 MODULE 2: USB FILE MANAGER VIEW
+                 ======================================================== -->
+            <section class="app-view" id="view-filemanager">
+                <div class="filemanager-container">
+                    <div class="filemanager-toolbar">
+                        <div class="storage-selector-group" id="storage-pills-container">
+                            <!-- Dynamic Storage Pills -->
+                        </div>
+
+                        <div class="storage-capacity-bar-box">
+                            <span class="capacity-text" id="storage-capacity-text">Detecting drive capacity...</span>
+                            <button class="osd-btn focusable" id="fm-refresh-btn" tabindex="0" style="padding:6px 14px; font-size:13px;">
+                                <span>🔄</span>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="fm-navigation-bar">
+                        <div class="breadcrumbs-bar" id="fm-breadcrumbs">
+                            <span>📁</span>
+                            <span class="breadcrumb-item">removable_sda1</span>
+                        </div>
+                        <div class="fm-quick-nav-actions">
+                            <button class="osd-btn focusable" id="fm-up-btn" tabindex="0" title="Go to Parent Folder">
+                                <span>⬆️</span>
+                                <span>Up Level</span>
+                            </button>
+                            <button class="osd-btn focusable" id="fm-root-btn" tabindex="0" title="Go to Storage Root">
+                                <span>🏠</span>
+                                <span>Storage Root</span>
+                            </button>
+                            <button class="osd-btn focusable" id="fm-received-btn" tabindex="0" title="Open Received Files">
+                                <span>📥</span>
+                                <span>Received Files</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="file-grid" id="fm-file-grid">
+                        <!-- Dynamic File Cards -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================
+                 MODULE 3: VIDEO PLAYER VIEW (STARTING VIEW)
+                 ======================================================== -->
+            <section class="app-view active-view" id="view-player">
+                <div class="player-view-container amnis-container">
+                    <div class="player-banner amnis-banner">
+                        <div class="player-title amnis-title">
+                            <span style="color:#d8b4fe;">🎬</span>
+                            <span>Video Player</span>
+                        </div>
+                        <div class="player-tagline amnis-tagline">Stream Torrents, Network URLs, &amp; Local Media with AVPlay</div>
+                    </div>
+
+                    <!-- Active Downloads / Torrents Section (PLACED PROMINENTLY AT TOP) -->
+                    <div class="player-downloads-container amnis-downloads-container" id="player-downloads-container">
+                        <div class="player-downloads-header amnis-downloads-header">
+                            <div class="panel-title" style="margin-bottom:0; font-size:20px;">
+                                <span>⚡</span>
+                                <span>Active Downloads &amp; Streams</span>
+                            </div>
+                            <div class="queue-stats" id="player-downloads-stats">0 active streams</div>
+                        </div>
+                        <div class="player-downloads-list amnis-downloads-list" id="player-downloads-list">
+                            <!-- Empty State Placeholder -->
+                            <div class="empty-state" id="player-downloads-empty" style="padding: 24px 0;">
+                                <div style="font-size: 15px; color: var(--text-muted); text-align: center;">
+                                    No active torrent downloads. Send a .torrent from phone, enter magnet URL, or browse storage.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2x2 Video Player Primary Cards Grid (Placed Below Active Downloads) -->
+                    <div class="player-cards-grid amnis-cards-grid">
+                        <div class="player-card amnis-card focusable" id="player-card-load-file" tabindex="0">
+                            <div class="player-card-icon amnis-card-icon">📁</div>
+                            <div class="player-card-content amnis-card-content">
+                                <div class="player-card-title amnis-card-title">Browse Storage</div>
+                                <div class="player-card-desc amnis-card-desc">Select video or torrent file directly from USB drive or TV local storage</div>
+                            </div>
+                        </div>
+
+                        <div class="player-card amnis-card focusable" id="player-card-load-url" tabindex="0">
+                            <div class="player-card-icon amnis-card-icon">🔗</div>
+                            <div class="player-card-content amnis-card-content">
+                                <div class="player-card-title amnis-card-title">From URL / Magnet ...</div>
+                                <div class="player-card-desc amnis-card-desc">Stream live video directly from HTTP, HTTPS, HLS, or magnet stream URLs</div>
+                            </div>
+                        </div>
+
+                        <div class="player-card amnis-card focusable" id="player-card-addons" tabindex="0">
+                            <div class="player-card-icon amnis-card-icon">🧩</div>
+                            <div class="player-card-content amnis-card-content">
+                                <div class="player-card-title amnis-card-title">Addons &amp; Subtitles</div>
+                                <div class="player-card-desc amnis-card-desc">Search and load subtitles from OpenSubtitles, BSPlayer, or local SRT files</div>
+                            </div>
+                        </div>
+
+                        <div class="player-card amnis-card focusable" id="player-card-settings" tabindex="0">
+                            <div class="player-card-icon amnis-card-icon">⚙️</div>
+                            <div class="player-card-content amnis-card-content">
+                                <div class="player-card-title amnis-card-title">Settings &amp; Theme</div>
+                                <div class="player-card-desc amnis-card-desc">Storage destination, Day/Night themes, font scaling, and decoder options</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ================================================================
+         FULL SCREEN VIDEO PLAYER (AVPlay & Fallback)
+         ================================================================ -->
+    <div id="player-container">
+        <!-- HTML5 Fallback Video Element -->
+        <video id="fallback-video" playsinline></video>
+
+        <!-- Subtitles Layer -->
+        <div id="subtitles-layer"></div>
+
+        <!-- Center Buffering & Download Progress Overlay -->
+        <div class="player-buffering-overlay" id="player-buffering-overlay" style="display:none;">
+            <div class="buffering-spinner"></div>
+            <div class="buffering-percent" id="buffering-percent">0%</div>
+            <div class="buffering-label" id="buffering-label">Buffering video...</div>
+            <div class="buffering-dl-info" id="buffering-dl-info" style="display:none;">
+                <span class="buffering-dl-dot"></span>
+                <span id="buffering-dl-text">Downloading: 0%</span>
+            </div>
+        </div>
+
+        <!-- Resume Notification Toast -->
+        <div class="player-resume-toast" id="player-resume-toast" style="display:none;">
+            <span>▶</span>
+            <span id="player-resume-text">Resuming from 00:00</span>
+        </div>
+
+        <!-- In-Player Live Download Indicator -->
+        <div class="player-dl-badge" id="player-dl-badge" style="display:none;">
+            <span class="dl-badge-icon">⚡</span>
+            <span id="player-dl-badge-text">Downloading: 0%</span>
+        </div>
+
+        <!-- TV Player OSD Overlay -->
+        <div class="player-osd" id="player-osd">
+            <!-- Top Header -->
+            <div class="osd-header">
+                <div class="video-title-text" id="video-title-display">Video Title</div>
+                <div class="osd-top-actions">
+                    <button class="osd-btn focusable" id="osd-info-btn" tabindex="0">
+                        <span>ℹ️</span>
+                        <span>Stream Info</span>
+                    </button>
+                    <button class="osd-btn focusable" id="osd-subs-btn" tabindex="0">
+                        <span>💬</span>
+                        <span>Subtitles</span>
+                    </button>
+                    <button class="osd-btn focusable" id="osd-aspect-btn" tabindex="0">
+                        <span>📐</span>
+                        <span>Aspect Ratio</span>
+                    </button>
+                    <button class="osd-btn focusable" id="osd-close-btn" tabindex="0" style="background:rgba(239,68,68,0.2); border-color:var(--color-danger);">
+                        <span>✕</span>
+                        <span>Exit</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Center Big Play Button -->
+            <div class="osd-center">
+                <button class="osd-play-btn focusable" id="osd-play-btn" tabindex="0">▶</button>
+            </div>
+
+            <!-- Bottom Scrubber & Status -->
+            <div class="osd-bottom">
+                <div class="osd-timeline-box focusable" id="osd-timeline-box" tabindex="0">
+                    <span class="osd-time-text" id="osd-current-time">00:00</span>
+                    <div class="osd-scrubber-track">
+                        <div class="osd-scrubber-fill" id="osd-scrubber-fill"></div>
+                        <div class="osd-scrubber-thumb" id="osd-scrubber-thumb"></div>
+                    </div>
+                    <span class="osd-time-text" id="osd-duration-time">00:00</span>
+                </div>
+
+                <div class="osd-controls-row">
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div class="osd-status-tag" id="osd-status-tag">Playing</div>
+                        <div class="osd-seek-feedback" id="osd-seek-feedback" style="display:none;"></div>
+                    </div>
+                    <div class="osd-hint-text" style="font-size:14px; color:var(--text-muted);">
+                        ◄ / ► Seek 10s • [Enter] Play/Pause • ▲ / ▼ Navigate • [Return] Exit
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         DIALOGS & MODALS
+         ================================================================ -->
+
+    <!-- Amnis Torrent Information Modal (Matches Amnis APK) -->
+    <div class="app-dialog-backdrop" id="amnis-hud-backdrop">
+        <div class="hud-overlay" id="amnis-hud-overlay">
+            <div class="hud-title">Torrent Information</div>
+            
+            <div class="hud-stat-row">
+                <span class="hud-label">File:</span>
+                <span class="hud-value" id="hud-stream-name" style="font-weight:700; color:#fff;">Stream Name</span>
+            </div>
+
+            <div class="hud-stat-row">
+                <span class="hud-label">Download Progress:</span>
+                <span class="hud-value" style="display:flex; gap:12px;">
+                    <span id="hud-progress-pct" style="color:var(--color-success); font-weight:700;">0%</span>
+                    <span id="hud-speed" style="color:var(--primary-cyan);">0 B/s</span>
+                </span>
+            </div>
+
+            <div class="progress-track" style="height:14px; margin: 4px 0;">
+                <div class="progress-fill" id="hud-progress-bar" style="width: 0%; background: linear-gradient(90deg, #10b981 0%, #00f2fe 100%);"></div>
+            </div>
+
+            <div class="hud-stat-row">
+                <span class="hud-label">Completed:</span>
+                <span class="hud-value" id="hud-completed">0 MB / 0 MB</span>
+            </div>
+
+            <div class="hud-stat-row">
+                <span class="hud-label">Active peers number:</span>
+                <span class="hud-value" id="hud-peers">0 peers</span>
+            </div>
+
+            <div class="hud-stat-row">
+                <span class="hud-label">Pieces:</span>
+                <span class="hud-value" id="hud-pieces">Buffering sequential pieces...</span>
+            </div>
+
+            <div class="hud-stat-row">
+                <span class="hud-label">Status:</span>
+                <span class="hud-value" id="hud-status" style="color:var(--primary-cyan); font-weight:600;">Connecting to Swarm...</span>
+            </div>
+
+            <div class="dialog-actions" style="margin-top:16px; display:flex; gap:12px; justify-content:flex-end;">
+                <button class="btn-primary focusable" id="hud-play-btn" tabindex="0">▶️ Play Video Stream</button>
+                <button class="btn-secondary focusable" id="hud-close-btn" tabindex="0">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL Input Dialog -->
+    <div class="app-dialog-backdrop" id="url-dialog-backdrop">
+        <div class="dialog-window">
+            <div class="dialog-title">Stream from URL or Magnet</div>
+            <div class="dialog-body">
+                Enter an HTTP, HTTPS, HLS (.m3u8), or direct video stream URL:
+            </div>
+            <input type="text" class="dialog-input focusable" id="stream-url-input" tabindex="0" placeholder="https://example.com/stream.mp4">
+            
+            <div style="font-size:14px; color:var(--text-muted); margin-top:-8px;">Quick Test Presets:</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Big Buck Bunny 4K</button>
+                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Tears of Steel 1080p</button>
+                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Elephants Dream 4K</button>
+            </div>
+
+            <div class="dialog-actions">
+                <button class="btn-secondary focusable" id="url-dialog-cancel-btn" tabindex="0">Cancel</button>
+                <button class="btn-primary focusable" id="url-dialog-play-btn" tabindex="0">Play Stream</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subtitles Search Dialog -->
+    <div class="app-dialog-backdrop" id="subtitles-dialog-backdrop">
+        <div class="dialog-window" style="width:800px;">
+            <div class="dialog-title">Video Player Subtitles Search</div>
+            <div class="dialog-body">
+                Search OpenSubtitles and BSPlayer for matched subtitles:
+            </div>
+            <input type="text" class="dialog-input focusable" id="subtitles-search-input" tabindex="0" placeholder="Movie title or release name...">
+            
+            <div id="subtitles-results-list" style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                <!-- Subtitle items -->
+            </div>
+
+            <div class="dialog-actions">
+                <button class="btn-secondary focusable" id="subtitles-close-btn" tabindex="0">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Dialog (Storage, Theme & Font Size) -->
+    <div class="app-dialog-backdrop" id="settings-dialog-backdrop">
+        <div class="dialog-window" style="width: 780px;">
+            <div class="dialog-title">Video Player &amp; TV Settings</div>
+            <div class="dialog-body" style="display:flex; flex-direction:column; gap:20px;">
+                <!-- Storage Destination Option -->
+                <div class="settings-group">
+                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">💾 Default Storage Destination:</div>
+                    <div class="settings-options-row" id="settings-storage-options" style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <button class="settings-pill focusable active" id="btn-storage-auto" tabindex="0">
+                            <span>⚡</span>
+                            <span>Auto (Prefer USB)</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-storage-internal" tabindex="0">
+                            <span>📱</span>
+                            <span>Internal TV Storage</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Option: Day / Night -->
+                <div class="settings-group">
+                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">🎨 App Theme Mode:</div>
+                    <div class="settings-options-row" style="display:flex; gap:12px;">
+                        <button class="settings-pill focusable active" id="btn-theme-night" tabindex="0">
+                            <span>🌙</span>
+                            <span>Night Mode (Dark)</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-theme-day" tabindex="0">
+                            <span>☀️</span>
+                            <span>Day Mode (Light)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Font Size Option -->
+                <div class="settings-group">
+                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">🔍 TV Font Size Scaling:</div>
+                    <div class="settings-options-row" style="display:flex; gap:12px;">
+                        <button class="settings-pill focusable active" id="btn-font-normal" tabindex="0">
+                            <span>Standard (100%)</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-font-large" tabindex="0">
+                            <span>Large (115%)</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-font-xlarge" tabindex="0">
+                            <span>Extra Large (130%)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <span>Decoder Mode:</span>
+                    <span style="color:var(--primary-cyan); font-weight:600;">Samsung AVPlay (Hardware Accelerated)</span>
+                </div>
+                <div class="info-row">
+                    <span>Target Folder:</span>
+                    <span id="settings-target-folder-info" style="color:var(--text-primary); font-family:Consolas;">/TVFileHub/Received/</span>
+                </div>
+                <div class="info-row">
+                    <span>Subtitle Size:</span>
+                    <span style="color:var(--text-primary);">34px (Medium TV standard)</span>
+                </div>
+                <div class="info-row">
+                    <span>Overwrite Protection:</span>
+                    <span style="color:var(--color-success); font-weight:600;">Active (Auto-versioning)</span>
+                </div>
+            </div>
+
+            <div class="dialog-actions">
+                <button class="btn-primary focusable" id="settings-close-btn" tabindex="0">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- On-screen Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/qrcode.min.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/filesystem.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/videoplayer.js"></script>
+    <script src="js/filemanager.js"></script>
+    <script src="js/receiver.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
