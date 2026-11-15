@@ -179,6 +179,11 @@ window.Navigation = (function() {
 
     function setFocus(element) {
         if (!element) return;
+        const activeModal = getActiveModal();
+        if (activeModal && !activeModal.contains(element)) {
+            // Block background elements from stealing focus while a modal is active
+            return;
+        }
         if (currentFocusedElement && currentFocusedElement !== element) {
             currentFocusedElement.classList.remove('focused');
             currentFocusedElement.blur();
@@ -269,8 +274,50 @@ window.Navigation = (function() {
         if (!isNavigationEnabled) return;
 
         const keyCode = e.keyCode;
+        const activeModal = getActiveModal();
 
-        // Custom player key handling if player is active
+        // 1. If an active modal is open on screen, STRICTLY trap and route keys inside the modal only
+        if (activeModal) {
+            // If focus was somehow lost or outside, immediately snap to modal
+            if (!currentFocusedElement || !activeModal.contains(currentFocusedElement)) {
+                focusInitialElement();
+            }
+
+            // Return / Back key dismisses the modal
+            if (keyCode === KEY_CODES.RETURN || keyCode === KEY_CODES.BACKSPACE || keyCode === KEY_CODES.ESCAPE) {
+                e.preventDefault();
+                handleReturnKey();
+                return;
+            }
+
+            switch (keyCode) {
+                case KEY_CODES.LEFT:
+                    e.preventDefault();
+                    move('left');
+                    return;
+                case KEY_CODES.RIGHT:
+                    e.preventDefault();
+                    move('right');
+                    return;
+                case KEY_CODES.UP:
+                    e.preventDefault();
+                    move('up');
+                    return;
+                case KEY_CODES.DOWN:
+                    e.preventDefault();
+                    move('down');
+                    return;
+                case KEY_CODES.ENTER:
+                    e.preventDefault();
+                    if (currentFocusedElement) {
+                        currentFocusedElement.click();
+                    }
+                    return;
+            }
+            return;
+        }
+
+        // 2. Custom player key handling if player is active (and no modal is open)
         if (window.Player && window.Player.isActive()) {
             if (handlePlayerKeys(keyCode, e)) {
                 return;

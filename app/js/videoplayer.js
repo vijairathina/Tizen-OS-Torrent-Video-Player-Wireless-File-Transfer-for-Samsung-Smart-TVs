@@ -252,6 +252,13 @@ window.VideoPlayer = (function() {
             if (infoBtn) infoBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 torrentStats.name = item.cleanTitle;
+                if (item.speed) torrentStats.speed = item.speed;
+                if (item.progress !== undefined) torrentStats.progress = item.progress;
+                if (item.completedMB) torrentStats.completedMB = item.completedMB;
+                if (item.totalMB) torrentStats.totalMB = item.totalMB;
+                if (item.peers !== undefined) torrentStats.peers = item.peers;
+                if (item.status) torrentStats.status = item.status;
+                if (item.streamUrl) torrentStats.streamUrl = item.streamUrl;
                 toggleTorrentInfoHud(true);
             });
             if (delBtn) delBtn.addEventListener('click', (e) => {
@@ -748,26 +755,30 @@ window.VideoPlayer = (function() {
         const backdrop = document.getElementById('player-hud-backdrop') || document.getElementById('amnis-hud-backdrop');
         if (!backdrop) return;
 
-        const isCurrentlyOpen = backdrop.classList.contains('dialog-open') || backdrop.classList.contains('hud-visible');
+        const isCurrentlyOpen = backdrop.classList.contains('dialog-open') || 
+                                backdrop.classList.contains('hud-visible') || 
+                                backdrop.style.display === 'flex';
         const shouldShow = (typeof forceShow === 'boolean') ? forceShow : !isCurrentlyOpen;
 
         if (shouldShow) {
             lastFocusedBeforeHud = document.activeElement;
             updateTorrentHudValues();
+            backdrop.style.display = 'flex';
+            backdrop.style.zIndex = '2500';
             backdrop.classList.add('dialog-open', 'hud-visible');
             const overlay = document.getElementById('amnis-hud-overlay');
             if (overlay) overlay.classList.add('hud-visible');
 
-            // Default focus to Close button so user can immediately dismiss using remote OK/Enter
+            // Default focus strictly to Close button so user can immediately dismiss using remote OK/Enter
             const closeBtn = document.getElementById('hud-close-btn');
-            const playBtn = document.getElementById('hud-play-btn');
-            const targetBtn = closeBtn || playBtn;
-            if (targetBtn && window.Navigation) {
+            if (closeBtn && window.Navigation) {
+                window.Navigation.setFocus(closeBtn);
                 setTimeout(() => {
-                    window.Navigation.setFocus(targetBtn);
-                }, 50);
+                    window.Navigation.setFocus(closeBtn);
+                }, 60);
             }
         } else {
+            backdrop.style.display = 'none';
             backdrop.classList.remove('dialog-open', 'hud-visible');
             const overlay = document.getElementById('amnis-hud-overlay');
             if (overlay) overlay.classList.remove('hud-visible');
