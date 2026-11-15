@@ -57,48 +57,63 @@ def get_mime_type(filepath):
     return 'application/octet-stream'
 
 def find_media_file(filename_or_query):
+    """Finds an exact uploaded or downloaded file on disk."""
     if not filename_or_query:
         return None
     
     clean_target = os.path.basename(filename_or_query).strip()
-    is_torrent_query = clean_target.lower().endswith('.torrent')
-    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
-    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
-    stem_lower = stem_clean.lower()
 
-    # 1. Search DOWNLOADS_DIR for downloaded video first
-    if not is_torrent_query:
-        p = os.path.join(DOWNLOADS_DIR, clean_target)
-        if os.path.exists(p) and os.path.isfile(p):
-            return p
-
-    p = os.path.join(DOWNLOADS_DIR, stem)
-    if os.path.exists(p) and os.path.isfile(p):
-        return p
-        
-    p = os.path.join(DOWNLOADS_DIR, stem_clean)
-    if os.path.exists(p) and os.path.isfile(p):
-        return p
-
-    # Search DOWNLOADS_DIR recursively for matches on video extension
-    for root, dirs, files in os.walk(DOWNLOADS_DIR):
-        for f in files:
-            f_lower = f.lower()
-            if f_lower == stem_lower or f_lower == clean_target.lower():
-                return os.path.join(root, f)
-            if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
-                if stem_lower and (stem_lower in f_lower or f_lower in stem_lower):
-                    return os.path.join(root, f)
-
-    # 2. Only if NO downloaded video was found in DOWNLOADS_DIR, check UPLOADS_DIR
+    # 1. Exact match in UPLOADS_DIR (for uploaded files, torrents, etc.)
     p = os.path.join(UPLOADS_DIR, clean_target)
     if os.path.exists(p) and os.path.isfile(p):
         return p
 
+    # 2. Exact match in DOWNLOADS_DIR (for downloaded videos, files, etc.)
+    p = os.path.join(DOWNLOADS_DIR, clean_target)
+    if os.path.exists(p) and os.path.isfile(p):
+        return p
+
+    # 3. Case-insensitive or clean match in UPLOADS_DIR
+    target_lower = clean_target.lower()
     for root, dirs, files in os.walk(UPLOADS_DIR):
         for f in files:
-            if f.lower() == clean_target.lower() or f.lower() == stem_lower:
+            if f.lower() == target_lower:
                 return os.path.join(root, f)
+
+    # 4. Case-insensitive or clean match in DOWNLOADS_DIR
+    for root, dirs, files in os.walk(DOWNLOADS_DIR):
+        for f in files:
+            if f.lower() == target_lower:
+                return os.path.join(root, f)
+
+    return None
+
+def find_downloaded_video(filename_or_query):
+    """Finds a 100% completed video file matching a torrent or query in DOWNLOADS_DIR."""
+    if not filename_or_query:
+        return None
+
+    clean_target = os.path.basename(filename_or_query).strip()
+    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
+    stem_clean = re.sub(r'\s*\(\d+\)$', '', stem, flags=re.IGNORECASE).strip()
+    stem_lower = stem_clean.lower()
+
+    # 1. Direct stem match in DOWNLOADS_DIR
+    p = os.path.join(DOWNLOADS_DIR, stem)
+    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
+        return p
+
+    p = os.path.join(DOWNLOADS_DIR, stem_clean)
+    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
+        return p
+
+    # 2. Search DOWNLOADS_DIR recursively for matching video files
+    for root, dirs, files in os.walk(DOWNLOADS_DIR):
+        for f in files:
+            f_lower = f.lower()
+            if any(f_lower.endswith(ext) for ext in ('.mkv', '.mp4', '.avi', '.webm', '.mov', '.ts')):
+                if f_lower == stem_lower or (stem_lower and (stem_lower in f_lower or f_lower in stem_lower)):
+                    return os.path.join(root, f)
 
     return None
 
@@ -123,7 +138,7 @@ class TorrentStreamManager:
             clean_title = title or os.path.basename(torrent_path_or_magnet)
             
             # Check if video is ALREADY in DOWNLOADS_DIR
-            downloaded = find_media_file(clean_title)
+            downloaded = find_downloaded_video(clean_title)
             if downloaded and not downloaded.lower().endswith('.torrent'):
                 v_name = os.path.basename(downloaded)
                 v_size = os.path.getsize(downloaded)
@@ -497,8 +512,8 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             if fnames:
                 fname = os.path.basename(fnames[0])
                 
-                # Check if video is already downloaded in DOWNLOADS_DIR or exists in UPLOADS_DIR
-                media_path = find_media_file(fname)
+                # Check if video is already downloaded in DOWNLOADS_DIR
+                media_path = find_downloaded_video(fname)
                 if media_path and not media_path.lower().endswith('.torrent'):
                     stream_url = TORRENT_MANAGER.start_torrent(media_path, title=os.path.basename(media_path))
                     self.send_response(200)
@@ -722,6 +737,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     try:
                         tv_text = unmasked.decode('utf-8', errors='ignore')
                         print(f"  [TV LOG] {tv_text}")
+                        sys.stdout.flush()
                         # Parse JSON commands from TV
                         try:
                             cmd_data = json.loads(tv_text)

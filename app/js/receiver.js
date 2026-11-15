@@ -473,12 +473,15 @@ window.FileReceiver = (function() {
 
         const fetchUrl = downloadUrl.startsWith('http') ? downloadUrl : `http://${serverHostIP}:${transferPort}${downloadUrl}`;
         
+        sendSocketMessage(`[FileReceiver] Fetching file from ${fetchUrl} (${totalBytes} bytes)...`);
+
         fetch(fetchUrl)
             .then(res => {
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 return res.arrayBuffer();
             })
             .then(arrayBuffer => {
+                sendSocketMessage(`[FileReceiver] Downloaded buffer: ${arrayBuffer.byteLength} bytes. Passing to TVFilesystem...`);
                 window.TVFilesystem.saveFileToStorage(
                     filename,
                     arrayBuffer,
@@ -489,6 +492,7 @@ window.FileReceiver = (function() {
                         if (err || !savedInfo) {
                             console.error('[FileReceiver] Storage write error:', err);
                             const errMsg = err ? err.message : 'Unknown write error';
+                            sendSocketMessage(`[FileReceiver] Storage write error: ${errMsg}`);
                             markTransferFailed(fileId, 'Write Error: ' + errMsg);
                             showToast(`Failed writing to storage: ${errMsg}`);
                             return;
@@ -497,7 +501,10 @@ window.FileReceiver = (function() {
                         // Mark completed with verified disk write
                         const finalName = savedInfo.name;
                         const isUsb = savedInfo.isUsb;
+                        const wasFallback = !!savedInfo.fallbackFromUsb;
                         const finalSize = savedInfo.size || totalBytes || arrayBuffer.byteLength;
+
+                        sendSocketMessage(`[FileReceiver] Save completed: ${finalName} (${finalSize} bytes) on ${isUsb ? 'USB' : (wasFallback ? 'Internal (Fallback)' : 'Internal')}`);
 
                         markTransferCompleted(fileId, finalName, isUsb, fetchUrl, finalSize);
 
@@ -511,7 +518,7 @@ window.FileReceiver = (function() {
                             timestamp: Date.now()
                         });
 
-                        const loc = isUsb ? 'USB' : 'Local Storage';
+                        const loc = isUsb ? 'USB' : (wasFallback ? 'Internal Storage (USB read-only)' : 'Internal Storage');
                         showToast(`Saved to ${loc}: ${finalName}`);
 
                         // If user sent a .torrent file, auto-prompt to play in Video Player
@@ -526,6 +533,7 @@ window.FileReceiver = (function() {
                 );
             })
             .catch(err => {
+                sendSocketMessage(`[FileReceiver] Network / Download error: ${err.message}`);
                 markTransferFailed(fileId, 'Network Error');
                 console.error('[FileReceiver] Download error:', err);
                 showToast(`Transfer failed: ${err.message}`);

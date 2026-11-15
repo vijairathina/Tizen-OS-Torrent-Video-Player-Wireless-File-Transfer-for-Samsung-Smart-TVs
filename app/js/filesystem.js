@@ -270,6 +270,32 @@ window.TVFilesystem = (function() {
         }
     }
 
+    function logFs(msg) {
+        console.log('[TVFilesystem]', msg);
+        if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+            window.FileReceiver.sendSocketMessage('[TVFilesystem] ' + msg);
+        }
+    }
+
+    function sanitizeFilename(filename) {
+        if (!filename) return 'received_' + Date.now();
+        // Replace forbidden characters: / \ : * ? " < > | \0
+        let clean = filename.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
+        // Collapse consecutive underscores or spaces
+        clean = clean.replace(/_+/g, '_').replace(/\s+/g, ' ');
+        // If length exceeds 100 characters, truncate basename while keeping extension
+        if (clean.length > 100) {
+            const dot = clean.lastIndexOf('.');
+            if (dot !== -1 && clean.length - dot <= 12) {
+                const ext = clean.substring(dot);
+                clean = clean.substring(0, 100 - ext.length) + ext;
+            } else {
+                clean = clean.substring(0, 100);
+            }
+        }
+        return clean || ('file_' + Date.now());
+    }
+
     function ensureTargetDirectory(storageLabel, callback) {
         if (typeof tizen === 'undefined' || !tizen.filesystem) {
             if (callback) callback(null, null);
@@ -279,73 +305,78 @@ window.TVFilesystem = (function() {
         const baseLabel = (storageLabel && storageLabel !== 'downloads') ? storageLabel : 'wgt-private';
         const fullVirtualPath = `${baseLabel}/TVFileHub/Received`;
 
-        // 1. Try to resolve the full directory directly first
+        // 1. Try resolving full directory directly with rw
         tizen.filesystem.resolve(fullVirtualPath, function(targetDir) {
-            console.log('[TVFilesystem] Resolved target folder directly:', fullVirtualPath);
+            logFs(`Resolved target directory directly: ${fullVirtualPath}`);
             targetDirHandle = targetDir;
             if (callback) callback(null, targetDir);
-        }, function() {
-            // 2. Build folder structure step-by-step from base storage root
-            console.log('[TVFilesystem] Scaffolding target folder hierarchy on:', baseLabel);
+        }, function(errDirect) {
+            // 2. Resolve root storage first
             tizen.filesystem.resolve(baseLabel, function(rootDir) {
-                rootDir.listFiles(function(files) {
-                    let hubDir = files.find(f => f.isDirectory && f.name === 'TVFileHub');
-                    if (!hubDir) {
-                        try {
-                            hubDir = rootDir.createDirectory('TVFileHub');
-                            console.log('[TVFilesystem] Created directory: TVFileHub');
-                        } catch (e1) {
-                            console.warn('[TVFilesystem] createDirectory TVFileHub:', e1);
-                        }
-                    }
-
-                    if (!hubDir) {
+                // Ensure TVFileHub
+                getOrCreateDir(rootDir, 'TVFileHub', function(errHub, hubDir) {
+                    if (errHub || !hubDir) {
+                        logFs(`Could not create TVFileHub on ${baseLabel}, using root: ${errHub ? errHub.message : ''}`);
                         targetDirHandle = rootDir;
                         if (callback) callback(null, rootDir);
                         return;
                     }
-
-                    hubDir.listFiles(function(hubFiles) {
-                        let recDir = hubFiles.find(f => f.isDirectory && f.name === 'Received');
-                        if (!recDir) {
-                            try {
-                                recDir = hubDir.createDirectory('Received');
-                                console.log('[TVFilesystem] Created directory: TVFileHub/Received');
-                            } catch (e2) {
-                                console.warn('[TVFilesystem] createDirectory Received:', e2);
-                            }
-                        }
-
+                    // Ensure Received inside TVFileHub
+                    getOrCreateDir(hubDir, 'Received', function(errRec, recDir) {
                         const finalDir = recDir || hubDir || rootDir;
                         targetDirHandle = finalDir;
+                        logFs(`Target directory ready on ${baseLabel}: ${finalDir.fullPath || finalDir.name}`);
                         if (callback) callback(null, finalDir);
-                    }, function() {
-                        try {
-                            const recDir = hubDir.createDirectory('Received');
-                            targetDirHandle = recDir;
-                            if (callback) callback(null, recDir);
-                        } catch (e3) {
-                            targetDirHandle = hubDir;
-                            if (callback) callback(null, hubDir);
-                        }
                     });
-
-                }, function() {
-                    try {
-                        const hubDir = rootDir.createDirectory('TVFileHub');
-                        const recDir = hubDir.createDirectory('Received');
-                        targetDirHandle = recDir;
-                        if (callback) callback(null, recDir);
-                    } catch (e4) {
-                        targetDirHandle = rootDir;
-                        if (callback) callback(null, rootDir);
-                    }
                 });
-            }, function(errRootResolve) {
-                console.error('[TVFilesystem] Failed to resolve root storage:', baseLabel, errRootResolve);
-                if (callback) callback(errRootResolve);
+            }, function(errRoot) {
+                logFs(`Failed to resolve root storage ${baseLabel}: ${errRoot ? errRoot.message : ''}`);
+                if (callback) callback(errRoot);
             }, 'rw');
         }, 'rw');
+    }
+
+    function getOrCreateDir(parentDir, dirName, cb) {
+        if (!parentDir) {
+            cb(new Error('Parent directory is null'));
+            return;
+        }
+        try {
+            parentDir.resolve(dirName, function(resolved) {
+                if (resolved && resolved.isDirectory) {
+                    cb(null, resolved);
+                } else {
+                    cb(null, parentDir);
+                }
+            }, function() {
+                try {
+                    const created = parentDir.createDirectory(dirName);
+                    cb(null, created);
+                } catch (createErr) {
+                    try {
+                        parentDir.listFiles(function(files) {
+                            const found = (Array.isArray(files) ? files : []).find(f => f.isDirectory && f.name.toLowerCase() === dirName.toLowerCase());
+                            if (found) {
+                                cb(null, found);
+                            } else {
+                                cb(null, parentDir);
+                            }
+                        }, function() {
+                            cb(null, parentDir);
+                        });
+                    } catch (e) {
+                        cb(null, parentDir);
+                    }
+                }
+            }, 'rw');
+        } catch (err) {
+            try {
+                const created = parentDir.createDirectory(dirName);
+                cb(null, created);
+            } catch (e2) {
+                cb(null, parentDir);
+            }
+        }
     }
 
     function resolveNonConflictingFilename(parentDir, filename, callback) {
@@ -356,8 +387,10 @@ window.TVFilesystem = (function() {
 
         parentDir.listFiles(function(files) {
             const existing = {};
-            for (let i = 0; i < files.length; i++) {
-                existing[files[i].name.toLowerCase()] = true;
+            if (Array.isArray(files)) {
+                for (let i = 0; i < files.length; i++) {
+                    existing[files[i].name.toLowerCase()] = true;
+                }
             }
 
             if (!existing[filename.toLowerCase()]) {
@@ -374,25 +407,163 @@ window.TVFilesystem = (function() {
                 counter++;
             }
             const safe = `${base} (${counter})${ext}`;
-            console.log('[TVFilesystem] Resolved non-conflicting filename:', safe);
+            logFs(`Resolved non-conflicting filename: ${safe}`);
             callback(safe);
         }, function(err) {
-            console.warn('[TVFilesystem] resolveNonConflictingFilename listFiles:', err);
+            logFs(`resolveNonConflictingFilename listFiles error: ${err}`);
             callback(filename);
         });
     }
 
-    function uint8ToBase64(uint8) {
-        let binary = '';
-        const len = uint8.length;
-        const CHUNK = 8192;
-        for (let i = 0; i < len; i += CHUNK) {
-            const end = Math.min(i + CHUNK, len);
-            for (let j = i; j < end; j++) {
-                binary += String.fromCharCode(uint8[j]);
+    function writeBufferToFile(targetFile, dataArrayBuffer, progressCallback, completionCallback) {
+        targetFile.openStream('w', function(fileStream) {
+            try {
+                const uint8 = new Uint8Array(dataArrayBuffer);
+                const totalBytes = uint8.length;
+                const CHUNK_SIZE = 16384;
+                let offset = 0;
+
+                function writeNextChunk() {
+                    try {
+                        if (offset >= totalBytes) {
+                            try { fileStream.close(); } catch (e) {}
+                            if (progressCallback) progressCallback(100);
+                            if (completionCallback) completionCallback(null);
+                            return;
+                        }
+
+                        const chunkEnd = Math.min(offset + CHUNK_SIZE, totalBytes);
+                        const chunkSlice = uint8.subarray(offset, chunkEnd);
+
+                        let written = false;
+
+                        // 1. Primary: writeBase64
+                        if (typeof fileStream.writeBase64 === 'function') {
+                            try {
+                                let binaryStr = '';
+                                const subChunk = 4096;
+                                for (let c = 0; c < chunkSlice.length; c += subChunk) {
+                                    const subEnd = Math.min(c + subChunk, chunkSlice.length);
+                                    binaryStr += String.fromCharCode.apply(null, chunkSlice.subarray(c, subEnd));
+                                }
+                                fileStream.writeBase64(window.btoa(binaryStr));
+                                written = true;
+                            } catch (eB64) {
+                                logFs(`writeBase64 chunk error: ${eB64}`);
+                            }
+                        }
+
+                        // 2. Secondary: writeData
+                        if (!written && typeof fileStream.writeData === 'function') {
+                            try {
+                                fileStream.writeData(chunkSlice);
+                                written = true;
+                            } catch (eData) {
+                                try {
+                                    fileStream.writeData(Array.from(chunkSlice));
+                                    written = true;
+                                } catch (eArr) {}
+                            }
+                        }
+
+                        // 3. Fallback: raw write
+                        if (!written) {
+                            let rawBin = '';
+                            for (let b = 0; b < chunkSlice.length; b++) {
+                                rawBin += String.fromCharCode(chunkSlice[b]);
+                            }
+                            fileStream.write(rawBin);
+                        }
+
+                        offset = chunkEnd;
+                        if (progressCallback && totalBytes > 0) {
+                            const pct = Math.floor((offset / totalBytes) * 100);
+                            progressCallback(Math.max(pct, 70));
+                        }
+
+                        writeNextChunk();
+                    } catch (chunkErr) {
+                        logFs(`Stream write error at byte ${offset}: ${chunkErr}`);
+                        try { fileStream.close(); } catch (e) {}
+                        if (completionCallback) completionCallback(chunkErr);
+                    }
+                }
+
+                writeNextChunk();
+            } catch (streamErr) {
+                logFs(`Stream processing error: ${streamErr}`);
+                try { fileStream.close(); } catch (e) {}
+                if (completionCallback) completionCallback(streamErr);
             }
+        }, function(openErr) {
+            logFs(`openStream('w') error: ${openErr ? openErr.message : openErr}`);
+            if (completionCallback) completionCallback(openErr);
+        });
+    }
+
+    function saveToDirectory(targetDir, rawFilename, dataArrayBuffer, isUsb, progressCallback, completionCallback) {
+        if (!targetDir) {
+            completionCallback(new Error('Target directory is null'));
+            return;
         }
-        return window.btoa(binary);
+
+        const safeName = sanitizeFilename(rawFilename);
+
+        resolveNonConflictingFilename(targetDir, safeName, function(finalName) {
+            logFs(`Attempting to create file: ${finalName} in ${targetDir.fullPath || targetDir.name}`);
+            
+            let fileHandle = null;
+            try {
+                fileHandle = targetDir.createFile(finalName);
+            } catch (createErr) {
+                logFs(`createFile threw (${createErr ? createErr.message : createErr}), trying resolve/overwrite...`);
+                try {
+                    targetDir.resolve(finalName, function(existing) {
+                        fileHandle = existing;
+                        startWrite();
+                    }, function(resErr) {
+                        // Try timestamped fallback name
+                        const dot = finalName.lastIndexOf('.');
+                        const base = dot !== -1 ? finalName.substring(0, dot) : finalName;
+                        const ext = dot !== -1 ? finalName.substring(dot) : '';
+                        const fallbackName = `${base}_${Date.now()}${ext}`;
+                        try {
+                            fileHandle = targetDir.createFile(fallbackName);
+                            finalName = fallbackName;
+                            startWrite();
+                        } catch (errTime) {
+                            completionCallback(createErr || errTime);
+                        }
+                    }, 'rw');
+                    return;
+                } catch (eResolve) {
+                    completionCallback(createErr || eResolve);
+                    return;
+                }
+            }
+
+            startWrite();
+
+            function startWrite() {
+                if (!fileHandle) {
+                    completionCallback(new Error('Could not obtain file handle for ' + finalName));
+                    return;
+                }
+                writeBufferToFile(fileHandle, dataArrayBuffer, progressCallback, function(errWrite) {
+                    if (errWrite) {
+                        completionCallback(errWrite);
+                    } else {
+                        logFs(`File successfully written to disk: ${finalName} (${dataArrayBuffer.byteLength} bytes)`);
+                        completionCallback(null, {
+                            name: finalName,
+                            path: fileHandle.fullPath || `${targetDir.fullPath}/${finalName}`,
+                            size: dataArrayBuffer.byteLength,
+                            isUsb: isUsb
+                        });
+                    }
+                });
+            }
+        });
     }
 
     function saveFileToStorage(filename, dataArrayBuffer, progressCallback, completionCallback) {
@@ -407,86 +578,78 @@ window.TVFilesystem = (function() {
             return;
         }
 
-        const activeLabel = (selectedStorage && selectedStorage.label) ? selectedStorage.label : 'wgt-private';
+        const primaryStorage = selectedStorage || { label: 'wgt-private', isUsb: false };
+        const primaryLabel = primaryStorage.label || 'wgt-private';
+        const isPrimaryUsb = !!primaryStorage.isUsb;
 
-        ensureTargetDirectory(activeLabel, function(err, targetDir) {
-            if (err || !targetDir) {
-                console.error('[TVFilesystem] Could not access storage folder:', err);
-                if (completionCallback) completionCallback(err || new Error('Could not access storage folder'));
-                return;
+        logFs(`saveFileToStorage called for "${filename}" (${dataArrayBuffer.byteLength} bytes) to primary: ${primaryLabel} (isUsb=${isPrimaryUsb})`);
+
+        // Attempt 1: Try writing to primary storage
+        ensureTargetDirectory(primaryLabel, function(errDir, targetDir) {
+            if (!errDir && targetDir) {
+                saveToDirectory(targetDir, filename, dataArrayBuffer, isPrimaryUsb, progressCallback, function(errSave, savedInfo) {
+                    if (!errSave && savedInfo) {
+                        if (completionCallback) completionCallback(null, savedInfo);
+                        return;
+                    }
+                    
+                    // If primary was USB and failed, fallback to Internal TV Storage!
+                    if (isPrimaryUsb) {
+                        logFs(`USB write failed (${errSave ? errSave.message : 'unknown'}). Initiating automatic fallback to Internal TV Storage...`);
+                        saveToInternalFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+                    } else {
+                        // If Internal storage subfolder failed, try Internal storage root directly!
+                        logFs(`Internal subfolder save failed, falling back to root wgt-private: ${errSave ? errSave.message : ''}`);
+                        saveToInternalRootFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+                    }
+                });
+            } else {
+                // Directory resolution failed on primary
+                if (isPrimaryUsb) {
+                    logFs(`USB directory access failed (${errDir ? errDir.message : 'unknown'}). Falling back to Internal TV Storage...`);
+                    saveToInternalFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+                } else {
+                    logFs(`Internal directory access failed, falling back to root wgt-private...`);
+                    saveToInternalRootFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+                }
             }
+        });
+    }
 
-            resolveNonConflictingFilename(targetDir, filename, function(safeName) {
-                try {
-                    const newFile = targetDir.createFile(safeName);
-                    newFile.openStream('w', function(fileStream) {
-                        try {
-                            const uint8 = new Uint8Array(dataArrayBuffer);
-                            if (progressCallback) progressCallback(80);
+    function saveToInternalFallback(filename, dataArrayBuffer, progressCallback, completionCallback) {
+        ensureTargetDirectory('wgt-private', function(errInternalDir, intDir) {
+            if (!errInternalDir && intDir) {
+                saveToDirectory(intDir, filename, dataArrayBuffer, false, progressCallback, function(errIntSave, savedInfo) {
+                    if (!errIntSave && savedInfo) {
+                        savedInfo.fallbackFromUsb = true;
+                        logFs(`Successfully saved to Internal Storage (fallback from USB): ${savedInfo.name}`);
+                        if (completionCallback) completionCallback(null, savedInfo);
+                    } else {
+                        saveToInternalRootFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+                    }
+                });
+            } else {
+                saveToInternalRootFallback(filename, dataArrayBuffer, progressCallback, completionCallback);
+            }
+        });
+    }
 
-                            let written = false;
-
-                            // 1. Primary binary writer: writeBase64
-                            if (typeof fileStream.writeBase64 === 'function') {
-                                try {
-                                    const b64 = uint8ToBase64(uint8);
-                                    fileStream.writeBase64(b64);
-                                    written = true;
-                                } catch (eB64) {
-                                    console.warn('[TVFilesystem] writeBase64 error, trying writeData:', eB64);
-                                }
-                            }
-
-                            // 2. Secondary binary writer: writeData
-                            if (!written && typeof fileStream.writeData === 'function') {
-                                try {
-                                    fileStream.writeData(uint8);
-                                    written = true;
-                                } catch (eU8) {
-                                    try {
-                                        fileStream.writeData(Array.from(uint8));
-                                        written = true;
-                                    } catch (eArr) {
-                                        console.warn('[TVFilesystem] writeData error:', eArr);
-                                    }
-                                }
-                            }
-
-                            // 3. Fallback binary string writer
-                            if (!written) {
-                                let bin = '';
-                                for (let i = 0; i < uint8.length; i++) {
-                                    bin += String.fromCharCode(uint8[i]);
-                                }
-                                fileStream.write(bin);
-                            }
-
-                            fileStream.close();
-
-                            console.log('[TVFilesystem] File saved to storage successfully:', safeName, 'size:', uint8.length);
-
-                            if (progressCallback) progressCallback(100);
-                            if (completionCallback) completionCallback(null, {
-                                name: safeName,
-                                path: newFile.fullPath,
-                                size: uint8.length,
-                                isUsb: selectedStorage ? selectedStorage.isUsb : false
-                            });
-                        } catch (writeErr) {
-                            console.error('[TVFilesystem] Stream write error:', writeErr);
-                            try { fileStream.close(); } catch (e) {}
-                            if (completionCallback) completionCallback(writeErr);
-                        }
-                    }, function(openErr) {
-                        console.error('[TVFilesystem] openStream error:', openErr);
-                        if (completionCallback) completionCallback(openErr);
-                    });
-                } catch (createErr) {
-                    console.error('[TVFilesystem] createFile error:', createErr);
-                    if (completionCallback) completionCallback(createErr);
+    function saveToInternalRootFallback(filename, dataArrayBuffer, progressCallback, completionCallback) {
+        tizen.filesystem.resolve('wgt-private', function(rootDir) {
+            saveToDirectory(rootDir, filename, dataArrayBuffer, false, progressCallback, function(errRootSave, savedInfo) {
+                if (!errRootSave && savedInfo) {
+                    savedInfo.fallbackFromUsb = true;
+                    logFs(`Successfully saved to Internal Root storage: ${savedInfo.name}`);
+                    if (completionCallback) completionCallback(null, savedInfo);
+                } else {
+                    logFs(`Fatal write error even on Internal Root storage: ${errRootSave ? errRootSave.message : ''}`);
+                    if (completionCallback) completionCallback(errRootSave || new Error('Internal storage write failed'));
                 }
             });
-        });
+        }, function(errResolveRoot) {
+            logFs(`Fatal: Could not resolve wgt-private root: ${errResolveRoot ? errResolveRoot.message : ''}`);
+            if (completionCallback) completionCallback(errResolveRoot || new Error('Storage completely unavailable'));
+        }, 'rw');
     }
 
     function browsePath(pathString, callback) {
