@@ -64,14 +64,45 @@ window.Navigation = (function() {
         }
     }
 
+    function getActiveModal() {
+        const modal = document.querySelector(
+            '#amnis-hud-backdrop.dialog-open, #amnis-hud-backdrop.hud-visible, ' +
+            '#player-hud-backdrop.dialog-open, #player-hud-backdrop.hud-visible, ' +
+            '.app-dialog-backdrop.dialog-open, .app-dialog-backdrop.hud-visible'
+        );
+        if (modal) {
+            const style = window.getComputedStyle(modal);
+            if (style.display !== 'none' && style.visibility !== 'hidden') {
+                return modal;
+            }
+        }
+        return null;
+    }
+
     function getVisibleFocusables() {
-        // If player is active, ONLY search in player-container!
+        // 1. If any modal dialog (Torrent HUD, Settings, Subtitles, URL) is currently active,
+        // focus navigation MUST be strictly restricted inside this dialog!
+        const activeModal = getActiveModal();
+        if (activeModal) {
+            const modalCandidates = Array.from(activeModal.querySelectorAll('.focusable:not([disabled])'));
+            return modalCandidates.filter(el => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return (
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.visibility !== 'hidden' &&
+                    style.display !== 'none' &&
+                    style.opacity !== '0'
+                );
+            });
+        }
+
+        // 2. If player is active, ONLY search in player-container!
         if (window.Player && window.Player.isActive()) {
             const playerContainer = document.getElementById('player-container');
             if (playerContainer) {
-                const hud = playerContainer.querySelector('.hud-overlay.hud-visible');
-                const pContainer = hud || playerContainer;
-                const candidates = Array.from(pContainer.querySelectorAll('.focusable:not([disabled])'));
+                const candidates = Array.from(playerContainer.querySelectorAll('.focusable:not([disabled])'));
                 return candidates.filter(el => {
                     const rect = el.getBoundingClientRect();
                     const style = window.getComputedStyle(el);
@@ -86,9 +117,9 @@ window.Navigation = (function() {
             }
         }
 
-        // If a modal dialog is currently active, restrict focus navigation inside the dialog
-        const activeModal = document.querySelector('.app-dialog-backdrop.dialog-open, .hud-overlay.hud-visible');
-        const container = activeModal || document;
+        // 3. Otherwise, search within active view, or fallback to document
+        const activeView = document.querySelector('.app-view.active-view');
+        const container = activeView || document;
 
         const candidates = Array.from(container.querySelectorAll('.focusable:not([disabled])'));
         return candidates.filter(el => {
@@ -105,9 +136,14 @@ window.Navigation = (function() {
     }
 
     function focusInitialElement() {
-        // If modal dialog is open, focus inside it
-        const activeModal = document.querySelector('.app-dialog-backdrop.dialog-open, .hud-overlay.hud-visible');
+        // If modal dialog is open, focus inside it (prefer Close button on HUD so user can easily dismiss)
+        const activeModal = getActiveModal();
         if (activeModal) {
+            const closeBtn = activeModal.querySelector('#hud-close-btn');
+            if (closeBtn) {
+                setFocus(closeBtn);
+                return;
+            }
             const modalFocusables = getVisibleFocusables();
             if (modalFocusables.length > 0) {
                 setFocus(modalFocusables[0]);
@@ -154,13 +190,37 @@ window.Navigation = (function() {
     }
 
     function move(direction) {
-        if (!currentFocusedElement) {
+        const activeModal = getActiveModal();
+
+        // If modal is active, focus MUST be inside it.
+        // If current focus is lost or outside, snap to modal immediately!
+        if (activeModal) {
+            if (!currentFocusedElement || !activeModal.contains(currentFocusedElement)) {
+                focusInitialElement();
+                return;
+            }
+        } else if (!currentFocusedElement) {
             focusInitialElement();
             return;
         }
 
         const focusables = getVisibleFocusables();
         if (focusables.length <= 1) return;
+
+        // If inside a modal with 2 buttons (e.g. Play and Close in HUD)
+        if (activeModal && focusables.length === 2) {
+            const currentIndex = focusables.indexOf(currentFocusedElement);
+            if (currentIndex !== -1) {
+                if (direction === 'left' || direction === 'right') {
+                    const otherIndex = (currentIndex === 0) ? 1 : 0;
+                    setFocus(focusables[otherIndex]);
+                    return;
+                } else if (direction === 'up' || direction === 'down') {
+                    // Stay inside modal on current button
+                    return;
+                }
+            }
+        }
 
         const currentRect = currentFocusedElement.getBoundingClientRect();
         const currentCenter = {
@@ -279,8 +339,8 @@ window.Navigation = (function() {
 
     function handlePlayerKeys(keyCode, e) {
         // If an overlay/dialog (Torrent Info HUD or Subtitle modal) is open inside player
-        const openHud = document.querySelector('.hud-overlay.hud-visible, .app-dialog-backdrop.dialog-open');
-        if (openHud) {
+        const activeModal = getActiveModal();
+        if (activeModal) {
             if (keyCode === KEY_CODES.RETURN || keyCode === KEY_CODES.BACKSPACE || keyCode === KEY_CODES.ESCAPE) {
                 e.preventDefault();
                 handleReturnKey();
@@ -461,17 +521,25 @@ window.Navigation = (function() {
     }
 
     function handleReturnKey() {
-        // If a dialog is open, close it
-        const openDialog = document.querySelector('.app-dialog-backdrop.dialog-open');
-        if (openDialog) {
-            openDialog.classList.remove('dialog-open');
-            focusInitialElement();
+        // 1. If Torrent Info HUD is open, close it cleanly
+        const hudBackdrop = document.getElementById('amnis-hud-backdrop') || document.getElementById('player-hud-backdrop');
+        if (hudBackdrop && (hudBackdrop.classList.contains('dialog-open') || hudBackdrop.classList.contains('hud-visible'))) {
+            const playerModule = window.VideoPlayer || window.Amnis;
+            if (playerModule && playerModule.toggleTorrentInfoHud) {
+                playerModule.toggleTorrentInfoHud(false);
+            } else {
+                hudBackdrop.classList.remove('dialog-open', 'hud-visible');
+                const overlay = document.getElementById('amnis-hud-overlay');
+                if (overlay) overlay.classList.remove('hud-visible');
+                focusInitialElement();
+            }
             return;
         }
 
-        const openHud = document.querySelector('.hud-overlay.hud-visible');
-        if (openHud) {
-            openHud.classList.remove('hud-visible');
+        // 2. If any other dialog is open, close it
+        const openDialog = document.querySelector('.app-dialog-backdrop.dialog-open, .app-dialog-backdrop.hud-visible');
+        if (openDialog) {
+            openDialog.classList.remove('dialog-open', 'hud-visible');
             focusInitialElement();
             return;
         }

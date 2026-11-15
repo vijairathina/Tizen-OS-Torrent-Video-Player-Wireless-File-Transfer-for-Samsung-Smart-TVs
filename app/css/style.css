@@ -1475,23 +1475,118 @@ body.media-playing-mode #app-container {
     font-family: Consolas, monospace;
 }
 
-/* Modals & Dialogs (Input URL, Subtitles, Confirmation) */
-.app-dialog-backdrop {
+/* Modals & Dialogs (Input URL, Subtitles, Confirmation, Torrent HUD) */
+.app-dialog-backdrop,
+#amnis-hud-backdrop,
+#player-hud-backdrop {
     position: fixed;
     top: 0;
     left: 0;
     width: 1920px;
     height: 1080px;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.82);
     backdrop-filter: blur(14px);
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: 2500;
 }
 
-.app-dialog-backdrop.dialog-open {
-    display: flex;
+.app-dialog-backdrop.dialog-open,
+.app-dialog-backdrop.hud-visible,
+#amnis-hud-backdrop.dialog-open,
+#amnis-hud-backdrop.hud-visible,
+#player-hud-backdrop.dialog-open,
+#player-hud-backdrop.hud-visible {
+    display: flex !important;
+}
+
+/* Day Mode styling for Torrent Information HUD */
+body.theme-day #amnis-hud-backdrop,
+body.theme-day #player-hud-backdrop {
+    background: rgba(15, 23, 42, 0.7) !important;
+}
+
+body.theme-day .hud-overlay {
+    background: #ffffff !important;
+    border: 2px solid #0284c7 !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25), 0 0 24px rgba(2, 132, 199, 0.35) !important;
+}
+
+body.theme-day .hud-title {
+    color: #0f172a !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+body.theme-day .hud-label {
+    color: #475569 !important;
+}
+
+body.theme-day .hud-value {
+    color: #0284c7 !important;
+}
+
+body.theme-day #hud-stream-name {
+    color: #0f172a !important;
+}
+
+/* Distinct high-contrast focus styling for HUD buttons */
+#hud-close-btn,
+#hud-play-btn {
+    min-width: 140px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    transition: var(--transition-smooth);
+}
+
+#hud-close-btn {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+#hud-close-btn:focus,
+#hud-close-btn.focused {
+    outline: none;
+    border-color: #ef4444 !important;
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.9) !important;
+    transform: scale(1.08);
+}
+
+#hud-play-btn:focus,
+#hud-play-btn.focused {
+    outline: none;
+    border-color: var(--border-focus) !important;
+    box-shadow: var(--glow-focus) !important;
+    transform: scale(1.08);
+}
+
+body.theme-day #hud-close-btn {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+}
+
+body.theme-day #hud-close-btn:focus,
+body.theme-day #hud-close-btn.focused {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.8) !important;
+}
+
+body.theme-day #hud-play-btn {
+    background: #0284c7 !important;
+    color: #ffffff !important;
+}
+
+body.theme-day #hud-play-btn:focus,
+body.theme-day #hud-play-btn.focused {
+    background: #0369a1 !important;
+    box-shadow: 0 0 24px rgba(2, 132, 199, 0.8) !important;
 }
 
 .dialog-window {

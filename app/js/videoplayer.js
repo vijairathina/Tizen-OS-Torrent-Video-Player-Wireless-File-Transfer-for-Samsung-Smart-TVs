@@ -741,24 +741,41 @@ window.VideoPlayer = (function() {
         if (window.Navigation) window.Navigation.focusInitialElement();
     }
 
+    let lastFocusedBeforeHud = null;
+
     /* BitTorrent / Stream Information HUD */
     function toggleTorrentInfoHud(forceShow) {
         const backdrop = document.getElementById('player-hud-backdrop') || document.getElementById('amnis-hud-backdrop');
         if (!backdrop) return;
 
-        const isCurrentlyOpen = backdrop.classList.contains('hud-visible');
+        const isCurrentlyOpen = backdrop.classList.contains('dialog-open') || backdrop.classList.contains('hud-visible');
         const shouldShow = (typeof forceShow === 'boolean') ? forceShow : !isCurrentlyOpen;
 
         if (shouldShow) {
+            lastFocusedBeforeHud = document.activeElement;
             updateTorrentHudValues();
-            backdrop.classList.add('hud-visible');
+            backdrop.classList.add('dialog-open', 'hud-visible');
+            const overlay = document.getElementById('amnis-hud-overlay');
+            if (overlay) overlay.classList.add('hud-visible');
+
+            // Default focus to Close button so user can immediately dismiss using remote OK/Enter
+            const closeBtn = document.getElementById('hud-close-btn');
             const playBtn = document.getElementById('hud-play-btn');
-            if (playBtn && window.Navigation) {
-                window.Navigation.setFocus(playBtn);
+            const targetBtn = closeBtn || playBtn;
+            if (targetBtn && window.Navigation) {
+                setTimeout(() => {
+                    window.Navigation.setFocus(targetBtn);
+                }, 50);
             }
         } else {
-            backdrop.classList.remove('hud-visible');
-            if (window.Navigation) window.Navigation.focusInitialElement();
+            backdrop.classList.remove('dialog-open', 'hud-visible');
+            const overlay = document.getElementById('amnis-hud-overlay');
+            if (overlay) overlay.classList.remove('hud-visible');
+            if (lastFocusedBeforeHud && document.body.contains(lastFocusedBeforeHud) && window.Navigation) {
+                window.Navigation.setFocus(lastFocusedBeforeHud);
+            } else if (window.Navigation) {
+                window.Navigation.focusInitialElement();
+            }
         }
     }
 
@@ -807,7 +824,13 @@ window.VideoPlayer = (function() {
         if (urlCancelBtn) urlCancelBtn.addEventListener('click', closeUrlDialog);
         if (hudPlayBtn) hudPlayBtn.addEventListener('click', function() {
             toggleTorrentInfoHud(false);
-            const streamUrl = 'http://192.168.0.13:8889/';
+            let streamUrl = torrentStats.streamUrl;
+            if (!streamUrl && activeDownloads.length > 0 && activeDownloads[0].streamUrl) {
+                streamUrl = activeDownloads[0].streamUrl;
+            }
+            if (!streamUrl) {
+                streamUrl = 'http://192.168.0.13:8889/';
+            }
             window.Player.openMedia(streamUrl, torrentStats.name);
         });
         if (hudCloseBtn) hudCloseBtn.addEventListener('click', () => toggleTorrentInfoHud(false));
