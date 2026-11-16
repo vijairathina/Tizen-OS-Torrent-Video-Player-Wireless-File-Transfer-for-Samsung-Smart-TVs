@@ -117,7 +117,6 @@ client.add(torrentInput, {
     if (!isDownloadOnly) {
         const server = http.createServer((req, res) => {
             // Determine active file for this HTTP request (allows streaming any episode via /<index> or ?file=<index>)
-            // Determine active file for this HTTP request (allows streaming any episode via /<index> or ?file=<index>)
             let reqFile = targetFile;
             try {
                 const u = new URL(req.url, 'http://127.0.0.1:8889');

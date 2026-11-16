@@ -183,13 +183,21 @@ def find_downloaded_video(filename_or_query):
         if exp_name:
             cand = os.path.join(DOWNLOADS_DIR, exp_name)
             done_marker = cand + '.done'
+            root_done = os.path.join(DOWNLOADS_DIR, exp_name + '.done')
             if os.path.exists(cand) and os.path.isfile(cand):
-                if os.path.exists(done_marker):
+                if os.path.exists(done_marker) or os.path.exists(root_done):
                     return cand
                 else:
-                    print(f"[TorrentEngine] '{exp_name}' exists on disk but has no .done marker. Running live sequential torrent engine.")
-                    sys.stdout.flush()
                     return None
+
+            # Subdirectory search in DOWNLOADS_DIR
+            if os.path.exists(DOWNLOADS_DIR):
+                for root, _, files in os.walk(DOWNLOADS_DIR):
+                    if exp_name in files:
+                        fp = os.path.join(root, exp_name)
+                        if os.path.exists(fp + '.done') or os.path.exists(root_done) or os.path.exists(os.path.join(root, os.path.basename(root) + '.done')):
+                            return fp
+                        return None
 
     # 2. Direct exact stem matching in DOWNLOADS_DIR
     clean_target = os.path.basename(filename_or_query).strip()
@@ -198,10 +206,20 @@ def find_downloaded_video(filename_or_query):
     if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
         t_matching = find_torrent_file(stem)
         if t_matching:
-            if os.path.exists(p + '.done'):
+            if os.path.exists(p + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, stem + '.done')):
                 return p
             return None
         return p
+
+    # 3. Check for matching video file anywhere in DOWNLOADS_DIR
+    if os.path.exists(DOWNLOADS_DIR):
+        for root, _, files in os.walk(DOWNLOADS_DIR):
+            for f in files:
+                if f.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.webm', '.ts')):
+                    if stem and stem.lower() in f.lower():
+                        fp = os.path.join(root, f)
+                        if os.path.exists(fp + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, f + '.done')):
+                            return fp
 
     return None
 
@@ -437,11 +455,28 @@ class TorrentStreamManager:
             # Check if already in queue
             for item in self.queue:
                 if item["filename"] == fname or item["torrent_path"] == torrent_path_or_magnet:
+                    # If previously marked completed but not actually on disk, revive it
+                    if item.get("completed", False) and not find_downloaded_video(fname):
+                        item["completed"] = False
+                        item["progress"] = 0
+                        item["priority"] = "HIGHEST" if high_priority else "QUEUED"
+                        item["status"] = "Highest Priority (Queued)" if high_priority else "Queued in Background"
                     if high_priority and item["priority"] != "HIGHEST":
                         item["priority"] = "HIGHEST"
                         item["status"] = "Highest Priority (Queued)"
                         self.queue.remove(item)
                         self.queue.insert(0, item)
+                    elif not high_priority:
+                        # Move to front of queued items so user's newly uploaded torrent starts next
+                        self.queue.remove(item)
+                        insert_idx = 0
+                        for i, q in enumerate(self.queue):
+                            if q.get("priority") == "HIGHEST":
+                                insert_idx = i + 1
+                            else:
+                                break
+                        self.queue.insert(insert_idx, item)
+                    print(f"[Queue] Updated existing queue item for '{clean}' (Priority: {item['priority']})")
                     return True
 
             exp_size = 0
@@ -465,13 +500,21 @@ class TorrentStreamManager:
                 "completed": False,
                 "is_active_stream": False,
                 "stream_url": None,
+                "retry_count": 0,
                 "created_at": time.time()
             }
 
             if high_priority:
                 self.queue.insert(0, item)
             else:
-                self.queue.append(item)
+                # Place before older queued items so newly uploaded torrent starts next in idle mode
+                insert_idx = 0
+                for i, q in enumerate(self.queue):
+                    if q.get("priority") == "HIGHEST":
+                        insert_idx = i + 1
+                    else:
+                        break
+                self.queue.insert(insert_idx, item)
 
             print(f"[Queue] Enqueued torrent: '{clean}' (Priority: {item['priority']})")
             return True
@@ -742,16 +785,29 @@ class TorrentStreamManager:
                     # 2. Check if background download process finished
                     if self.active_bg_proc:
                         if self.active_bg_proc.poll() is not None:
-                            print(f"[Queue] Background download completed/exited for: {self.active_bg_title}")
+                            exit_code = self.active_bg_proc.poll()
+                            print(f"[Queue] Background download process exited (code={exit_code}) for: {self.active_bg_title}")
                             if self.active_bg_title:
+                                is_actually_done = bool(find_downloaded_video(self.active_bg_title))
                                 for item in self.queue:
                                     if item["filename"] == self.active_bg_title:
-                                        item["completed"] = True
-                                        item["progress"] = 100
-                                        item["speed"] = "0 B/s"
-                                        item["upload_speed"] = "0 B/s (Seeding Stopped)"
-                                        item["status"] = "Completed (Seeding Stopped)"
-                                        item["priority"] = "Completed"
+                                        if is_actually_done or item.get("completed", False):
+                                            item["completed"] = True
+                                            item["progress"] = 100
+                                            item["speed"] = "0 B/s"
+                                            item["upload_speed"] = "0 B/s (Seeding Stopped)"
+                                            item["status"] = "Completed (Seeding Stopped)"
+                                            item["priority"] = "Completed"
+                                            print(f"[Queue] Background download 100% verified completed on disk: {self.active_bg_title}")
+                                        else:
+                                            # Process exited or crashed without completing
+                                            item["completed"] = False
+                                            item["speed"] = "0 B/s"
+                                            item["upload_speed"] = "0 B/s (Seeding Stopped)"
+                                            item["priority"] = "QUEUED"
+                                            item["retry_count"] = item.get("retry_count", 0) + 1
+                                            item["status"] = f"Queued (Retry #{item['retry_count']})"
+                                            print(f"[Queue] Process exited without completion (retries: {item['retry_count']}). Keeping queued: {self.active_bg_title}")
                             self.active_bg_proc = None
                             self.active_bg_title = None
 
@@ -768,6 +824,8 @@ class TorrentStreamManager:
                                 item["upload_speed"] = "0 B/s (Seeding Stopped)"
                                 item["status"] = "Completed (Seeding Stopped)"
                                 item["priority"] = "Completed"
+                                continue
+                            if item.get("retry_count", 0) >= 5:
                                 continue
                             next_item = item
                             break
