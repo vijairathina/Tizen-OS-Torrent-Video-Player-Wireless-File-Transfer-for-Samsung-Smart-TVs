@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torrent Download Management Dashboard - Samsung TV File Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Torrent Download Management - Samsung TV File Hub</title>
     <style>
         :root {
-            --bg-dark: #0a070e;
-            --bg-card: rgba(22, 16, 32, 0.88);
-            --bg-card-hover: rgba(35, 26, 52, 0.95);
+            --bg-dark: #09070f;
+            --bg-card: rgba(22, 16, 34, 0.92);
+            --bg-card-hover: rgba(33, 24, 52, 0.98);
+            --bg-subtle: rgba(255, 255, 255, 0.04);
             --primary: #7b2cbf;
             --accent-cyan: #00f2fe;
             --accent-purple: #a855f7;
@@ -18,8 +19,9 @@
             --danger: #ef4444;
             --text: #ffffff;
             --text-muted: #94a3b8;
-            --border: rgba(255, 255, 255, 0.08);
+            --border: rgba(255, 255, 255, 0.09);
             --gradient: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
+            --gradient-accent: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
         }
 
         * {
@@ -27,29 +29,32 @@
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background-color: var(--bg-dark);
             color: var(--text);
             min-height: 100vh;
+            min-height: -webkit-fill-available;
             display: flex;
             flex-direction: column;
-            padding: 20px;
+            padding: 18px;
             background-image: 
-                radial-gradient(circle at 10% 15%, rgba(123, 44, 191, 0.28) 0%, transparent 45%),
-                radial-gradient(circle at 90% 85%, rgba(0, 242, 254, 0.18) 0%, transparent 45%),
-                radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.1) 0%, transparent 60%);
+                radial-gradient(circle at 10% 10%, rgba(123, 44, 191, 0.28) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(0, 242, 254, 0.18) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.08) 0%, transparent 60%);
             background-attachment: fixed;
+            overflow-x: hidden;
         }
 
         .dashboard-container {
             width: 100%;
-            max-width: 1100px;
+            max-width: 1060px;
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
         }
 
         /* Top Navigation Bar */
@@ -59,60 +64,79 @@
             align-items: center;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 14px 22px;
+            border-radius: 16px;
+            padding: 12px 18px;
             backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
 
         .nav-brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            min-width: 0;
         }
 
         .brand-icon {
-            font-size: 24px;
+            font-size: 22px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
         }
 
         .brand-text h1 {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             background: var(--gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .brand-text span {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .nav-links {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            flex-shrink: 0;
         }
 
         .nav-btn {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
-            padding: 8px 16px;
-            border-radius: 12px;
+            padding: 8px 14px;
+            border-radius: 10px;
             font-size: 13px;
             font-weight: 600;
             text-decoration: none;
             color: #ffffff;
             background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.2s ease;
             cursor: pointer;
+            white-space: nowrap;
+            min-height: 38px;
         }
 
-        .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.25);
-            transform: translateY(-1px);
+        .nav-btn:active {
+            transform: scale(0.97);
         }
 
         .nav-btn.active {
@@ -126,41 +150,43 @@
         .status-hero {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 22px 26px;
+            border-radius: 16px;
+            padding: 16px 18px;
             backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
         }
 
         .hero-top {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 10px;
         }
 
         .hero-title h2 {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 800;
             color: #ffffff;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .hero-title p {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .hero-pills {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
@@ -168,10 +194,11 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 14px;
+            padding: 5px 12px;
             border-radius: 999px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
+            line-height: 1;
         }
 
         .pill-api {
@@ -181,11 +208,17 @@
         }
 
         .pill-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             background: #10b981;
             box-shadow: 0 0 8px #10b981;
+            animation: pulseDot 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
         }
 
         .pill-mode {
@@ -195,16 +228,36 @@
         }
 
         .pill-mode.stream-mode {
-            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(168, 85, 247, 0.2));
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25));
             border-color: #ec4899;
             color: #f472b6;
         }
 
+        .btn-refresh {
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            min-height: 28px;
+        }
+
+        .btn-refresh:active {
+            transform: scale(0.95);
+        }
+
+        /* Stats Grid (2x2 on Mobile, 4 columns on Desktop) */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            padding-top: 14px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            padding-top: 12px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
@@ -212,78 +265,144 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 12px;
-            padding: 12px 16px;
+            padding: 10px 14px;
             display: flex;
             flex-direction: column;
             gap: 4px;
+            min-width: 0;
         }
 
         .stat-label {
             font-size: 11px;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .stat-value {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
             color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .text-cyan { color: var(--accent-cyan); }
         .text-success { color: var(--success); }
         .text-purple { color: var(--accent-purple); }
 
-        /* Magnet Input Strip */
+        /* Magnet & File Input Strip */
         .magnet-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 16px 20px;
+            padding: 14px 16px;
             backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .magnet-form {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
-        .magnet-input {
+        .input-wrap {
             flex: 1;
-            min-width: 260px;
-            background: rgba(0, 0, 0, 0.35);
+            min-width: 240px;
+            display: flex;
+            gap: 6px;
+            position: relative;
+        }
+
+        .magnet-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 12px;
-            padding: 12px 16px;
+            border-radius: 10px;
+            padding: 11px 14px;
             color: #ffffff;
             font-size: 14px;
             outline: none;
-            transition: border-color 0.2s ease;
+            transition: all 0.2s ease;
         }
 
         .magnet-input:focus {
             border-color: var(--accent-cyan);
-            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.25);
+        }
+
+        .btn-paste {
+            display: none; /* Shown dynamically if clipboard api available */
+            padding: 0 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            align-items: center;
+            justify-content: center;
         }
 
         .btn-magnet {
-            padding: 12px 22px;
+            padding: 11px 18px;
             background: var(--gradient);
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             color: #000000;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
             transition: transform 0.15s ease, opacity 0.15s ease;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 42px;
         }
 
-        .btn-magnet:hover {
-            transform: translateY(-1px);
-            opacity: 0.95;
+        .btn-magnet:active {
+            transform: scale(0.97);
+        }
+
+        .magnet-tools-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .btn-upload-torrent {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-upload-torrent:hover {
+            background: rgba(0, 242, 254, 0.12);
+            border-color: rgba(0, 242, 254, 0.3);
         }
 
         /* Section Layouts */
@@ -291,25 +410,25 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 10px;
+            margin-top: 6px;
             margin-bottom: 4px;
         }
 
         .section-title-wrap {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .section-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: #ffffff;
         }
 
         .count-pill {
             background: rgba(255, 255, 255, 0.08);
-            padding: 3px 10px;
+            padding: 2px 8px;
             border-radius: 999px;
             font-size: 11px;
             font-weight: 700;
@@ -317,62 +436,59 @@
         }
 
         .section-desc {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         /* Downloading Cards */
         .items-list {
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
         }
 
         .download-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 18px 22px;
+            border-radius: 14px;
+            padding: 14px 16px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
             transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-
-        .download-card:hover {
-            border-color: rgba(0, 242, 254, 0.4);
-            background: var(--bg-card-hover);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         }
 
         .card-top {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            gap: 12px;
+            gap: 10px;
         }
 
         .card-title-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
             flex: 1;
-            overflow: hidden;
+            min-width: 0;
         }
 
         .priority-badge-row {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
         .priority-badge {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            padding: 3px 8px;
-            border-radius: 6px;
+            padding: 2px 7px;
+            border-radius: 5px;
+            letter-spacing: 0.3px;
         }
 
         .badge-highest {
@@ -394,23 +510,24 @@
         }
 
         .card-name {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #ffffff;
-            line-height: 1.4;
+            line-height: 1.35;
             word-break: break-word;
         }
 
         .card-pct {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 800;
             color: var(--accent-cyan);
             flex-shrink: 0;
+            line-height: 1;
         }
 
         .progress-track {
             width: 100%;
-            height: 8px;
+            height: 7px;
             background: rgba(255, 255, 255, 0.08);
             border-radius: 999px;
             overflow: hidden;
@@ -427,68 +544,83 @@
             background: linear-gradient(90deg, var(--accent-pink), var(--accent-purple), var(--accent-cyan));
         }
 
+        /* 2x2 Metrics Box for Downloads */
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 8px 16px;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 10px 14px;
-            border-radius: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px 12px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 8px 12px;
+            border-radius: 8px;
         }
 
         .metric-item {
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
+            align-items: center;
+            font-size: 11px;
+            gap: 4px;
         }
 
-        .metric-lbl { color: var(--text-muted); }
-        .metric-val { font-weight: 600; color: #e2e8f0; }
+        .metric-lbl { 
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .metric-val { 
+            font-weight: 600; 
+            color: #e2e8f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
         .card-footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
-            padding-top: 10px;
+            gap: 8px;
+            padding-top: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .card-status {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
         }
 
         .card-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
         .btn-action {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 7px 14px;
+            justify-content: center;
+            gap: 5px;
+            padding: 7px 12px;
             border-radius: 8px;
             font-size: 12px;
             font-weight: 600;
             border: none;
             cursor: pointer;
             transition: all 0.15s ease;
+            text-decoration: none;
+            min-height: 36px;
+        }
+
+        .btn-action:active {
+            transform: scale(0.96);
         }
 
         .btn-action.pri-btn {
             background: rgba(0, 242, 254, 0.15);
             border: 1px solid rgba(0, 242, 254, 0.4);
             color: var(--accent-cyan);
-        }
-
-        .btn-action.pri-btn:hover {
-            background: var(--accent-cyan);
-            color: #000000;
         }
 
         .btn-action.stream-btn {
@@ -503,23 +635,18 @@
             color: #f87171;
         }
 
-        .btn-action.del-btn:hover {
-            background: var(--danger);
-            color: #ffffff;
-        }
-
         /* Available Movie Cards */
         .movie-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 14px 18px;
+            border-radius: 12px;
+            padding: 12px 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 16px;
-            flex-wrap: wrap;
+            gap: 12px;
             transition: all 0.2s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
 
         .movie-card:hover {
@@ -530,32 +657,33 @@
         .movie-info {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex: 1;
-            min-width: 240px;
+            min-width: 0;
         }
 
         .movie-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
             background: linear-gradient(135deg, var(--primary), var(--accent-purple));
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 18px;
             flex-shrink: 0;
         }
 
         .movie-text {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            overflow: hidden;
+            gap: 3px;
+            min-width: 0;
+            flex: 1;
         }
 
         .movie-title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
             color: #ffffff;
             line-height: 1.3;
@@ -565,9 +693,9 @@
         .movie-meta {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         .badge-done {
@@ -578,8 +706,9 @@
         .badge-seeding-stopped {
             background: rgba(255, 255, 255, 0.06);
             color: var(--text-muted);
-            padding: 2px 8px;
+            padding: 1px 6px;
             border-radius: 4px;
+            font-size: 10px;
         }
 
         .movie-size {
@@ -590,16 +719,18 @@
         .movie-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            flex-shrink: 0;
         }
 
         .btn-play-movie {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
+            justify-content: center;
+            gap: 5px;
+            padding: 8px 14px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             background: var(--gradient);
             color: #000000;
@@ -607,56 +738,163 @@
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
+            min-height: 36px;
         }
 
-        .btn-play-movie:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(0, 242, 254, 0.35);
+        .btn-play-movie:active {
+            transform: scale(0.96);
         }
 
         .empty-placeholder {
-            padding: 40px 20px;
+            padding: 30px 16px;
             text-align: center;
             background: rgba(255, 255, 255, 0.02);
             border: 1px dashed rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
+            border-radius: 12px;
         }
 
         .empty-icon {
-            font-size: 36px;
-            margin-bottom: 8px;
+            font-size: 32px;
+            margin-bottom: 6px;
             opacity: 0.8;
         }
 
         .empty-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
 
         .empty-desc {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
-            max-width: 440px;
+            max-width: 420px;
             margin: 0 auto;
+            line-height: 1.4;
+        }
+
+        /* Built-in Mobile Video Modal */
+        .video-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 99999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+        }
+
+        .video-modal-box {
+            background: #140e20;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 860px;
+            max-height: 94vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            animation: modalFadeIn 0.2s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .video-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .video-modal-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 12px;
+        }
+
+        .video-modal-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #ffffff;
+            font-size: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .video-modal-player-wrap {
+            position: relative;
+            background: #000000;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+        }
+
+        .video-modal-player {
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            outline: none;
+        }
+
+        .video-modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            gap: 10px;
+            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.02);
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .video-modal-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         .toast {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: rgba(15, 23, 42, 0.95);
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            max-width: 460px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.96);
             border: 1px solid var(--accent-cyan);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
             color: #ffffff;
-            padding: 12px 20px;
+            padding: 12px 18px;
             border-radius: 12px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             display: none;
-            z-index: 9999;
-            backdrop-filter: blur(10px);
+            z-index: 999999;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            text-align: center;
             animation: fadeIn 0.2s ease;
         }
 
@@ -665,14 +903,182 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* ========================================================
+           Mobile Responsive Enhancements (Screen width <= 680px)
+           ======================================================== */
         @media (max-width: 680px) {
-            body { padding: 12px; }
-            .top-nav { flex-direction: column; gap: 12px; align-items: flex-start; }
-            .nav-links { width: 100%; justify-content: space-between; }
-            .card-top { flex-direction: column; }
-            .card-pct { align-self: flex-start; margin-top: 4px; }
-            .movie-card { flex-direction: column; align-items: flex-start; }
-            .movie-actions { width: 100%; justify-content: space-between; }
+            body {
+                padding: 10px;
+            }
+
+            .dashboard-container {
+                gap: 12px;
+            }
+
+            /* Nav layout */
+            .top-nav {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px 14px;
+            }
+
+            .nav-brand {
+                width: 100%;
+            }
+
+            .nav-links {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .nav-btn {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            /* Hero layout */
+            .status-hero {
+                padding: 14px 14px;
+            }
+
+            .hero-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .hero-title h2 {
+                font-size: 16px;
+            }
+
+            .hero-pills {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            /* 2x2 Clean Dashboard Grid on Mobile */
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .stat-box {
+                padding: 8px 10px;
+            }
+
+            .stat-label {
+                font-size: 10px;
+            }
+
+            .stat-value {
+                font-size: 13px;
+            }
+
+            /* Magnet card */
+            .magnet-card {
+                padding: 12px 14px;
+            }
+
+            .magnet-form {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .input-wrap {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .btn-magnet {
+                width: 100%;
+                padding: 12px;
+                font-size: 13px;
+            }
+
+            .magnet-tools-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .btn-upload-torrent {
+                width: 100%;
+                justify-content: center;
+                padding: 8px 12px;
+            }
+
+            /* Downloading cards */
+            .download-card {
+                padding: 12px 12px;
+            }
+
+            .card-name {
+                font-size: 13px;
+            }
+
+            .card-pct {
+                font-size: 18px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 4px 8px;
+                padding: 6px 8px;
+            }
+
+            .metric-item {
+                font-size: 10px;
+            }
+
+            .card-footer {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .card-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+                width: 100%;
+            }
+
+            .card-actions .del-btn {
+                grid-column: span 2;
+            }
+
+            .btn-action {
+                width: 100%;
+                font-size: 11px;
+                padding: 8px 6px;
+            }
+
+            /* Movie cards */
+            .movie-card {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                padding: 12px 12px;
+            }
+
+            .movie-info {
+                width: 100%;
+            }
+
+            .movie-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 8px;
+            }
+
+            .btn-play-movie {
+                width: 100%;
+                font-size: 12px;
+                padding: 8px 12px;
+            }
         }
     </style>
 </head>
@@ -683,13 +1089,13 @@
             <div class="nav-brand">
                 <span class="brand-icon">⚡</span>
                 <div class="brand-text">
-                    <h1>Torrent Download Management</h1>
+                    <h1>Download Hub</h1>
                     <span>Raspberry Pi Autonomous Background Queue</span>
                 </div>
             </div>
             <div class="nav-links">
                 <a href="/sender" class="nav-btn">📤 File Sender</a>
-                <a href="/downloads" class="nav-btn active">⚡ Downloads Dashboard</a>
+                <a href="/downloads" class="nav-btn active">⚡ Downloads</a>
             </div>
         </nav>
 
@@ -698,27 +1104,28 @@
             <div class="hero-top">
                 <div class="hero-title">
                     <h2>
-                        <span>Raspberry Pi Download Engine</span>
+                        <span>Raspberry Pi Engine</span>
                     </h2>
-                    <p>All torrent downloads run autonomously on the Pi without depending on TV power.</p>
+                    <p>Priority Queue • Autonomous Background Downloads • Zero Seeding on Completion</p>
                 </div>
                 <div class="hero-pills">
                     <div class="pill pill-api" id="pill-api">
                         <span class="pill-dot"></span>
-                        <span id="api-endpoint-text">API: Connecting...</span>
+                        <span id="api-endpoint-text">API: Live</span>
                     </div>
                     <div class="pill pill-mode" id="pill-mode">Idle Mode</div>
-                    <button class="nav-btn" id="btn-manual-refresh" title="Refresh Live API Data">🔄 Refresh</button>
+                    <button class="btn-refresh" id="btn-manual-refresh" title="Refresh Live API Data">🔄 Refresh</button>
                 </div>
             </div>
 
+            <!-- 2x2 Grid on Mobile, 4 columns on Desktop -->
             <div class="stats-grid">
                 <div class="stat-box">
                     <span class="stat-label">System Mode</span>
-                    <span class="stat-value text-cyan" id="stat-mode">Idle Mode (Monitoring)</span>
+                    <span class="stat-value text-cyan" id="stat-mode">Idle Mode</span>
                 </div>
                 <div class="stat-box">
-                    <span class="stat-label">Active Downloads</span>
+                    <span class="stat-label">Active Queue</span>
                     <span class="stat-value text-purple" id="stat-active-count">0 items</span>
                 </div>
                 <div class="stat-box">
@@ -726,7 +1133,7 @@
                     <span class="stat-value text-success" id="stat-avail-count">0 movies</span>
                 </div>
                 <div class="stat-box">
-                    <span class="stat-label">BitTorrent Seeding / Upload</span>
+                    <span class="stat-label">Seeding / Upload</span>
                     <span class="stat-value text-success" id="stat-seeding">Stopped (0 B/s)</span>
                 </div>
             </div>
@@ -735,21 +1142,32 @@
         <!-- Add Torrent / Magnet Box -->
         <div class="magnet-card">
             <form class="magnet-form" id="magnet-form">
-                <input type="text" class="magnet-input" id="magnet-input" placeholder="Paste magnet link (magnet:?xt=...) or video URL to download in background..." required>
-                <button type="submit" class="btn-magnet">⚡ Start Background Download</button>
+                <div class="input-wrap">
+                    <input type="text" class="magnet-input" id="magnet-input" placeholder="Paste magnet link (magnet:?xt=...) or URL" required>
+                    <button type="button" class="btn-paste" id="btn-paste-clipboard" title="Paste from clipboard">📋 Paste</button>
+                </div>
+                <button type="submit" class="btn-magnet">⚡ Start Download</button>
             </form>
+            <div class="magnet-tools-row">
+                <span>Direct Mobile / PC Addition:</span>
+                <button type="button" class="btn-upload-torrent" id="btn-browse-torrent">
+                    <span>📁</span>
+                    <span>Upload .torrent file</span>
+                </button>
+                <input type="file" id="file-torrent-input" accept=".torrent" style="display: none;">
+            </div>
         </div>
 
         <!-- Section 1: Currently Downloading Movies -->
         <div>
             <div class="section-header">
                 <div class="section-title-wrap">
-                    <span style="color: var(--accent-cyan); font-size: 20px;">⚡</span>
-                    <h3 class="section-title">Currently Downloading Movies</h3>
+                    <span style="color: var(--accent-cyan); font-size: 18px;">⚡</span>
+                    <h3 class="section-title">Currently Downloading</h3>
                     <span class="count-pill" id="dl-count-pill">0</span>
                 </div>
             </div>
-            <p class="section-desc">Priority Queue: Streaming is Highest Priority; remaining items automatically download in background.</p>
+            <p class="section-desc">Highest Priority streams take precedence; remaining torrents download sequentially in background.</p>
 
             <div class="items-list" id="downloading-list">
                 <div class="empty-placeholder">
@@ -763,34 +1181,148 @@
         <div>
             <div class="section-header">
                 <div class="section-title-wrap">
-                    <span style="color: var(--accent-purple); font-size: 20px;">🎬</span>
-                    <h3 class="section-title">Available Movies &amp; Video Library</h3>
+                    <span style="color: var(--accent-purple); font-size: 18px;">🎬</span>
+                    <h3 class="section-title">Available Movies &amp; Library</h3>
                     <span class="count-pill" id="avail-count-pill">0</span>
                 </div>
             </div>
-            <p class="section-desc">Completed 100% on Raspberry Pi. Seeding stopped. Ready to stream instantly on Samsung TV or in browser.</p>
+            <p class="section-desc">100% completed media stored on Raspberry Pi, ready to stream to Samsung TV or mobile browser.</p>
 
             <div class="items-list" id="available-list">
                 <div class="empty-placeholder">
                     <div class="empty-icon">🎬</div>
-                    <div class="empty-title">Loading completed movies...</div>
+                    <div class="empty-title">Scanning media storage...</div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Mobile-Responsive Video Modal Player -->
+    <div class="video-modal-backdrop" id="video-modal">
+        <div class="video-modal-box">
+            <div class="video-modal-header">
+                <div class="video-modal-title" id="modal-video-title">Playing Video</div>
+                <button class="video-modal-close" id="btn-close-modal" title="Close player">✕</button>
+            </div>
+            <div class="video-modal-player-wrap">
+                <video class="video-modal-player" id="modal-video-element" controls playsinline preload="auto"></video>
+            </div>
+            <div class="video-modal-footer">
+                <div style="font-size: 11px; color: var(--text-muted);" id="modal-stream-url-label">Direct Stream</div>
+                <div class="video-modal-actions">
+                    <button class="btn-refresh" id="btn-copy-stream-link">📋 Copy Link</button>
+                    <a href="#" target="_blank" class="btn-refresh" id="btn-open-external">↗ Open in Tab</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
     <script>
         const API_ENDPOINT = '/api/downloads';
         let isFetching = false;
+        let activeVideoUrl = '';
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
-            if (!toast) return;
             toast.textContent = msg;
             toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 3200);
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // Clipboard paste helper if supported
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            const pasteBtn = document.getElementById('btn-paste-clipboard');
+            if (pasteBtn) {
+                pasteBtn.style.display = 'inline-flex';
+                pasteBtn.addEventListener('click', async () => {
+                    try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) {
+                            document.getElementById('magnet-input').value = text.trim();
+                            showToast('Pasted magnet from clipboard!');
+                        }
+                    } catch (e) {
+                        showToast('Clipboard access unavailable');
+                    }
+                });
+            }
+        }
+
+        // Torrent file upload handler
+        const browseBtn = document.getElementById('btn-browse-torrent');
+        const fileInput = document.getElementById('file-torrent-input');
+        if (browseBtn && fileInput) {
+            browseBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                showToast(`Uploading '${file.name}' to Pi...`);
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error('Upload failed with status ' + res.status);
+                    return res.text();
+                })
+                .then(() => {
+                    showToast(`Torrent '${file.name}' uploaded and enqueued!`);
+                    fileInput.value = '';
+                    fetchDashboard();
+                })
+                .catch(err => {
+                    showToast('Upload error: ' + err.message);
+                });
+            });
+        }
+
+        // Video Modal Controls
+        const videoModal = document.getElementById('video-modal');
+        const videoElement = document.getElementById('modal-video-element');
+        const videoTitle = document.getElementById('modal-video-title');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const btnCopyLink = document.getElementById('btn-copy-stream-link');
+        const btnOpenExternal = document.getElementById('btn-open-external');
+
+        function openVideoModal(url, title) {
+            activeVideoUrl = url;
+            videoTitle.textContent = title || 'Playing Video';
+            videoElement.src = url;
+            document.getElementById('modal-stream-url-label').textContent = url;
+            btnOpenExternal.href = url;
+            videoModal.style.display = 'flex';
+            videoElement.play().catch(() => {});
+        }
+
+        function closeVideoModal() {
+            videoElement.pause();
+            videoElement.src = '';
+            videoModal.style.display = 'none';
+        }
+
+        if (btnCloseModal) btnCloseModal.addEventListener('click', closeVideoModal);
+        if (videoModal) {
+            videoModal.addEventListener('click', (e) => {
+                if (e.target === videoModal) closeVideoModal();
+            });
+        }
+        if (btnCopyLink) {
+            btnCopyLink.addEventListener('click', () => {
+                if (!activeVideoUrl) return;
+                navigator.clipboard.writeText(activeVideoUrl)
+                    .then(() => showToast('Stream link copied to clipboard!'))
+                    .catch(() => showToast('Link: ' + activeVideoUrl));
+            });
         }
 
         function fetchDashboard() {
@@ -808,10 +1340,12 @@
                 })
                 .catch(err => {
                     isFetching = false;
-                    console.warn('[Dashboard] Fetch error:', err);
-                    document.getElementById('api-endpoint-text').textContent = 'API: Disconnected';
-                    document.getElementById('pill-api').style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                    document.getElementById('pill-api').style.color = '#f87171';
+                    const apiPill = document.getElementById('pill-api');
+                    if (apiPill) {
+                        document.getElementById('api-endpoint-text').textContent = 'API: Disconnected';
+                        apiPill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                        apiPill.style.color = '#ef4444';
+                    }
                 });
         }
 
@@ -821,7 +1355,7 @@
             // 1. System Status
             const sys = data.system_status || {};
             const apiText = document.getElementById('api-endpoint-text');
-            if (apiText) apiText.textContent = `API: http://${window.location.host}${API_ENDPOINT} (Live)`;
+            if (apiText) apiText.textContent = `API: Live (${window.location.host})`;
 
             const modePill = document.getElementById('pill-mode');
             const isStream = sys.mode === 'streaming_priority';
@@ -878,6 +1412,7 @@
                 const badgeClass = isHighest ? 'badge-highest' : (isNormal ? 'badge-normal' : 'badge-queued');
                 const badgeText = item.priority_badge || (isHighest ? '⚡ Highest Priority' : (isNormal ? '⏳ Normal Priority' : '🕒 Queued'));
                 const pct = Math.min(100, Math.max(0, item.progress || 0));
+                const titleStr = item.clean_title || item.name;
 
                 html += `
                     <div class="download-card" id="dl-card-${idx}">
@@ -887,7 +1422,7 @@
                                     <span class="priority-badge ${badgeClass}">${badgeText}</span>
                                     ${item.is_active_stream ? '<span class="priority-badge badge-highest">📺 Active Stream to TV</span>' : ''}
                                 </div>
-                                <div class="card-name">${escapeHtml(item.clean_title || item.name)}</div>
+                                <div class="card-name">${escapeHtml(titleStr)}</div>
                             </div>
                             <div class="card-pct">${pct}%</div>
                         </div>
@@ -898,19 +1433,19 @@
 
                         <div class="metrics-grid">
                             <div class="metric-item">
-                                <span class="metric-lbl">Download Speed:</span>
+                                <span class="metric-lbl">Speed:</span>
                                 <span class="metric-val ${isHighest || isNormal ? 'text-cyan' : ''}">${item.speed || '0 B/s'}</span>
                             </div>
                             <div class="metric-item">
-                                <span class="metric-lbl">Upload (Seeding):</span>
+                                <span class="metric-lbl">Upload:</span>
                                 <span class="metric-val text-success">${item.upload_speed || '0 B/s (Stopped)'}</span>
                             </div>
                             <div class="metric-item">
-                                <span class="metric-lbl">Transferred:</span>
+                                <span class="metric-lbl">Data:</span>
                                 <span class="metric-val">${item.downloaded || '0 B'} / ${item.total || '...'}</span>
                             </div>
                             <div class="metric-item">
-                                <span class="metric-lbl">Peers &amp; Time:</span>
+                                <span class="metric-lbl">Peers/ETA:</span>
                                 <span class="metric-val">${item.peers || 0} peers • ${item.time_remaining || 'In Queue'}</span>
                             </div>
                         </div>
@@ -921,14 +1456,14 @@
                                 ${!isHighest ? `
                                 <button class="btn-action pri-btn" onclick="promoteTorrent('${encodeURIComponent(item.name)}')">
                                     <span>⚡</span>
-                                    <span>Make Highest Priority</span>
+                                    <span>Highest Priority</span>
                                 </button>
                                 ` : ''}
                                 ${item.stream_url ? `
-                                <a href="${item.stream_url}" target="_blank" class="btn-action stream-btn">
+                                <button class="btn-action stream-btn" onclick="openVideoModal('${item.stream_url}', '${escapeHtml(titleStr)}')">
                                     <span>▶️</span>
-                                    <span>Open Stream</span>
-                                </a>
+                                    <span>Play Video</span>
+                                </button>
                                 ` : `
                                 <button class="btn-action stream-btn" onclick="startStream('${encodeURIComponent(item.name)}')">
                                     <span>▶️</span>
@@ -958,7 +1493,7 @@
                         <div class="empty-icon">🎬</div>
                         <div class="empty-title">No Completed Movies on Server</div>
                         <div class="empty-desc">
-                            When background downloads finish on the Raspberry Pi, they will appear here ready for direct streaming on Samsung TV or phone/PC.
+                            When background downloads finish on the Raspberry Pi, they will appear here ready for direct streaming on Samsung TV or mobile browser.
                         </div>
                     </div>
                 `;
@@ -967,24 +1502,25 @@
 
             let html = '';
             movies.forEach((movie, idx) => {
+                const titleStr = movie.clean_title || movie.name;
                 html += `
                     <div class="movie-card" id="movie-card-${idx}">
                         <div class="movie-info">
                             <div class="movie-icon">🎬</div>
                             <div class="movie-text">
-                                <div class="movie-title">${escapeHtml(movie.clean_title || movie.name)}</div>
+                                <div class="movie-title">${escapeHtml(titleStr)}</div>
                                 <div class="movie-meta">
                                     <span class="badge-done">✓ 100% Downloaded</span>
-                                    <span class="badge-seeding-stopped">Upload: Seeding Stopped</span>
+                                    <span class="badge-seeding-stopped">Seeding Stopped</span>
                                     <span class="movie-size">${movie.size_formatted || '0 B'}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="movie-actions">
-                            <a href="${movie.stream_url}" target="_blank" class="btn-play-movie">
+                            <button class="btn-play-movie" onclick="openVideoModal('${movie.stream_url}', '${escapeHtml(titleStr)}')">
                                 <span>▶️</span>
-                                <span>Play Movie</span>
-                            </a>
+                                <span>Play</span>
+                            </button>
                             <button class="btn-action del-btn" onclick="deleteMovie('${encodeURIComponent(movie.name)}')">
                                 <span>🗑️</span>
                                 <span>Delete</span>
@@ -1010,9 +1546,8 @@
             fetch(`/start_torrent?file=${fname}`)
                 .then(r => r.json())
                 .then(data => {
-                    showToast('Streaming initiated at Highest Priority!');
                     if (data && data.streamUrl) {
-                        window.open(data.streamUrl, '_blank');
+                        openVideoModal(data.streamUrl, decodeURIComponent(fname));
                     }
                     fetchDashboard();
                 })
@@ -1041,11 +1576,16 @@
 
         function escapeHtml(str) {
             if (!str) return '';
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
-        // Form: Add Magnet / URL
-        document.getElementById('magnet-form').addEventListener('submit', (e) => {
+        // Magnet form handler
+        document.getElementById('magnet-form').addEventListener('submit', e => {
             e.preventDefault();
             const input = document.getElementById('magnet-input');
             const val = input.value.trim();
@@ -1056,7 +1596,7 @@
                 .then(r => r.json())
                 .then(() => {
                     input.value = '';
-                    showToast('Magnet enqueued for autonomous background download!');
+                    showToast('Magnet enqueued for background download!');
                     fetchDashboard();
                 })
                 .catch(err => showToast('Error enqueuing magnet link'));
