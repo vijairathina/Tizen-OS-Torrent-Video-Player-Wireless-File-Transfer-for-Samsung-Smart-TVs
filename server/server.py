@@ -169,61 +169,6 @@ def get_torrent_main_file_info(torrent_path):
     except Exception:
         return None, 0
 
-def find_downloaded_video(filename_or_query):
-    """Finds a truly 100% completed video file matching a torrent in DOWNLOADS_DIR.
-    A BitTorrent download is ONLY considered 100% complete if its .done marker exists,
-    because BitTorrent clients pre-allocate the full file size on disk."""
-    if not filename_or_query:
-        return None
-
-    # 1. Match the specific torrent first
-    t_path = find_torrent_file(filename_or_query)
-    if t_path and os.path.exists(t_path):
-        exp_name, exp_size = get_torrent_main_file_info(t_path)
-        if exp_name:
-            cand = os.path.join(DOWNLOADS_DIR, exp_name)
-            done_marker = cand + '.done'
-            root_done = os.path.join(DOWNLOADS_DIR, exp_name + '.done')
-            if os.path.exists(cand) and os.path.isfile(cand):
-                if os.path.exists(done_marker) or os.path.exists(root_done):
-                    return cand
-                else:
-                    return None
-
-            # Subdirectory search in DOWNLOADS_DIR
-            if os.path.exists(DOWNLOADS_DIR):
-                for root, _, files in os.walk(DOWNLOADS_DIR):
-                    if exp_name in files:
-                        fp = os.path.join(root, exp_name)
-                        if os.path.exists(fp + '.done') or os.path.exists(root_done) or os.path.exists(os.path.join(root, os.path.basename(root) + '.done')):
-                            return fp
-                        return None
-
-    # 2. Direct exact stem matching in DOWNLOADS_DIR
-    clean_target = os.path.basename(filename_or_query).strip()
-    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.IGNORECASE).strip()
-    p = os.path.join(DOWNLOADS_DIR, stem)
-    if os.path.exists(p) and os.path.isfile(p) and not p.lower().endswith('.torrent'):
-        t_matching = find_torrent_file(stem)
-        if t_matching:
-            if os.path.exists(p + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, stem + '.done')):
-                return p
-            return None
-        return p
-
-    # 3. Check for matching video file anywhere in DOWNLOADS_DIR
-    if os.path.exists(DOWNLOADS_DIR):
-        for root, _, files in os.walk(DOWNLOADS_DIR):
-            for f in files:
-                if f.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.webm', '.ts')):
-                    if stem and stem.lower() in f.lower():
-                        fp = os.path.join(root, f)
-                        if os.path.exists(fp + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, f + '.done')):
-                            return fp
-
-    return None
-
-
 def parse_torrent_files(torrent_path):
     """Parses .torrent bencode metadata and returns list of video files/episodes."""
     if not torrent_path or not os.path.exists(torrent_path):
@@ -309,6 +254,113 @@ def parse_torrent_files(torrent_path):
     except Exception as e:
         print(f"[TorrentEngine] Error parsing torrent files: {e}")
         return []
+
+
+def is_torrent_fully_downloaded(torrent_path_or_filename):
+    """
+    Checks whether all media files for a torrent are 100% completed on disk.
+    Auto-creates .done marker files when confirmed complete.
+    """
+    if not torrent_path_or_filename:
+        return False
+    t_path = torrent_path_or_filename if os.path.isabs(torrent_path_or_filename) else find_torrent_file(torrent_path_or_filename)
+    if not t_path or not os.path.exists(t_path):
+        return False
+
+    t_name = os.path.basename(t_path)
+    stem = re.sub(r'\.torrent$', '', t_name, flags=re.IGNORECASE).strip()
+
+    # If top-level .done marker exists
+    if os.path.exists(os.path.join(DOWNLOADS_DIR, t_name + '.done')) or \
+       os.path.exists(os.path.join(DOWNLOADS_DIR, stem + '.done')):
+        return True
+
+    # Parse torrent metadata
+    files = parse_torrent_files(t_path)
+    if not files:
+        exp_name, exp_size = get_torrent_main_file_info(t_path)
+        if exp_name and exp_size > 0:
+            for root, _, disk_files in os.walk(DOWNLOADS_DIR):
+                if exp_name in disk_files:
+                    fp = os.path.join(root, exp_name)
+                    if os.path.exists(fp + '.done') or os.path.getsize(fp) >= exp_size * 0.99:
+                        try:
+                            with open(fp + '.done', 'w') as df: df.write('1')
+                            with open(os.path.join(DOWNLOADS_DIR, stem + '.done'), 'w') as df: df.write('1')
+                        except Exception: pass
+                        return True
+        return False
+
+    video_files = [f for f in files if f.get('name') and not f['name'].startswith('.pad')]
+    if not video_files:
+        return False
+
+    all_done = True
+    found_count = 0
+    for vf in video_files:
+        v_name = vf['name']
+        v_len = vf.get('length', 0)
+        found_fp = None
+        for root, _, disk_files in os.walk(DOWNLOADS_DIR):
+            if v_name in disk_files:
+                found_fp = os.path.join(root, v_name)
+                break
+        if not found_fp:
+            all_done = False
+            break
+
+        actual_size = os.path.getsize(found_fp)
+        has_marker = os.path.exists(found_fp + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, v_name + '.done'))
+        if has_marker or (v_len > 0 and actual_size >= v_len * 0.99):
+            found_count += 1
+            if not has_marker:
+                try:
+                    with open(found_fp + '.done', 'w') as df: df.write('1')
+                except Exception: pass
+        else:
+            all_done = False
+            break
+
+    if all_done and found_count == len(video_files):
+        try:
+            with open(os.path.join(DOWNLOADS_DIR, stem + '.done'), 'w') as df: df.write('1')
+        except Exception: pass
+        return True
+
+    return False
+
+
+def find_downloaded_video(filename_or_query):
+    """Finds a truly 100% completed video file matching a torrent in DOWNLOADS_DIR."""
+    if not filename_or_query:
+        return None
+
+    # Check if torrent as a whole is complete
+    t_path = find_torrent_file(filename_or_query)
+    if t_path and is_torrent_fully_downloaded(t_path):
+        exp_name, _ = get_torrent_main_file_info(t_path)
+        if exp_name:
+            for root, _, files in os.walk(DOWNLOADS_DIR):
+                if exp_name in files:
+                    return os.path.join(root, exp_name)
+        stem = re.sub(r'\.torrent$', '', os.path.basename(t_path), flags=re.I).strip()
+        cand = os.path.join(DOWNLOADS_DIR, stem)
+        if os.path.exists(cand):
+            return cand
+
+    # Direct file match with .done marker
+    clean_target = os.path.basename(filename_or_query).strip()
+    stem = re.sub(r'\.torrent$', '', clean_target, flags=re.I).strip()
+    if os.path.exists(DOWNLOADS_DIR):
+        for root, _, files in os.walk(DOWNLOADS_DIR):
+            for f in files:
+                if f.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.webm', '.ts')):
+                    if f == clean_target or f == stem or (stem and stem.lower() in f.lower()):
+                        fp = os.path.join(root, f)
+                        if os.path.exists(fp + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, f + '.done')):
+                            return fp
+
+    return None
 
 LANG_NAME_MAP = {
     'tam': 'Tamil', 'ta': 'Tamil',
@@ -433,9 +485,13 @@ class TorrentStreamManager:
         try:
             if not os.path.exists(UPLOADS_DIR):
                 return
-            for f in os.listdir(UPLOADS_DIR):
+            for f in sorted(os.listdir(UPLOADS_DIR)):
                 if f.lower().endswith('.torrent'):
                     t_path = os.path.join(UPLOADS_DIR, f)
+                    if is_torrent_fully_downloaded(t_path):
+                        clean = clean_media_title(f)
+                        print(f"[Queue] '{clean}' is ALREADY 100% completed on disk. Skipping startup queue.")
+                        continue
                     self.enqueue_torrent(t_path, filename=f, high_priority=False)
         except Exception as e:
             print(f"[Queue] Error scanning uploads on startup: {e}")
@@ -446,9 +502,8 @@ class TorrentStreamManager:
             fname = filename or os.path.basename(torrent_path_or_magnet)
             clean = clean_media_title(fname)
 
-            # Check if video is ALREADY in DOWNLOADS_DIR with .done marker
-            downloaded = find_downloaded_video(fname)
-            if downloaded and not downloaded.lower().endswith('.torrent'):
+            # Check if video is ALREADY in DOWNLOADS_DIR with .done marker or full size
+            if is_torrent_fully_downloaded(torrent_path_or_magnet) or find_downloaded_video(fname):
                 print(f"[Queue] '{clean}' is ALREADY 100% completed on disk. Skipping download queue.")
                 return False
 
@@ -817,7 +872,7 @@ class TorrentStreamManager:
                         for item in list(self.queue):
                             if item.get("completed", False):
                                 continue
-                            if find_downloaded_video(item["filename"]):
+                            if is_torrent_fully_downloaded(item["torrent_path"]) or find_downloaded_video(item["filename"]):
                                 item["completed"] = True
                                 item["progress"] = 100
                                 item["speed"] = "0 B/s"
@@ -1039,7 +1094,20 @@ class TorrentStreamManager:
             available_movies = []
             seen_names = set()
 
-            # A. Scan DOWNLOADS_DIR for completed media files
+            # Build set of titles/filenames that are actively downloading or incomplete in queue
+            incomplete_titles = set()
+            if self.process and self.current_torrent:
+                incomplete_titles.add(os.path.basename(self.current_torrent).lower())
+                if self.current_title:
+                    incomplete_titles.add(self.current_title.lower())
+            if self.active_bg_title:
+                incomplete_titles.add(self.active_bg_title.lower())
+            for q in self.queue:
+                if not q.get("completed", False):
+                    incomplete_titles.add(q["filename"].lower())
+                    incomplete_titles.add(q["clean_title"].lower())
+
+            # A. Scan DOWNLOADS_DIR for truly completed media files
             if os.path.exists(DOWNLOADS_DIR):
                 for root, dirs, files in os.walk(DOWNLOADS_DIR):
                     for f in files:
@@ -1047,13 +1115,26 @@ class TorrentStreamManager:
                             fp = os.path.join(root, f)
                             done_marker = fp + '.done'
                             root_done_marker = os.path.join(DOWNLOADS_DIR, f + '.done')
+                            parent_done = os.path.join(DOWNLOADS_DIR, os.path.basename(root) + '.done')
 
-                            is_done = os.path.exists(done_marker) or os.path.exists(root_done_marker)
-                            # If file size > 50MB and no active download writing to it, also available
-                            if not is_done and os.path.getsize(fp) > 50 * 1024 * 1024:
-                                is_downloading = (self.current_title and f in self.current_title) or \
-                                                 (self.active_bg_title and f in self.active_bg_title)
-                                if not is_downloading:
+                            # Check if active or incomplete in queue
+                            is_active_incomplete = False
+                            f_clean = clean_media_title(f).lower()
+                            f_lower = f.lower()
+                            for it in incomplete_titles:
+                                if it in f_lower or f_lower in it or it in f_clean or f_clean in it:
+                                    is_active_incomplete = True
+                                    break
+
+                            if is_active_incomplete:
+                                continue
+
+                            is_done = os.path.exists(done_marker) or os.path.exists(root_done_marker) or os.path.exists(parent_done)
+
+                            # If no marker, verify completion with matching torrent metadata
+                            if not is_done:
+                                t_cand = find_torrent_file(f) or find_torrent_file(os.path.basename(root))
+                                if t_cand and is_torrent_fully_downloaded(t_cand):
                                     is_done = True
 
                             if is_done and f not in seen_names:

@@ -45,11 +45,12 @@ const PUBLIC_TRACKERS = [
 ];
 
 // 3. WebTorrent Client with high peer limits and peer discovery protocols enabled
+// Note: utp is set to false because utp-native can crash with unhandled UTP_ECONNRESET on Linux / Raspberry Pi
 const client = new WebTorrent({
-    maxConns: 200,      // Increase max peer connections from 55 to 200
+    maxConns: 250,      // Allow up to 250 peer connections
     dht: true,          // Distributed Hash Table peer discovery
     lsd: true,          // Local Peer Discovery
-    utp: true           // Micro Transport Protocol enabled
+    utp: false          // Pure TCP connections for rock-solid stability and throughput
 });
 
 function formatBytes(bytes) {
@@ -60,12 +61,23 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Keep native torrent trackers and merge public trackers
 client.add(torrentInput, {
     path: downloadDir,
-    announce: PUBLIC_TRACKERS,
     maxWebConns: 10
 }, torrent => {
     console.log('[TorrentEngine] Torrent ready:', torrent.name);
+
+    // Merge high-performance public trackers to maximize seeders
+    if (PUBLIC_TRACKERS && Array.isArray(PUBLIC_TRACKERS)) {
+        PUBLIC_TRACKERS.forEach(tr => {
+            try {
+                if (typeof torrent.addTracker === 'function') {
+                    torrent.addTracker(tr);
+                }
+            } catch (e) {}
+        });
+    }
 
     // Parse optional target file index from command-line argument: --file-idx=N
     let targetFileIdx = -1;
@@ -99,9 +111,19 @@ client.add(torrentInput, {
         }
     });
 
-    // Focus sequential downloading on the targeted file for immediate playback
-    if (targetFile) {
-        try { targetFile.select(); } catch (e) {}
+    if (isDownloadOnly) {
+        // High-speed parallel swarm download (rarest-first across all peers)
+        torrent.files.forEach(f => {
+            if (/\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name)) {
+                try { f.select(); } catch (e) {}
+            }
+        });
+        console.log(`[ENGINE_BG_DOWNLOAD] Background high-speed parallel swarm download active for: ${torrent.name}`);
+    } else {
+        // Live streaming mode: prioritize sequential pieces on targeted file for instant TV playback
+        if (targetFile) {
+            try { targetFile.select(); } catch (e) {}
+        }
     }
 
     // Log structured file list for companion server episode discovery
