@@ -330,6 +330,43 @@ def is_torrent_fully_downloaded(torrent_path_or_filename):
     return False
 
 
+def get_torrent_disk_progress(t_path):
+    """Calculates progress (percentage, downloaded_bytes, total_bytes) from disk files."""
+    if not t_path or not os.path.exists(t_path):
+        return 0, 0, 0
+    files = parse_torrent_files(t_path)
+    if not files:
+        exp_name, exp_size = get_torrent_main_file_info(t_path)
+        if exp_name and exp_size > 0:
+            for root, _, disk_files in os.walk(DOWNLOADS_DIR):
+                if exp_name in disk_files:
+                    act = os.path.getsize(os.path.join(root, exp_name))
+                    prog = min(100, int((act / exp_size) * 100))
+                    return prog, act, exp_size
+        return 0, 0, 0
+
+    video_files = [f for f in files if f.get('name') and not f['name'].startswith('.pad')]
+    if not video_files:
+        return 0, 0, 0
+
+    total_len = sum(f.get('length', 0) for f in video_files)
+    if total_len <= 0:
+        return 0, 0, 0
+
+    downloaded_len = 0
+    for vf in video_files:
+        v_name = vf['name']
+        v_len = vf.get('length', 0)
+        for root, _, disk_files in os.walk(DOWNLOADS_DIR):
+            if v_name in disk_files:
+                act = os.path.getsize(os.path.join(root, v_name))
+                downloaded_len += min(v_len, act)
+                break
+
+    prog = min(100, int((downloaded_len / total_len) * 100))
+    return prog, downloaded_len, total_len
+
+
 def find_downloaded_video(filename_or_query):
     """Finds a truly 100% completed video file matching a torrent in DOWNLOADS_DIR."""
     if not filename_or_query:
@@ -485,14 +522,16 @@ class TorrentStreamManager:
         try:
             if not os.path.exists(UPLOADS_DIR):
                 return
-            for f in sorted(os.listdir(UPLOADS_DIR)):
-                if f.lower().endswith('.torrent'):
-                    t_path = os.path.join(UPLOADS_DIR, f)
-                    if is_torrent_fully_downloaded(t_path):
-                        clean = clean_media_title(f)
-                        print(f"[Queue] '{clean}' is ALREADY 100% completed on disk. Skipping startup queue.")
-                        continue
-                    self.enqueue_torrent(t_path, filename=f, high_priority=False)
+            torrent_files = [f for f in os.listdir(UPLOADS_DIR) if f.lower().endswith('.torrent')]
+            # Sort by modification time ascending so newer uploads are enqueued last and placed at the head of the queue
+            torrent_files.sort(key=lambda f: os.path.getmtime(os.path.join(UPLOADS_DIR, f)))
+            for f in torrent_files:
+                t_path = os.path.join(UPLOADS_DIR, f)
+                if is_torrent_fully_downloaded(t_path):
+                    clean = clean_media_title(f)
+                    print(f"[Queue] '{clean}' is ALREADY 100% completed on disk. Skipping startup queue.")
+                    continue
+                self.enqueue_torrent(t_path, filename=f, high_priority=False)
         except Exception as e:
             print(f"[Queue] Error scanning uploads on startup: {e}")
 
@@ -718,8 +757,11 @@ class TorrentStreamManager:
                     })
 
                 elif line_str.startswith("[ENGINE_STOP_SEEDING]"):
-                    self.stats["upload_speed"] = "0 B/s (Seeding Stopped)"
-                    self.stats["status"] = "Completed (Seeding Stopped)"
+                    with self.lock:
+                        self.stats["upload_speed"] = "0 B/s (Seeding Stopped)"
+                        self.stats["status"] = "Completed (Seeding Stopped)"
+                        self.stats["progress"] = 100
+                        self.stats["completed"] = True
 
                 elif line_str.startswith("[ENGINE_STATS]"):
                     payload = line_str.replace("[ENGINE_STATS]", "").strip()
@@ -830,12 +872,14 @@ class TorrentStreamManager:
             try:
                 time.sleep(1.5)
                 with self.lock:
-                    # 1. If active stream (HIGHEST PRIORITY) is running, keep normal downloads paused
+                    # 1. If active stream (HIGHEST PRIORITY) is running and downloading, keep normal downloads paused
                     if self.process and self.process.poll() is None:
-                        if self.active_bg_proc and self.active_bg_proc.poll() is None:
-                            print("[Queue] Active stream running. Suspending background download.")
-                            self._kill_bg_download()
-                        continue
+                        is_stream_downloading = (self.stats.get("progress", 0) < 100) and not self.stats.get("completed", False)
+                        if is_stream_downloading:
+                            if self.active_bg_proc and self.active_bg_proc.poll() is None:
+                                print("[Queue] Active stream running and downloading. Suspending background download.")
+                                self._kill_bg_download()
+                            continue
 
                     # 2. Check if background download process finished
                     if self.active_bg_proc:
@@ -1097,9 +1141,11 @@ class TorrentStreamManager:
             # Build set of titles/filenames that are actively downloading or incomplete in queue
             incomplete_titles = set()
             if self.process and self.current_torrent:
-                incomplete_titles.add(os.path.basename(self.current_torrent).lower())
-                if self.current_title:
-                    incomplete_titles.add(self.current_title.lower())
+                is_stream_incomplete = (self.stats.get("progress", 0) < 100) and not self.stats.get("completed", False)
+                if is_stream_incomplete:
+                    incomplete_titles.add(os.path.basename(self.current_torrent).lower())
+                    if self.current_title:
+                        incomplete_titles.add(self.current_title.lower())
             if self.active_bg_title:
                 incomplete_titles.add(self.active_bg_title.lower())
             for q in self.queue:
@@ -1183,38 +1229,53 @@ class TorrentStreamManager:
             # 2. Currently downloading & queued movies
             currently_downloading = []
 
-            # If Highest Priority stream is active:
+            # If Highest Priority stream is active and still downloading:
             if self.process and self.process.poll() is None and self.current_torrent:
-                c_name = os.path.basename(self.current_torrent)
-                currently_downloading.append({
-                    "id": "stream-" + hashlib.md5(c_name.encode()).hexdigest()[:8],
-                    "name": c_name,
-                    "clean_title": self.current_title or clean_media_title(c_name),
-                    "priority": "Highest",
-                    "priority_badge": "⚡ Highest Priority (Streaming)",
-                    "is_active_stream": True,
-                    "status": "Downloading & Streaming (Highest Priority)",
-                    "progress": self.stats.get("progress", 0),
-                    "speed": self.stats.get("speed", "0 B/s"),
-                    "upload_speed": "0 B/s (Seeding Stopped)",
-                    "downloaded": self.stats.get("downloaded", "0 B"),
-                    "total": self.stats.get("total", "Calculating..."),
-                    "peers": self.stats.get("peers", 0),
-                    "time_remaining": self.stats.get("timeRemaining", "Calculating..."),
-                    "completed": self.stats.get("progress", 0) >= 100,
-                    "stream_url": self.current_stream_url
-                })
+                is_stream_incomplete = (self.stats.get("progress", 0) < 100) and not self.stats.get("completed", False)
+                if is_stream_incomplete:
+                    c_name = os.path.basename(self.current_torrent)
+                    currently_downloading.append({
+                        "id": "stream-" + hashlib.md5(c_name.encode()).hexdigest()[:8],
+                        "name": c_name,
+                        "clean_title": self.current_title or clean_media_title(c_name),
+                        "priority": "Highest",
+                        "priority_badge": "⚡ Highest Priority (Streaming)",
+                        "is_active_stream": True,
+                        "status": "Downloading & Streaming (Highest Priority)",
+                        "progress": self.stats.get("progress", 0),
+                        "speed": self.stats.get("speed", "0 B/s"),
+                        "upload_speed": "0 B/s (Seeding Stopped)",
+                        "downloaded": self.stats.get("downloaded", "0 B"),
+                        "total": self.stats.get("total", "Calculating..."),
+                        "peers": self.stats.get("peers", 0),
+                        "time_remaining": self.stats.get("timeRemaining", "Calculating..."),
+                        "completed": False,
+                        "stream_url": self.current_stream_url
+                    })
 
             # Add items from self.queue (excluding active stream)
             for item in self.queue:
                 if item.get("completed", False):
                     continue
                 if self.current_torrent and (item["torrent_path"] == self.current_torrent or item["filename"] in self.current_torrent):
-                    continue
+                    if self.stats.get("progress", 0) >= 100 or self.stats.get("completed", False):
+                        continue
 
                 is_active_bg = bool(self.active_bg_proc and self.active_bg_title == item["filename"])
                 priority_name = "Normal" if is_active_bg else "Queued"
                 priority_badge = "⏳ Normal Priority (Background)" if is_active_bg else "🕒 Queued (Idle Mode)"
+
+                # Compute on-disk downloaded size if queued
+                downloaded_str = item.get("downloaded", "0 B")
+                total_str = item.get("total", "Calculating...")
+                progress_val = item.get("progress", 0)
+                if not is_active_bg and progress_val == 0:
+                    disk_prog, disk_dl, disk_tot = get_torrent_disk_progress(item["torrent_path"])
+                    if disk_prog > 0:
+                        progress_val = disk_prog
+                        downloaded_str = format_bytes(disk_dl)
+                        if disk_tot > 0 and (total_str == "Calculating..." or total_str == "0 B"):
+                            total_str = format_bytes(disk_tot)
 
                 currently_downloading.append({
                     "id": item["id"],
@@ -1224,11 +1285,11 @@ class TorrentStreamManager:
                     "priority_badge": priority_badge,
                     "is_active_stream": False,
                     "status": item.get("status", "Queued in Background"),
-                    "progress": item.get("progress", 0),
+                    "progress": progress_val,
                     "speed": item.get("speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)",
                     "upload_speed": "0 B/s (Seeding Stopped)",
-                    "downloaded": item.get("downloaded", "0 B"),
-                    "total": item.get("total", "Calculating..."),
+                    "downloaded": downloaded_str,
+                    "total": total_str,
                     "peers": item.get("peers", 0) if is_active_bg else 0,
                     "time_remaining": item.get("time_remaining", "In Queue") if is_active_bg else "In Queue",
                     "completed": False,
@@ -1236,7 +1297,8 @@ class TorrentStreamManager:
                 })
 
             # System mode calculation
-            if self.process and self.process.poll() is None:
+            is_stream_downloading = bool(self.process and self.process.poll() is None and self.stats.get("progress", 0) < 100 and not self.stats.get("completed", False))
+            if is_stream_downloading:
                 system_mode = "streaming_priority"
                 mode_label = "Highest Priority Video Streaming Active"
             elif self.active_bg_proc and self.active_bg_proc.poll() is None:
@@ -1246,11 +1308,18 @@ class TorrentStreamManager:
                 system_mode = "idle"
                 mode_label = "Idle Mode (Monitoring Queue)"
 
+            active_stream_name = None
+            if self.process and self.process.poll() is None and self.current_title:
+                if is_stream_downloading:
+                    active_stream_name = self.current_title
+                else:
+                    active_stream_name = f"{self.current_title} (Completed - Playing)"
+
             return {
                 "system_status": {
                     "mode": system_mode,
                     "mode_label": mode_label,
-                    "active_stream": self.current_title if (self.process and self.process.poll() is None) else None,
+                    "active_stream": active_stream_name,
                     "active_bg_download": self.active_bg_title if (self.active_bg_proc and self.active_bg_proc.poll() is None) else None,
                     "total_available": len(available_movies),
                     "total_downloading": len(currently_downloading),
