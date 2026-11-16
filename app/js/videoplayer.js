@@ -472,13 +472,6 @@ window.VideoPlayer = (function() {
         const loadUrlCard = document.getElementById('player-card-load-url') || document.getElementById('amnis-card-load-url');
         const addonsCard = document.getElementById('player-card-addons') || document.getElementById('amnis-card-addons');
         const settingsCard = document.getElementById('player-card-settings') || document.getElementById('amnis-card-settings');
-        const downloadsBtn = document.getElementById('player-btn-downloads');
-
-        if (downloadsBtn) {
-            downloadsBtn.addEventListener('click', () => {
-                if (window.App) window.App.switchView('downloads');
-            });
-        }
 
         if (loadFileCard) {
             loadFileCard.addEventListener('click', openStorageDialog);

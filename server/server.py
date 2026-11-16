@@ -1286,6 +1286,22 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(404, 'sender.html not found')
             return
 
+        # 2.1. Download Management Dashboard UI (for Mobile & PC Browser)
+        elif path in ('/dashboard', '/downloads', '/downloads.html', '/dashboard.html'):
+            dash_file = os.path.join(PUBLIC_DIR, 'dashboard.html')
+            if os.path.exists(dash_file):
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                with open(dash_file, 'rb') as f:
+                    content = f.read()
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_error(404, 'dashboard.html not found')
+            return
+
         elif path == '/storage_target':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -1368,7 +1384,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
         # 4.5. Download Management Dashboard API
         # Dynamic API for Download Dashboard: available movies, downloading movies, status, progress, speed, completion
-        elif path in ('/api/downloads', '/downloads', '/api/queue'):
+        elif path in ('/api/downloads', '/api/queue'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')

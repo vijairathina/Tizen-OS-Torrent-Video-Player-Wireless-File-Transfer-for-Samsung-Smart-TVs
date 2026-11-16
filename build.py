@@ -26,7 +26,6 @@ REQUIRED_FILES = [
     os.path.join('js', 'videoplayer.js'),
     os.path.join('js', 'filemanager.js'),
     os.path.join('js', 'receiver.js'),
-    os.path.join('js', 'downloadmanager.js'),
     os.path.join('js', 'app.js'),
     os.path.join('js', 'qrcode.min.js')
 ]

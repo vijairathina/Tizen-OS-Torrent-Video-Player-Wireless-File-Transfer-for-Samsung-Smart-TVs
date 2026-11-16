@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torrent Download Management Dashboard - Samsung TV File Hub</title>
+    <style>
+        :root {
+            --bg-dark: #0a070e;
+            --bg-card: rgba(22, 16, 32, 0.88);
+            --bg-card-hover: rgba(35, 26, 52, 0.95);
+            --primary: #7b2cbf;
+            --accent-cyan: #00f2fe;
+            --accent-purple: #a855f7;
+            --accent-pink: #ec4899;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #ffffff;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.08);
+            --gradient: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background-image: 
+                radial-gradient(circle at 10% 15%, rgba(123, 44, 191, 0.28) 0%, transparent 45%),
+                radial-gradient(circle at 90% 85%, rgba(0, 242, 254, 0.18) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.1) 0%, transparent 60%);
+            background-attachment: fixed;
+        }
+
+        .dashboard-container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Top Navigation Bar */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 14px 22px;
+            backdrop-filter: blur(14px);
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            font-size: 24px;
+        }
+
+        .brand-text h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text span {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .nav-btn.active {
+            background: var(--gradient);
+            color: #000000;
+            border: none;
+            font-weight: 700;
+        }
+
+        /* Hero / System Status Card */
+        .status-hero {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 22px 26px;
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .hero-title h2 {
+            font-size: 22px;
+            font-weight: 800;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hero-title p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .hero-pills {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pill-api {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #34d399;
+        }
+
+        .pill-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        .pill-mode {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #60a5fa;
+        }
+
+        .pill-mode.stream-mode {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(168, 85, 247, 0.2));
+            border-color: #ec4899;
+            color: #f472b6;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .text-cyan { color: var(--accent-cyan); }
+        .text-success { color: var(--success); }
+        .text-purple { color: var(--accent-purple); }
+
+        /* Magnet Input Strip */
+        .magnet-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px 20px;
+            backdrop-filter: blur(14px);
+        }
+
+        .magnet-form {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .magnet-input {
+            flex: 1;
+            min-width: 260px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .magnet-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+        }
+
+        .btn-magnet {
+            padding: 12px 22px;
+            background: var(--gradient);
+            border: none;
+            border-radius: 12px;
+            color: #000000;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .btn-magnet:hover {
+            transform: translateY(-1px);
+            opacity: 0.95;
+        }
+
+        /* Section Layouts */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            margin-bottom: 4px;
+        }
+
+        .section-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .count-pill {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #cbd5e1;
+        }
+
+        .section-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        /* Downloading Cards */
+        .items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .download-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .download-card:hover {
+            border-color: rgba(0, 242, 254, 0.4);
+            background: var(--bg-card-hover);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .card-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .priority-badge-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .priority-badge {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .badge-highest {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25));
+            border: 1px solid var(--accent-pink);
+            color: #f472b6;
+        }
+
+        .badge-normal {
+            background: rgba(0, 242, 254, 0.15);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            color: var(--accent-cyan);
+        }
+
+        .badge-queued {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-muted);
+        }
+
+        .card-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .card-pct {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            flex-shrink: 0;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, var(--accent-cyan));
+            border-radius: 999px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.fill-highest {
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-purple), var(--accent-cyan));
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 14px;
+            border-radius: 10px;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .metric-lbl { color: var(--text-muted); }
+        .metric-val { font-weight: 600; color: #e2e8f0; }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .card-status {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-action.pri-btn {
+            background: rgba(0, 242, 254, 0.15);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            color: var(--accent-cyan);
+        }
+
+        .btn-action.pri-btn:hover {
+            background: var(--accent-cyan);
+            color: #000000;
+        }
+
+        .btn-action.stream-btn {
+            background: var(--gradient);
+            color: #000000;
+            font-weight: 700;
+        }
+
+        .btn-action.del-btn {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #f87171;
+        }
+
+        .btn-action.del-btn:hover {
+            background: var(--danger);
+            color: #ffffff;
+        }
+
+        /* Available Movie Cards */
+        .movie-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            transition: all 0.2s ease;
+        }
+
+        .movie-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(168, 85, 247, 0.35);
+        }
+
+        .movie-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 240px;
+        }
+
+        .movie-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .movie-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        .movie-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .movie-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 12px;
+        }
+
+        .badge-done {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        .badge-seeding-stopped {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .movie-size {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .movie-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-play-movie {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            background: var(--gradient);
+            color: #000000;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-play-movie:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(0, 242, 254, 0.35);
+        }
+
+        .empty-placeholder {
+            padding: 40px 20px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+        }
+
+        .empty-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .empty-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+
+        .empty-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            max-width: 440px;
+            margin: 0 auto;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--accent-cyan);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            display: none;
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 680px) {
+            body { padding: 12px; }
+            .top-nav { flex-direction: column; gap: 12px; align-items: flex-start; }
+            .nav-links { width: 100%; justify-content: space-between; }
+            .card-top { flex-direction: column; }
+            .card-pct { align-self: flex-start; margin-top: 4px; }
+            .movie-card { flex-direction: column; align-items: flex-start; }
+            .movie-actions { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navigation -->
+        <nav class="top-nav">
+            <div class="nav-brand">
+                <span class="brand-icon">⚡</span>
+                <div class="brand-text">
+                    <h1>Torrent Download Management</h1>
+                    <span>Raspberry Pi Autonomous Background Queue</span>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="/sender" class="nav-btn">📤 File Sender</a>
+                <a href="/downloads" class="nav-btn active">⚡ Downloads Dashboard</a>
+            </div>
+        </nav>
+
+        <!-- Hero System Status -->
+        <div class="status-hero">
+            <div class="hero-top">
+                <div class="hero-title">
+                    <h2>
+                        <span>Raspberry Pi Download Engine</span>
+                    </h2>
+                    <p>All torrent downloads run autonomously on the Pi without depending on TV power.</p>
+                </div>
+                <div class="hero-pills">
+                    <div class="pill pill-api" id="pill-api">
+                        <span class="pill-dot"></span>
+                        <span id="api-endpoint-text">API: Connecting...</span>
+                    </div>
+                    <div class="pill pill-mode" id="pill-mode">Idle Mode</div>
+                    <button class="nav-btn" id="btn-manual-refresh" title="Refresh Live API Data">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <span class="stat-label">System Mode</span>
+                    <span class="stat-value text-cyan" id="stat-mode">Idle Mode (Monitoring)</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Active Downloads</span>
+                    <span class="stat-value text-purple" id="stat-active-count">0 items</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Available Movies</span>
+                    <span class="stat-value text-success" id="stat-avail-count">0 movies</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">BitTorrent Seeding / Upload</span>
+                    <span class="stat-value text-success" id="stat-seeding">Stopped (0 B/s)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Torrent / Magnet Box -->
+        <div class="magnet-card">
+            <form class="magnet-form" id="magnet-form">
+                <input type="text" class="magnet-input" id="magnet-input" placeholder="Paste magnet link (magnet:?xt=...) or video URL to download in background..." required>
+                <button type="submit" class="btn-magnet">⚡ Start Background Download</button>
+            </form>
+        </div>
+
+        <!-- Section 1: Currently Downloading Movies -->
+        <div>
+            <div class="section-header">
+                <div class="section-title-wrap">
+                    <span style="color: var(--accent-cyan); font-size: 20px;">⚡</span>
+                    <h3 class="section-title">Currently Downloading Movies</h3>
+                    <span class="count-pill" id="dl-count-pill">0</span>
+                </div>
+            </div>
+            <p class="section-desc">Priority Queue: Streaming is Highest Priority; remaining items automatically download in background.</p>
+
+            <div class="items-list" id="downloading-list">
+                <div class="empty-placeholder">
+                    <div class="empty-icon">⚡</div>
+                    <div class="empty-title">Loading background queue...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Available Movies (Completed) -->
+        <div>
+            <div class="section-header">
+                <div class="section-title-wrap">
+                    <span style="color: var(--accent-purple); font-size: 20px;">🎬</span>
+                    <h3 class="section-title">Available Movies &amp; Video Library</h3>
+                    <span class="count-pill" id="avail-count-pill">0</span>
+                </div>
+            </div>
+            <p class="section-desc">Completed 100% on Raspberry Pi. Seeding stopped. Ready to stream instantly on Samsung TV or in browser.</p>
+
+            <div class="items-list" id="available-list">
+                <div class="empty-placeholder">
+                    <div class="empty-icon">🎬</div>
+                    <div class="empty-title">Loading completed movies...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_ENDPOINT = '/api/downloads';
+        let isFetching = false;
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3200);
+        }
+
+        function fetchDashboard() {
+            if (isFetching) return;
+            isFetching = true;
+
+            fetch(API_ENDPOINT, { cache: 'no-store' })
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    isFetching = false;
+                    renderDashboard(data);
+                })
+                .catch(err => {
+                    isFetching = false;
+                    console.warn('[Dashboard] Fetch error:', err);
+                    document.getElementById('api-endpoint-text').textContent = 'API: Disconnected';
+                    document.getElementById('pill-api').style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                    document.getElementById('pill-api').style.color = '#f87171';
+                });
+        }
+
+        function renderDashboard(data) {
+            if (!data) return;
+
+            // 1. System Status
+            const sys = data.system_status || {};
+            const apiText = document.getElementById('api-endpoint-text');
+            if (apiText) apiText.textContent = `API: http://${window.location.host}${API_ENDPOINT} (Live)`;
+
+            const modePill = document.getElementById('pill-mode');
+            const isStream = sys.mode === 'streaming_priority';
+            if (modePill) {
+                modePill.textContent = sys.mode_label || 'Idle Mode';
+                modePill.className = 'pill pill-mode ' + (isStream ? 'stream-mode' : '');
+            }
+
+            const statMode = document.getElementById('stat-mode');
+            if (statMode) statMode.textContent = sys.mode_label || 'Idle Mode';
+
+            const statSeeding = document.getElementById('stat-seeding');
+            if (statSeeding) statSeeding.textContent = sys.seeding_status || 'Stopped (0 B/s)';
+
+            const statActiveCount = document.getElementById('stat-active-count');
+            const dlCount = (data.currently_downloading || []).length;
+            if (statActiveCount) statActiveCount.textContent = `${dlCount} item${dlCount === 1 ? '' : 's'}`;
+
+            const statAvailCount = document.getElementById('stat-avail-count');
+            const availCount = (data.available_movies || []).length;
+            if (statAvailCount) statAvailCount.textContent = `${availCount} movie${availCount === 1 ? '' : 's'}`;
+
+            document.getElementById('dl-count-pill').textContent = dlCount;
+            document.getElementById('avail-count-pill').textContent = availCount;
+
+            // 2. Render Downloading
+            renderDownloadingList(data.currently_downloading || []);
+
+            // 3. Render Available
+            renderAvailableList(data.available_movies || []);
+        }
+
+        function renderDownloadingList(items) {
+            const container = document.getElementById('downloading-list');
+            if (!container) return;
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-placeholder">
+                        <div class="empty-icon">⚡</div>
+                        <div class="empty-title">No Active Background Downloads</div>
+                        <div class="empty-desc">
+                            The Raspberry Pi engine is in <strong>Idle Mode</strong>. Any newly uploaded torrents will automatically begin sequential downloading in the background.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            items.forEach((item, idx) => {
+                const isHighest = item.priority === 'Highest';
+                const isNormal = item.priority === 'Normal';
+                const badgeClass = isHighest ? 'badge-highest' : (isNormal ? 'badge-normal' : 'badge-queued');
+                const badgeText = item.priority_badge || (isHighest ? '⚡ Highest Priority' : (isNormal ? '⏳ Normal Priority' : '🕒 Queued'));
+                const pct = Math.min(100, Math.max(0, item.progress || 0));
+
+                html += `
+                    <div class="download-card" id="dl-card-${idx}">
+                        <div class="card-top">
+                            <div class="card-title-group">
+                                <div class="priority-badge-row">
+                                    <span class="priority-badge ${badgeClass}">${badgeText}</span>
+                                    ${item.is_active_stream ? '<span class="priority-badge badge-highest">📺 Active Stream to TV</span>' : ''}
+                                </div>
+                                <div class="card-name">${escapeHtml(item.clean_title || item.name)}</div>
+                            </div>
+                            <div class="card-pct">${pct}%</div>
+                        </div>
+
+                        <div class="progress-track">
+                            <div class="progress-fill ${isHighest ? 'fill-highest' : ''}" style="width: ${pct}%;"></div>
+                        </div>
+
+                        <div class="metrics-grid">
+                            <div class="metric-item">
+                                <span class="metric-lbl">Download Speed:</span>
+                                <span class="metric-val ${isHighest || isNormal ? 'text-cyan' : ''}">${item.speed || '0 B/s'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-lbl">Upload (Seeding):</span>
+                                <span class="metric-val text-success">${item.upload_speed || '0 B/s (Stopped)'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-lbl">Transferred:</span>
+                                <span class="metric-val">${item.downloaded || '0 B'} / ${item.total || '...'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-lbl">Peers &amp; Time:</span>
+                                <span class="metric-val">${item.peers || 0} peers • ${item.time_remaining || 'In Queue'}</span>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="card-status">Status: <strong>${escapeHtml(item.status || 'Active')}</strong></div>
+                            <div class="card-actions">
+                                ${!isHighest ? `
+                                <button class="btn-action pri-btn" onclick="promoteTorrent('${encodeURIComponent(item.name)}')">
+                                    <span>⚡</span>
+                                    <span>Make Highest Priority</span>
+                                </button>
+                                ` : ''}
+                                ${item.stream_url ? `
+                                <a href="${item.stream_url}" target="_blank" class="btn-action stream-btn">
+                                    <span>▶️</span>
+                                    <span>Open Stream</span>
+                                </a>
+                                ` : `
+                                <button class="btn-action stream-btn" onclick="startStream('${encodeURIComponent(item.name)}')">
+                                    <span>▶️</span>
+                                    <span>Prioritize &amp; Stream</span>
+                                </button>
+                                `}
+                                <button class="btn-action del-btn" onclick="cancelDownload('${encodeURIComponent(item.name)}')">
+                                    <span>🗑️</span>
+                                    <span>Cancel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderAvailableList(movies) {
+            const container = document.getElementById('available-list');
+            if (!container) return;
+
+            if (movies.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-placeholder">
+                        <div class="empty-icon">🎬</div>
+                        <div class="empty-title">No Completed Movies on Server</div>
+                        <div class="empty-desc">
+                            When background downloads finish on the Raspberry Pi, they will appear here ready for direct streaming on Samsung TV or phone/PC.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            movies.forEach((movie, idx) => {
+                html += `
+                    <div class="movie-card" id="movie-card-${idx}">
+                        <div class="movie-info">
+                            <div class="movie-icon">🎬</div>
+                            <div class="movie-text">
+                                <div class="movie-title">${escapeHtml(movie.clean_title || movie.name)}</div>
+                                <div class="movie-meta">
+                                    <span class="badge-done">✓ 100% Downloaded</span>
+                                    <span class="badge-seeding-stopped">Upload: Seeding Stopped</span>
+                                    <span class="movie-size">${movie.size_formatted || '0 B'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="movie-actions">
+                            <a href="${movie.stream_url}" target="_blank" class="btn-play-movie">
+                                <span>▶️</span>
+                                <span>Play Movie</span>
+                            </a>
+                            <button class="btn-action del-btn" onclick="deleteMovie('${encodeURIComponent(movie.name)}')">
+                                <span>🗑️</span>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function promoteTorrent(fname) {
+            fetch(`/api/prioritize?file=${fname}`)
+                .then(() => {
+                    showToast('Promoted to Highest Priority! Bandwidth allocated.');
+                    fetchDashboard();
+                })
+                .catch(e => showToast('Error prioritizing torrent'));
+        }
+
+        function startStream(fname) {
+            fetch(`/start_torrent?file=${fname}`)
+                .then(r => r.json())
+                .then(data => {
+                    showToast('Streaming initiated at Highest Priority!');
+                    if (data && data.streamUrl) {
+                        window.open(data.streamUrl, '_blank');
+                    }
+                    fetchDashboard();
+                })
+                .catch(e => showToast('Error starting stream'));
+        }
+
+        function cancelDownload(fname) {
+            if (!confirm('Cancel and remove this background download?')) return;
+            fetch(`/delete_file?file=${fname}`)
+                .then(() => {
+                    showToast('Download cancelled.');
+                    fetchDashboard();
+                })
+                .catch(e => showToast('Error cancelling download'));
+        }
+
+        function deleteMovie(fname) {
+            if (!confirm('Permanently delete this movie from the server?')) return;
+            fetch(`/delete_file?file=${fname}`)
+                .then(() => {
+                    showToast('Movie deleted from server.');
+                    fetchDashboard();
+                })
+                .catch(e => showToast('Error deleting movie'));
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Form: Add Magnet / URL
+        document.getElementById('magnet-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('magnet-input');
+            const val = input.value.trim();
+            if (!val) return;
+
+            showToast('Starting background sequential download on Pi...');
+            fetch(`/start_torrent?magnet=${encodeURIComponent(val)}&downloadOnly=true`)
+                .then(r => r.json())
+                .then(() => {
+                    input.value = '';
+                    showToast('Magnet enqueued for autonomous background download!');
+                    fetchDashboard();
+                })
+                .catch(err => showToast('Error enqueuing magnet link'));
+        });
+
+        document.getElementById('btn-manual-refresh').addEventListener('click', fetchDashboard);
+
+        // Auto poll every 1.5 seconds
+        fetchDashboard();
+        setInterval(fetchDashboard, 1500);
+    </script>
+</body>
+</html>
