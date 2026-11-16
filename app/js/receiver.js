@@ -175,25 +175,30 @@ window.FileReceiver = (function() {
 
     function setupQueueActionButtons() {
         const clearBtn = document.getElementById('receiver-clear-list-btn');
-        const delAllBtn = document.getElementById('receiver-delete-all-btn');
-
         if (clearBtn) {
             clearBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 clearReceivedList();
             });
         }
-
-        if (delAllBtn) {
-            delAllBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                deleteAllReceivedFiles();
-            });
-        }
     }
 
     function clearReceivedList() {
         try {
+            // Only clean temporary .torrent metadata files from server, NEVER delete downloaded videos
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const history = JSON.parse(raw);
+                if (Array.isArray(history)) {
+                    history.forEach(item => {
+                        const name = item.name || item.filename || '';
+                        if (name.toLowerCase().endsWith('.torrent')) {
+                            fetch(`http://${serverHostIP}:${transferPort}/delete_file?file=${encodeURIComponent(name)}`)
+                                .catch(() => {});
+                        }
+                    });
+                }
+            }
             localStorage.removeItem(STORAGE_KEY);
         } catch (e) {}
         transferQueue = [];
@@ -205,7 +210,7 @@ window.FileReceiver = (function() {
         const emptyState = document.getElementById('receiver-empty-state');
         if (emptyState) emptyState.style.display = 'flex';
         updateQueueStats();
-        showToast('Received files list cleared.');
+        showToast('List cleared. Video files remain safe on storage & server.');
         if (window.Navigation) window.Navigation.focusInitialElement();
     }
 
@@ -399,18 +404,16 @@ window.FileReceiver = (function() {
                         color: #fff;
                         border: none;
                         border-radius: 8px;
-                        padding: 6px 14px;
+                        padding: 6px 18px;
                         font-size: 13px;
-                        font-weight: 600;
+                        font-weight: 700;
                         cursor: pointer;
                     ">${actionText}</button>
-                    <button class="action-btn-delete focusable" id="btn-del-${fileId}" tabindex="0" title="Delete File">🗑️ Delete</button>
                 </div>
             </div>
         `;
 
         const playBtn = card.querySelector(`#btn-play-${fileId}`);
-        const delBtn = card.querySelector(`#btn-del-${fileId}`);
         const launchAction = () => {
             console.log('[FileReceiver] Launching action for:', item.name);
             showToast(`Opening ${item.name}...`);
@@ -431,10 +434,6 @@ window.FileReceiver = (function() {
         if (playBtn) playBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             launchAction();
-        });
-        if (delBtn) delBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteReceivedItem(item, card);
         });
         card.addEventListener('click', launchAction);
 

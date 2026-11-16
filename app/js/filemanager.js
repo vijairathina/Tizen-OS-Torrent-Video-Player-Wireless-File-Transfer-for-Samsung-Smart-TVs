@@ -257,6 +257,23 @@ window.FileManager = (function() {
         });
     }
 
+    function formatDisplayName(name, isDirectory) {
+        if (!name || isDirectory) return name || '';
+        let clean = name.replace(/^www\.[a-zA-Z0-9-]+\.[a-zA-Z]+\s*-\s*/i, '');
+        clean = clean.replace(/\.(mkv|mp4|avi|mov|wmv|ts|webm|torrent)$/i, '');
+        return clean;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function renderFileGrid(files) {
         const grid = document.getElementById('fm-file-grid');
         if (!grid) return;
@@ -270,9 +287,18 @@ window.FileManager = (function() {
             upCard.className = 'file-item-card parent-dir-card focusable';
             upCard.tabIndex = 0;
             upCard.innerHTML = `
-                <div class="file-icon-wrapper folder-icon parent-icon-wrapper">⬆️</div>
-                <div class="file-name-text">.. (Parent Folder)</div>
-                <div class="file-meta-text">Go back up one level</div>
+                <div class="file-icon-wrapper folder-icon parent-icon-wrapper">
+                    <span>⬆️</span>
+                </div>
+                <div class="file-card-info">
+                    <div class="file-name-text">.. (Parent Folder)</div>
+                    <div class="file-meta-row">
+                        <span class="file-meta-badge">Go back up one level</span>
+                    </div>
+                </div>
+                <div class="file-card-action-badge">
+                    <span class="file-action-pill up-pill">⬆️ Up</span>
+                </div>
             `;
             upCard.addEventListener('click', function() {
                 navigateUp();
@@ -302,61 +328,69 @@ window.FileManager = (function() {
 
             let iconChar = '📄';
             let iconClass = '';
+            let actionText = '📄 View';
+            let actionClass = 'view-pill';
+            let typeBadge = 'File';
+
             if (file.isDirectory) {
                 iconChar = '📁';
                 iconClass = 'folder-icon';
+                actionText = '📂 Open';
+                actionClass = 'folder-pill';
+                typeBadge = 'Folder';
             } else if (file.fileType === 'video') {
                 iconChar = '🎬';
                 iconClass = 'video-icon';
+                actionText = '▶ Play';
+                actionClass = 'play-pill';
+                const parts = (file.name || '').split('.');
+                typeBadge = parts.length > 1 ? parts.pop().toUpperCase() : 'VIDEO';
             } else if (file.fileType === 'torrent') {
                 iconChar = '⚡';
                 iconClass = 'torrent-icon';
+                actionText = '⚡ Stream';
+                actionClass = 'torrent-pill';
+                typeBadge = 'TORRENT';
             } else if (file.fileType === 'audio') {
                 iconChar = '🎵';
                 iconClass = 'audio-icon';
+                actionText = '▶ Play';
+                actionClass = 'play-pill';
+                typeBadge = 'AUDIO';
             } else if (file.fileType === 'image') {
                 iconChar = '🖼️';
                 iconClass = 'image-icon';
+                actionText = '🖼️ View';
+                actionClass = 'view-pill';
+                typeBadge = 'IMAGE';
             } else if (file.fileType === 'subtitle') {
                 iconChar = '📝';
+                typeBadge = 'SUB';
             }
 
-            const sizeStr = file.isDirectory ? 'Folder' : window.TVFilesystem.formatBytes(file.fileSize);
-
-            // Build card inner HTML
-            let actionHtml = '';
-            if (!file.isDirectory) {
-                actionHtml = `
-                    <div class="fm-card-actions">
-                        <button class="fm-card-del-btn focusable" tabindex="0" title="Delete file">🗑️ Delete</button>
-                    </div>
-                `;
-            }
+            const sizeStr = file.isDirectory ? 'Folder' : (window.TVFilesystem && file.fileSize ? window.TVFilesystem.formatBytes(file.fileSize) : '');
+            const cleanName = formatDisplayName(file.name, file.isDirectory);
 
             card.innerHTML = `
-                <div class="file-icon-wrapper ${iconClass}">${iconChar}</div>
-                <div class="file-name-text" title="${file.name}">${file.name}</div>
-                <div class="file-meta-text">${sizeStr}</div>
-                ${actionHtml}
+                <div class="file-icon-wrapper ${iconClass}">
+                    <span>${iconChar}</span>
+                </div>
+                <div class="file-card-info">
+                    <div class="file-name-text" title="${escapeHtml(file.name)}">${escapeHtml(cleanName)}</div>
+                    <div class="file-meta-row">
+                        ${sizeStr ? `<span class="file-meta-badge">${sizeStr}</span>` : ''}
+                        <span class="file-meta-badge file-type-badge">${typeBadge}</span>
+                    </div>
+                </div>
+                <div class="file-card-action-badge">
+                    <span class="file-action-pill ${actionClass}">${actionText}</span>
+                </div>
             `;
 
-            // Card click handler (open directory or play file)
-            card.addEventListener('click', function(e) {
-                // If user clicked the delete button inside the card, ignore card click
-                if (e.target && e.target.closest('.fm-card-del-btn')) {
-                    return;
-                }
+            // Card click handler (open directory, play video, or handle file)
+            card.addEventListener('click', function() {
                 handleFileClick(file);
             });
-
-            // Delete button click handler
-            const delBtn = card.querySelector('.fm-card-del-btn');
-            if (delBtn) {
-                delBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    deleteFile(file);
-                });
-            }
 
             grid.appendChild(card);
         });

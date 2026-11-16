@@ -93,65 +93,69 @@ window.HomeLauncher = (function() {
 
     function loadHistoryData() {
         cachedHistory = [];
+        let savedHistory = [];
         try {
             const raw = localStorage.getItem('tvfilehub_received_history_v2');
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) cachedHistory = parsed;
+                if (Array.isArray(parsed)) savedHistory = parsed;
             }
         } catch (e) {
             console.warn('[HomeLauncher] History parse error:', e);
         }
 
-        // Also check active torrent downloads
-        try {
-            const rawDl = localStorage.getItem('tvhub_player_downloads_v2');
-            if (rawDl) {
-                const parsedDl = JSON.parse(rawDl);
-                if (Array.isArray(parsedDl)) {
-                    parsedDl.forEach(dl => {
-                        if (!cachedHistory.some(h => (h.name || h.filename) === (dl.title || dl.name))) {
-                            cachedHistory.unshift({
-                                name: dl.title || dl.name,
-                                size: dl.totalBytes || 0,
-                                isUsb: false,
-                                isTorrent: true,
-                                streamUrl: dl.streamUrl || ''
-                            });
-                        }
-                    });
-                }
-            }
-        } catch (e) {}
-
-        // Fetch completed movies from Raspberry Pi hub so Home spotlight and carousel match the browser dashboard
+        // Fetch completed movies from Raspberry Pi hub - RPi is the SINGLE SOURCE OF TRUTH
         const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
         fetch(`${srvUrl}/api/downloads`)
             .then(res => res.json())
             .then(data => {
-                if (data && Array.isArray(data.available_movies) && data.available_movies.length > 0) {
-                    let hasNew = false;
-                    data.available_movies.forEach(m => {
-                        if (!cachedHistory.some(h => (h.name || h.filename) === m.name)) {
-                            cachedHistory.push({
-                                name: m.name,
-                                cleanTitle: m.clean_title,
-                                size: m.size || 0,
-                                isUsb: false,
-                                isTorrent: false,
-                                isVideo: true,
-                                streamUrl: m.stream_url
-                            });
-                            hasNew = true;
-                        }
-                    });
-                    if (hasNew) {
-                        renderSpotlight();
-                        renderContinueWatching();
+                const availableMovies = (data && Array.isArray(data.available_movies)) ? data.available_movies : [];
+                const downloadingItems = (data && Array.isArray(data.currently_downloading)) ? data.currently_downloading : [];
+
+                // 1. Validated RPi available movies take top priority
+                const validatedMovies = availableMovies.map(m => ({
+                    name: m.name,
+                    cleanTitle: m.clean_title,
+                    size: m.size || 0,
+                    isUsb: false,
+                    isTorrent: false,
+                    isVideo: true,
+                    streamUrl: m.stream_url
+                }));
+
+                // 2. Prune dead or non-existent history items (such as old test torrents like Lakshmikanthan)
+                const cleanedSaved = savedHistory.filter(h => {
+                    const hName = (h.name || h.filename || '').toLowerCase();
+                    // Keep if matches an available movie or active download on Pi
+                    const onPi = availableMovies.some(m => m.name.toLowerCase() === hName) ||
+                                 downloadingItems.some(d => d.name.toLowerCase() === hName);
+                    // Keep if physical USB storage item
+                    const isUsb = Boolean(h.isUsb);
+                    return onPi || isUsb;
+                });
+
+                // Update localStorage with cleaned history
+                try {
+                    localStorage.setItem('tvfilehub_received_history_v2', JSON.stringify(cleanedSaved));
+                } catch (eClean) {}
+
+                // Combine: RPi available movies at the front, followed by any valid USB items
+                cachedHistory = [...validatedMovies];
+                cleanedSaved.forEach(item => {
+                    if (!cachedHistory.some(c => (c.name || '').toLowerCase() === (item.name || item.filename || '').toLowerCase())) {
+                        cachedHistory.push(item);
                     }
-                }
+                });
+
+                renderSpotlight();
+                renderContinueWatching();
             })
-            .catch(() => {});
+            .catch(() => {
+                // Offline fallback
+                cachedHistory = savedHistory.filter(h => h.isUsb || (h.streamUrl && h.streamUrl.length > 5));
+                renderSpotlight();
+                renderContinueWatching();
+            });
     }
 
     function getResumeMap() {

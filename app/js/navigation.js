@@ -219,9 +219,9 @@ window.Navigation = (function() {
         currentFocusedElement.classList.add('focused');
         currentFocusedElement.focus();
         
-        // Only scroll internal list containers (e.g. downloads list, carousel, dialog list)
+        // Only scroll internal list containers (e.g. downloads list, carousel, dialog list, file grid)
         // Never allow the outer window or document body to scroll or drift off-axis!
-        const scrollContainer = currentFocusedElement.closest('.amnis-downloads-list, .player-downloads-list, .media-carousel-container, .transfer-list, .storage-dialog-list, .settings-panel, .episodes-dialog-list');
+        const scrollContainer = currentFocusedElement.closest('.amnis-downloads-list, .player-downloads-list, .media-carousel-container, .transfer-list, .storage-dialog-list, .settings-panel, .episodes-dialog-list, .file-grid');
         if (scrollContainer) {
             const cRect = scrollContainer.getBoundingClientRect();
             const eRect = currentFocusedElement.getBoundingClientRect();
@@ -296,7 +296,44 @@ window.Navigation = (function() {
                         currentFocusedElement.click();
                         return;
                     }
-                    // Navigate down into the first element of the active view
+
+                    // Special case for Video Player: snap directly to active sub-tab (Available Movies / Downloads)
+                    if (currentFocusedElement.id === 'tab-player') {
+                        const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
+                        if (subtab) {
+                            setFocus(subtab);
+                            return;
+                        }
+                    }
+
+                    // Special case for File Manager: snap to active storage pill
+                    if (currentFocusedElement.id === 'tab-filemanager') {
+                        const target = document.querySelector('.storage-pill.active') || document.querySelector('.storage-pill') || document.getElementById('fm-up-btn');
+                        if (target) {
+                            setFocus(target);
+                            return;
+                        }
+                    }
+
+                    // Special case for File Receiver: snap to clear list btn or target storage
+                    if (currentFocusedElement.id === 'tab-receiver') {
+                        const target = document.getElementById('receiver-clear-list-btn') || document.getElementById('receiver-usb-target');
+                        if (target) {
+                            setFocus(target);
+                            return;
+                        }
+                    }
+
+                    // Special case for Home: snap to first quick launch tile
+                    if (currentFocusedElement.id === 'tab-home') {
+                        const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
+                        if (tile) {
+                            setFocus(tile);
+                            return;
+                        }
+                    }
+
+                    // Fallback: Navigate down into the first element of the active view
                     const activeView = document.querySelector('.app-view.active-view');
                     if (activeView) {
                         const viewCandidates = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(el => {
@@ -310,6 +347,139 @@ window.Navigation = (function() {
                     }
                 } else if (direction === 'up') {
                     // Stay on current tab
+                    return;
+                }
+            }
+        }
+
+        // Sub-tabs in Video Player (Available Movies vs Active Downloads)
+        if (currentFocusedElement.id === 'subtab-available' || currentFocusedElement.id === 'subtab-downloads') {
+            if (direction === 'up') {
+                const tabPlayer = document.getElementById('tab-player');
+                if (tabPlayer) {
+                    setFocus(tabPlayer);
+                    return;
+                }
+            } else if (direction === 'right' && currentFocusedElement.id === 'subtab-available') {
+                const subDls = document.getElementById('subtab-downloads');
+                if (subDls) {
+                    subDls.click();
+                    setFocus(subDls);
+                    return;
+                }
+            } else if (direction === 'left' && currentFocusedElement.id === 'subtab-downloads') {
+                const subAvail = document.getElementById('subtab-available');
+                if (subAvail) {
+                    subAvail.click();
+                    setFocus(subAvail);
+                    return;
+                }
+            } else if (direction === 'down') {
+                const activeContainer = (currentFocusedElement.id === 'subtab-available')
+                    ? document.getElementById('player-available-list')
+                    : document.getElementById('player-downloads-list');
+                if (activeContainer) {
+                    const firstBtn = activeContainer.querySelector('.action-btn-play.focusable, .player-download-card.focusable, .focusable:not([disabled])');
+                    if (firstBtn) {
+                        setFocus(firstBtn);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Inside Video Player movie cards / download items
+        const playerCard = currentFocusedElement.closest('.player-download-card');
+        if (playerCard) {
+            const listContainer = playerCard.closest('.player-downloads-list, .amnis-downloads-list');
+            if (direction === 'up') {
+                const prevCard = playerCard.previousElementSibling;
+                if (prevCard && prevCard.classList.contains('player-download-card')) {
+                    const prevBtn = prevCard.querySelector('.action-btn-play.focusable') || prevCard.querySelector('.focusable');
+                    if (prevBtn) {
+                        setFocus(prevBtn);
+                        return;
+                    }
+                } else {
+                    const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
+                    if (subtab) {
+                        setFocus(subtab);
+                        return;
+                    }
+                }
+            } else if (direction === 'down') {
+                const nextCard = playerCard.nextElementSibling;
+                if (nextCard && nextCard.classList.contains('player-download-card')) {
+                    const nextBtn = nextCard.querySelector('.action-btn-play.focusable') || nextCard.querySelector('.focusable');
+                    if (nextBtn) {
+                        setFocus(nextBtn);
+                        return;
+                    }
+                } else if (listContainer && listContainer.id === 'player-available-list') {
+                    // At bottom of available movies, pressing DOWN moves to active downloads subtab
+                    const subDls = document.getElementById('subtab-downloads');
+                    if (subDls) {
+                        subDls.click();
+                        setFocus(subDls);
+                        return;
+                    }
+                }
+            } else if (direction === 'right' && currentFocusedElement.classList.contains('action-btn-play')) {
+                const delBtn = playerCard.querySelector('.action-btn-delete.focusable');
+                if (delBtn) {
+                    setFocus(delBtn);
+                    return;
+                }
+            } else if (direction === 'left' && currentFocusedElement.classList.contains('action-btn-delete')) {
+                const playBtn = playerCard.querySelector('.action-btn-play.focusable');
+                if (playBtn) {
+                    setFocus(playBtn);
+                    return;
+                }
+            }
+        }
+
+        // File Manager navigation rules
+        if (currentFocusedElement.classList.contains('file-item-card')) {
+            if (direction === 'up') {
+                const grid = currentFocusedElement.closest('.file-grid');
+                if (grid) {
+                    const cards = Array.from(grid.querySelectorAll('.file-item-card.focusable'));
+                    const idx = cards.indexOf(currentFocusedElement);
+                    if (idx < 3) { // Top row in 3-column grid
+                        const navBtn = document.getElementById('fm-up-btn') || document.querySelector('.storage-pill.active') || document.getElementById('tab-filemanager');
+                        if (navBtn) {
+                            setFocus(navBtn);
+                            return;
+                        }
+                    }
+                }
+            }
+        } else if (currentFocusedElement.classList.contains('storage-pill')) {
+            if (direction === 'up') {
+                const tabFm = document.getElementById('tab-filemanager');
+                if (tabFm) {
+                    setFocus(tabFm);
+                    return;
+                }
+            } else if (direction === 'down') {
+                const navBtn = document.getElementById('fm-up-btn') || document.querySelector('.file-item-card.focusable');
+                if (navBtn) {
+                    setFocus(navBtn);
+                    return;
+                }
+            }
+        } else if (currentFocusedElement.id === 'fm-up-btn' || currentFocusedElement.id === 'fm-root-btn' || currentFocusedElement.id === 'fm-received-btn' || currentFocusedElement.id === 'fm-refresh-btn') {
+            if (direction === 'up') {
+                const pill = document.querySelector('.storage-pill.active') || document.getElementById('tab-filemanager');
+                if (pill) {
+                    setFocus(pill);
+                    return;
+                }
+            } else if (direction === 'down') {
+                const firstCard = document.querySelector('.file-item-card.focusable');
+                if (firstCard) {
+                    setFocus(firstCard);
                     return;
                 }
             }
