@@ -36,6 +36,10 @@
                     <span>📁</span>
                     <span>File Manager</span>
                 </button>
+                <button class="nav-tab focusable" id="tab-downloads" tabindex="0">
+                    <span>⚡</span>
+                    <span>Downloads</span>
+                </button>
             </nav>
 
             <div class="header-status">
@@ -127,6 +131,18 @@
                                 <div class="tile-sub">Browse USB Flash Drives &amp; Local TV</div>
                             </div>
                             <div class="tile-badge">Mounted</div>
+                        </div>
+
+                        <div class="home-tile focusable" id="home-tile-downloads" tabindex="0">
+                            <div class="tile-glow" style="background: linear-gradient(135deg, rgba(0, 242, 254, 0.4), rgba(59, 130, 246, 0.4));"></div>
+                            <div class="tile-icon-box" style="background: linear-gradient(135deg, #00f2fe 0%, #3b82f6 100%);">
+                                <span>⚡</span>
+                            </div>
+                            <div class="tile-info">
+                                <div class="tile-title">Download Manager</div>
+                                <div class="tile-sub">Background Torrents &amp; Available Movies</div>
+                            </div>
+                            <div class="tile-badge" style="background: rgba(0,242,254,0.2); color:#00f2fe; border-color: rgba(0,242,254,0.4);">Pi Queue</div>
                         </div>
 
                         <div class="home-tile focusable" id="home-tile-boost" tabindex="0">
@@ -333,6 +349,10 @@
 
                         <!-- Top-Right Action Icon Buttons -->
                         <div class="player-header-actions" id="player-header-actions">
+                            <button class="player-header-btn focusable" id="player-btn-downloads" tabindex="0" title="Download Management Dashboard">
+                                <span class="btn-icon">⚡</span>
+                                <span class="btn-text">Downloads</span>
+                            </button>
                             <button class="player-header-btn focusable" id="player-card-load-file" tabindex="0" title="Browse Storage">
                                 <span class="btn-icon">📁</span>
                                 <span class="btn-text">Browse Storage</span>
@@ -373,6 +393,87 @@
                                     <button class="btn-primary focusable" onclick="document.getElementById('player-card-load-url').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">🔗 Stream URL / Magnet</button>
                                     <button class="btn-secondary focusable" onclick="document.getElementById('player-card-load-file').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">📁 Browse Storage Devices</button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================
+                 MODULE 4: DOWNLOAD MANAGEMENT DASHBOARD VIEW (SEPARATE VIEW)
+                 ======================================================== -->
+            <section class="app-view" id="view-downloads">
+                <div class="dm-container">
+                    <!-- Dashboard Top Header Bar -->
+                    <div class="dm-header">
+                        <div class="dm-header-title-box">
+                            <div class="dm-title">
+                                <span class="dm-title-icon">⚡</span>
+                                <span>Torrent Download Management</span>
+                            </div>
+                            <div class="dm-subtitle">Raspberry Pi Companion Bridge • Autonomous Priority Queue &amp; Movie Library</div>
+                        </div>
+
+                        <div class="dm-header-actions">
+                            <div class="dm-status-pill online" id="dm-api-status">
+                                <span class="dm-dot online"></span>
+                                <span>API: http://192.168.0.14:8080/api/downloads</span>
+                            </div>
+                            <div class="dm-mode-pill idle" id="dm-system-mode">Idle Mode</div>
+                            <button class="osd-btn focusable" id="dm-refresh-btn" tabindex="0" title="Refresh Live API Data">
+                                <span>🔄</span>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- System Info Stats Strip -->
+                    <div class="dm-stats-strip">
+                        <div class="dm-stat-card">
+                            <span class="dm-stat-label">Active Priority Queue:</span>
+                            <span class="dm-stat-val text-accent" id="dm-total-speed">Connecting...</span>
+                        </div>
+                        <div class="dm-stat-card">
+                            <span class="dm-stat-label">BitTorrent Uploading / Seeding:</span>
+                            <span class="dm-stat-val text-success" id="dm-seeding-status">Stopped (Zero Upload)</span>
+                        </div>
+                        <div class="dm-stat-card">
+                            <span class="dm-stat-label">Pi Background Daemon:</span>
+                            <span class="dm-stat-val text-info">Autonomous (Works with TV Off)</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Dashboard Content Grid: Currently Downloading on Left, Available Movies on Right -->
+                    <div class="dm-content-grid">
+                        <!-- Column 1: Currently Downloading Movies -->
+                        <div class="dm-column">
+                            <div class="dm-section-header">
+                                <div class="dm-section-title-wrap">
+                                    <span class="dm-section-icon" style="color:#00f2fe;">⚡</span>
+                                    <span class="dm-section-title">Currently Downloading Movies</span>
+                                </div>
+                                <span class="dm-count-badge" id="dm-downloading-count">0 items</span>
+                            </div>
+                            <div class="dm-section-desc">Highest Priority streaming and sequential background queue on Raspberry Pi.</div>
+
+                            <div class="dm-list-container" id="dm-downloading-list">
+                                <!-- Populated dynamically by DownloadManager -->
+                            </div>
+                        </div>
+
+                        <!-- Column 2: Available Movies (Completed) -->
+                        <div class="dm-column">
+                            <div class="dm-section-header">
+                                <div class="dm-section-title-wrap">
+                                    <span class="dm-section-icon" style="color:#a855f7;">🎬</span>
+                                    <span class="dm-section-title">Available Movies</span>
+                                </div>
+                                <span class="dm-count-badge" id="dm-available-count">0 movies</span>
+                            </div>
+                            <div class="dm-section-desc">100% Downloaded on Raspberry Pi. Ready for instant hardware-accelerated playback.</div>
+
+                            <div class="dm-list-container" id="dm-available-list">
+                                <!-- Populated dynamically by DownloadManager -->
                             </div>
                         </div>
                     </div>
@@ -787,6 +888,7 @@
     <script src="js/videoplayer.js?v=1.0.9"></script>
     <script src="js/filemanager.js?v=1.0.9"></script>
     <script src="js/receiver.js?v=1.0.9"></script>
+    <script src="js/downloadmanager.js?v=1.1.6"></script>
     <script src="js/home.js?v=1.0.9"></script>
     <script src="js/app.js?v=1.0.9"></script>
 </body>

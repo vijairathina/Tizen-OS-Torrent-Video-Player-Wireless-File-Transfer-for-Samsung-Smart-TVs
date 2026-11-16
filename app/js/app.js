@@ -25,6 +25,7 @@ window.App = (function() {
         const tabReceiver = document.getElementById('tab-receiver');
         const tabFileManager = document.getElementById('tab-filemanager');
         const tabPlayer = document.getElementById('tab-player') || document.getElementById('tab-amnis');
+        const tabDownloads = document.getElementById('tab-downloads');
 
         if (tabHome) {
             tabHome.addEventListener('click', () => switchView('home'));
@@ -38,6 +39,9 @@ window.App = (function() {
         if (tabPlayer) {
             tabPlayer.addEventListener('click', () => switchView('player'));
         }
+        if (tabDownloads) {
+            tabDownloads.addEventListener('click', () => switchView('downloads'));
+        }
 
         // Initialize modules
         window.Navigation.init();
@@ -46,6 +50,7 @@ window.App = (function() {
         const playerModule = window.VideoPlayer || window.Amnis;
         if (playerModule && playerModule.init) playerModule.init();
         window.FileReceiver.init();
+        if (window.DownloadManager && window.DownloadManager.init) window.DownloadManager.init();
         if (window.HomeLauncher && window.HomeLauncher.init) window.HomeLauncher.init();
 
         // Initialize Filesystem with storage listener
@@ -65,6 +70,9 @@ window.App = (function() {
         if (currentView === viewName) return;
 
         // Hide current view
+        if (currentView === 'downloads' && window.DownloadManager && window.DownloadManager.stopPolling) {
+            window.DownloadManager.stopPolling();
+        }
         const currentViewEl = document.getElementById(`view-${currentView}`) || (currentView === 'player' ? document.getElementById('view-amnis') : null);
         const currentTabEl = document.getElementById(`tab-${currentView}`) || (currentView === 'player' ? document.getElementById('tab-amnis') : null);
         if (currentViewEl) currentViewEl.classList.remove('active-view');
@@ -81,6 +89,10 @@ window.App = (function() {
         if (viewName === 'home') {
             if (window.HomeLauncher && window.HomeLauncher.refresh) {
                 window.HomeLauncher.refresh();
+            }
+        } else if (viewName === 'downloads') {
+            if (window.DownloadManager && window.DownloadManager.startPolling) {
+                window.DownloadManager.startPolling();
             }
         } else if (viewName === 'filemanager' || viewName === 'receiver') {
             if (viewName === 'receiver' && window.FileReceiver && window.FileReceiver.clearReceiverTabAlert) {

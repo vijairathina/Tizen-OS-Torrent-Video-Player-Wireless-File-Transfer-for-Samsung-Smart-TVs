@@ -24,6 +24,7 @@ window.HomeLauncher = (function() {
         const tilePlayer = document.getElementById('home-tile-player');
         const tileReceiver = document.getElementById('home-tile-receiver');
         const tileFileManager = document.getElementById('home-tile-filemanager');
+        const tileDownloads = document.getElementById('home-tile-downloads');
         const tileBoost = document.getElementById('home-tile-boost');
         const headerBoostBtn = document.getElementById('header-boost-btn');
 
@@ -40,6 +41,11 @@ window.HomeLauncher = (function() {
         if (tileFileManager) {
             tileFileManager.addEventListener('click', () => {
                 if (window.App) window.App.switchView('filemanager');
+            });
+        }
+        if (tileDownloads) {
+            tileDownloads.addEventListener('click', () => {
+                if (window.App) window.App.switchView('downloads');
             });
         }
         if (tileBoost) {

@@ -128,7 +128,10 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
                     'Content-Type': mimeType
                 });
 
-                const stream = reqFile.createReadStream({ start, end });
+                const diskPath = path.join(downloadDir, reqFile.path);
+                const stream = (torrent.done && fs.existsSync(diskPath))
+                    ? fs.createReadStream(diskPath, { start, end })
+                    : reqFile.createReadStream({ start, end });
                 stream.on('error', err => {
                     console.warn('[TorrentEngine] Stream range error:', err);
                     try { res.end(); } catch (e) {}
@@ -142,7 +145,10 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
                     'Content-Length': total,
                     'Content-Type': mimeType
                 });
-                const stream = reqFile.createReadStream();
+                const diskPath = path.join(downloadDir, reqFile.path);
+                const stream = (torrent.done && fs.existsSync(diskPath))
+                    ? fs.createReadStream(diskPath)
+                    : reqFile.createReadStream();
                 stream.on('error', err => {
                     console.warn('[TorrentEngine] Stream full error:', err);
                     try { res.end(); } catch (e) {}
@@ -179,19 +185,64 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
                 } catch (e) {}
             }
         });
+        try {
+            const torrentMarker = path.join(downloadDir, `${torrent.name}.done`);
+            fs.writeFileSync(torrentMarker, '1', 'utf-8');
+        } catch (e) {}
+
+        // Stop uploading/seeding as required by priority download system
+        console.log(`[ENGINE_STOP_SEEDING] ${torrent.name}`);
+        console.log(`[TorrentEngine] Torrent 100% complete. Uploading/seeding stopped.`);
+        try {
+            torrent.pause();
+            if (torrent.wires) {
+                torrent.wires.forEach(w => {
+                    try { w.choke(); } catch (e) {}
+                });
+            }
+        } catch (e) {
+            console.warn('[TorrentEngine] Error pausing seeding wires:', e);
+        }
+
+        // Final completion stats broadcast
+        const finalStats = {
+            name: torrent.name,
+            progress: 100,
+            downloadSpeed: '0 B/s',
+            uploadSpeed: '0 B/s (Seeding Stopped)',
+            downloaded: formatBytes(torrent.length),
+            total: formatBytes(torrent.length),
+            peers: 0,
+            timeRemaining: '0s',
+            status: 'Completed (Seeding Stopped)',
+            completed: true
+        };
+        console.log(`[ENGINE_STATS] ${JSON.stringify(finalStats)}`);
+
+        if (isDownloadOnly) {
+            console.log(`[ENGINE_BG_COMPLETE] ${torrent.name}`);
+            console.log(`[TorrentEngine] Background download finished. Exiting process cleanly.`);
+            setTimeout(() => {
+                try { torrent.destroy(); } catch (e) {}
+                try { client.destroy(); } catch (e) {}
+                process.exit(0);
+            }, 1000);
+        }
     });
 
     setInterval(() => {
+        const isDone = !!torrent.done;
         const stats = {
             name: torrent.name,
-            progress: Math.floor(torrent.progress * 100),
-            downloadSpeed: formatBytes(torrent.downloadSpeed) + '/s',
-            uploadSpeed: formatBytes(torrent.uploadSpeed) + '/s',
+            progress: isDone ? 100 : Math.floor(torrent.progress * 100),
+            downloadSpeed: isDone ? '0 B/s' : (formatBytes(torrent.downloadSpeed) + '/s'),
+            uploadSpeed: isDone ? '0 B/s (Seeding Stopped)' : (formatBytes(torrent.uploadSpeed) + '/s'),
             downloaded: formatBytes(torrent.downloaded),
             total: formatBytes(torrent.length),
-            peers: torrent.numPeers,
-            timeRemaining: torrent.timeRemaining ? Math.round(torrent.timeRemaining / 1000) + 's' : '0s',
-            status: torrent.done ? 'Downloaded 100% (Ready to Stream)' : (torrent.numPeers > 0 ? 'Downloading & Streaming' : 'Connecting to Peers...')
+            peers: isDone ? 0 : torrent.numPeers,
+            timeRemaining: isDone ? '0s' : (torrent.timeRemaining ? Math.round(torrent.timeRemaining / 1000) + 's' : '0s'),
+            status: isDone ? 'Completed (Seeding Stopped)' : (torrent.numPeers > 0 ? 'Downloading & Streaming' : 'Connecting to Peers...'),
+            completed: isDone
         };
         console.log(`[ENGINE_STATS] ${JSON.stringify(stats)}`);
     }, 1000);
