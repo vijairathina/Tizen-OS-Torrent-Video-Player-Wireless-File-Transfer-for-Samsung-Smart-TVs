@@ -313,6 +313,8 @@ window.Player = (function() {
         const savedTime = getSavedResumePosition(videoResumeKey);
         pendingResumeTime = (savedTime > 8) ? savedTime : 0;
 
+        // Ensure both documentElement and body are 100% transparent so AVPlay hardware video plane is visible!
+        document.documentElement.classList.add('media-playing-mode');
         document.body.classList.add('media-playing-mode');
 
         const container = document.getElementById('player-container');
@@ -359,7 +361,6 @@ window.Player = (function() {
         try {
             stopAndCloseAVPlay();
             webapis.avplay.open(url);
-            applyAspectRatio();
 
             webapis.avplay.setListener({
                 onbufferingstart: function() {
@@ -438,10 +439,17 @@ window.Player = (function() {
                     const d = webapis.avplay.getDuration();
                     if (d && d > 0) durationSec = Math.floor(d / 1000);
                 } catch (e) {}
+
+                // AVPlay is now in READY state: configure display rectangle to 1920x1080 before starting playback
+                applyAspectRatio();
+
                 webapis.avplay.play();
                 isPlaying = true;
                 updatePlayPauseIcon();
                 updateStatusTag('Playing');
+
+                // Re-enforce aspect ratio and video layer once playing
+                setTimeout(applyAspectRatio, 150);
 
                 // Check and execute auto-resume if saved timestamp exists
                 if (pendingResumeTime > 0) {
@@ -917,20 +925,25 @@ window.Player = (function() {
 
         if (isAVPlay) {
             try {
-                const cfg = mode.avplay;
-                try {
-                    webapis.avplay.setDisplayRect(cfg.x, cfg.y, cfg.width, cfg.height);
-                } catch (eRect) {
-                    console.warn('[Player] Custom setDisplayRect failed, falling back to 0,0,1920,1080:', eRect);
+                const state = webapis.avplay.getState ? webapis.avplay.getState() : 'READY';
+                if (state === 'READY' || state === 'PLAYING' || state === 'PAUSED') {
+                    const cfg = mode.avplay;
                     try {
-                        webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
-                    } catch (eFallback) {}
-                }
-                if (cfg.method) {
-                    webapis.avplay.setDisplayMethod(cfg.method);
+                        webapis.avplay.setDisplayRect(cfg.x, cfg.y, cfg.width, cfg.height);
+                    } catch (eRect) {
+                        console.warn('[Player] Custom setDisplayRect failed, falling back to 0,0,1920,1080:', eRect);
+                        try {
+                            webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
+                        } catch (eFallback) {}
+                    }
+                    if (cfg.method) {
+                        try {
+                            webapis.avplay.setDisplayMethod(cfg.method);
+                        } catch (eMethod) {}
+                    }
                 }
             } catch (e) {
-                console.warn('[Player] AVPlay setDisplayMethod exception:', e);
+                console.warn('[Player] AVPlay applyAspectRatio exception:', e);
             }
         }
 
@@ -975,6 +988,7 @@ window.Player = (function() {
         if (aspectToast) aspectToast.style.display = 'none';
         clearTimeout(aspectToastTimeout);
 
+        document.documentElement.classList.remove('media-playing-mode');
         document.body.classList.remove('media-playing-mode');
 
         if (isAVPlay) {

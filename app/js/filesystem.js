@@ -693,26 +693,51 @@ window.TVFilesystem = (function() {
     }
 
     function browsePath(pathString, callback) {
-        const targetPath = pathString || (selectedStorage ? selectedStorage.label : 'wgt-private');
+        let targetPath = pathString || (selectedStorage ? selectedStorage.label : 'server');
+
+        // Handle Server browsing (Raspberry Pi Hub)
+        if (targetPath === 'server' || (selectedStorage && selectedStorage.isServer && (!pathString || pathString === 'server'))) {
+            const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+            fetch(`${srvUrl}/api/downloads`)
+                .then(res => res.json())
+                .then(data => {
+                    const results = [];
+                    if (data && Array.isArray(data.available_movies)) {
+                        data.available_movies.forEach(m => {
+                            results.push({
+                                name: m.clean_title || m.name,
+                                fullPath: m.stream_url,
+                                isDirectory: false,
+                                fileSize: m.size || 0,
+                                fileType: 'video',
+                                modifiedDate: new Date(),
+                                isServer: true
+                            });
+                        });
+                    }
+                    callback(null, results);
+                })
+                .catch(err => {
+                    console.warn('[TVFilesystem] Server browse error:', err);
+                    callback(null, []);
+                });
+            return;
+        }
 
         if (typeof tizen === 'undefined' || !tizen.filesystem) {
             callback(null, getMockFileList(targetPath));
             return;
         }
 
-        tizen.filesystem.resolve(targetPath, function(dir) {
-            if (!dir.isDirectory) {
-                callback(new Error('Selected path is not a directory'));
-                return;
-            }
-
+        // Helper to extract file items from a resolved Tizen directory handle
+        function listFilesFromDir(dir) {
             dir.listFiles(function(files) {
                 const results = [];
                 for (let i = 0; i < files.length; i++) {
                     const f = files[i];
                     const isDir = f.isDirectory;
                     const ext = isDir ? '' : (f.name.split('.').pop() || '').toLowerCase();
-                    
+
                     let fileType = 'other';
                     if (isDir) {
                         fileType = 'folder';
@@ -745,12 +770,61 @@ window.TVFilesystem = (function() {
                 });
 
                 callback(null, results);
-            }, function(err) {
-                callback(err);
+            }, function(errList) {
+                console.warn('[TVFilesystem] listFiles failed:', errList);
+                callback(null, []);
             });
-        }, function(err) {
-            callback(err);
-        });
+        }
+
+        // Systematically try safe virtual roots if a path fails to resolve
+        function tryFallbackLocations() {
+            const candidates = ['downloads', 'documents', 'videos', 'wgt-private/TVFileHub/Received', 'wgt-private', 'wgt-package'];
+            let idx = 0;
+
+            function tryNextCandidate() {
+                if (idx >= candidates.length) {
+                    // If no local directory resolves on TV, fall back to Raspberry Pi Server storage!
+                    browsePath('server', callback);
+                    return;
+                }
+                const cand = candidates[idx++];
+                try {
+                    tizen.filesystem.resolve(cand, function(cDir) {
+                        if (cDir && cDir.isDirectory) {
+                            console.log(`[TVFilesystem] Successfully fell back to working storage: ${cand}`);
+                            if (window.FileManager && window.FileManager.updateCurrentPath) {
+                                window.FileManager.updateCurrentPath(cand);
+                            }
+                            listFilesFromDir(cDir);
+                        } else {
+                            tryNextCandidate();
+                        }
+                    }, function() {
+                        tryNextCandidate();
+                    });
+                } catch (e) {
+                    tryNextCandidate();
+                }
+            }
+
+            tryNextCandidate();
+        }
+
+        // Try resolving the requested targetPath first
+        try {
+            tizen.filesystem.resolve(targetPath, function(dir) {
+                if (dir && dir.isDirectory) {
+                    listFilesFromDir(dir);
+                } else {
+                    tryFallbackLocations();
+                }
+            }, function(errTarget) {
+                console.warn(`[TVFilesystem] resolve failed for '${targetPath}':`, errTarget ? errTarget.message : '');
+                tryFallbackLocations();
+            });
+        } catch (e) {
+            tryFallbackLocations();
+        }
     }
 
     function setupMockStorage(callback) {

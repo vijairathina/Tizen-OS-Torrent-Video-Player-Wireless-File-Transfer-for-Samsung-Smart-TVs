@@ -143,12 +143,29 @@ window.FileManager = (function() {
             });
         }
 
+        // Pill 3: Raspberry Pi Hub (Server)
+        const isServerActive = activeStorage ? (activeStorage.label === 'server' || activeStorage.isServer) : false;
+        const serverPill = document.createElement('button');
+        serverPill.tabIndex = 0;
+        serverPill.id = 'pill-storage-server';
+        serverPill.className = `storage-pill focusable ${isServerActive ? 'active' : ''}`;
+        serverPill.innerHTML = `<span>⚡</span><span>Raspberry Pi Hub (Server)</span>`;
+        serverPill.addEventListener('click', function() {
+            const srvObj = { label: 'server', displayName: 'Raspberry Pi Hub', isUsb: false, isServer: true };
+            window.TVFilesystem.setSelectedStorage('server', function(sel) {
+                renderStoragePills(safeStorages, sel || srvObj);
+                currentStorageRoot = 'server';
+                navigateTo('server');
+            });
+        });
+        container.appendChild(serverPill);
+
         // Update capacity summary
         const curStorage = activeStorage || internalStorage;
         if (curStorage && capacityText) {
             const avail = window.TVFilesystem.formatBytes(curStorage.availableSize);
             const total = window.TVFilesystem.formatBytes(curStorage.totalSize);
-            const typeLabel = curStorage.isUsb ? 'USB Storage' : 'Internal TV Storage';
+            const typeLabel = curStorage.isServer ? 'Raspberry Pi Server Storage' : (curStorage.isUsb ? 'USB Storage' : 'Internal TV Storage');
             capacityText.textContent = `${typeLabel}: ${avail} available of ${total}`;
         }
     }
@@ -160,7 +177,14 @@ window.FileManager = (function() {
 
         window.TVFilesystem.browsePath(currentPath, function(err, files) {
             if (err) {
-                console.error('[FileManager] browsePath error:', err);
+                console.warn('[FileManager] browsePath error for', currentPath, err);
+                if (currentPath !== 'server') {
+                    window.FileReceiver.showToast('Switching to Raspberry Pi server files...');
+                    currentPath = 'server';
+                    currentStorageRoot = 'server';
+                    navigateTo('server');
+                    return;
+                }
                 renderErrorState(err.message || 'Unable to open folder');
                 return;
             }
@@ -219,7 +243,7 @@ window.FileManager = (function() {
             const crumbBtn = document.createElement('button');
             crumbBtn.className = `breadcrumb-crumb focusable ${isLast ? 'active-crumb' : ''}`;
             crumbBtn.tabIndex = 0;
-            crumbBtn.textContent = part;
+            crumbBtn.textContent = part === 'server' ? 'Raspberry Pi Hub' : part;
             crumbBtn.title = `Go to ${targetPath}`;
 
             if (!isLast) {
@@ -436,6 +460,11 @@ window.FileManager = (function() {
         navigateBack: navigateBack,
         navigateUp: navigateUp,
         navigateTo: navigateTo,
-        refreshCurrentFolder: refreshCurrentFolder
+        refreshCurrentFolder: refreshCurrentFolder,
+        updateCurrentPath: function(newPath) {
+            currentPath = newPath;
+            currentStorageRoot = newPath.split('/')[0];
+            updateBreadcrumbs();
+        }
     };
 })();

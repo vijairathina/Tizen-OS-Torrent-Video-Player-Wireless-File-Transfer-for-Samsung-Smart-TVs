@@ -65,8 +65,8 @@ window.FileReceiver = (function() {
             try {
                 qrcodeInstance = new QRCode(qrContainer, {
                     text: senderUrl,
-                    width: 200,
-                    height: 200,
+                    width: 140,
+                    height: 140,
                     colorDark: '#0f0c13',
                     colorLight: '#ffffff',
                     correctLevel: QRCode.CorrectLevel.M
