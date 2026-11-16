@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "utp-native": "^2.5.3",
     "webtorrent": "^3.0.21"
   }
 }

@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1 \
     NODE_ENV=production \
@@ -6,9 +6,10 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080 \
     TORRENT_STREAM_PORT=8889
 
-# Install Python 3 and process utilities (psmisc for fuser, procps for pkill/ps, curl for healthchecks)
+# Install Python 3, process utilities, and build tools for native uTP compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
+    build-essential \
     psmisc \
     procps \
     curl \
