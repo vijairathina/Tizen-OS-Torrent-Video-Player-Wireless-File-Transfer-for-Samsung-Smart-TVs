@@ -25,7 +25,7 @@ from socketserver import ThreadingMixIn
 PORT = int(os.environ.get("PORT", 8080))
 TORRENT_STREAM_PORT = int(os.environ.get("TORRENT_STREAM_PORT", 8889))
 HOST_IP = os.environ.get("HOST_IP", "192.168.0.14")
-BIND_IP = os.environ.get("BIND_IP", "")
+BIND_IP = os.environ.get("BIND_IP", "0.0.0.0")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, 'public')
 UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
@@ -964,7 +964,7 @@ class TorrentStreamManager:
                 "stats": self.stats
             }
 
-    def get_downloads_dashboard_data(self):
+    def get_downloads_dashboard_data(self, req_host=None):
         """
         Returns dynamic dashboard data for Download Management:
         - List of all available movies
@@ -974,6 +974,8 @@ class TorrentStreamManager:
         """
         with self.lock:
             import urllib.parse
+            effective_host = req_host or f"{self.host_ip}:{PORT}"
+            effective_ip = effective_host.split(':')[0]
 
             # 1. Discover all available movies (completed on disk)
             available_movies = []
@@ -999,7 +1001,7 @@ class TorrentStreamManager:
                             if is_done and f not in seen_names:
                                 seen_names.add(f)
                                 fsize = os.path.getsize(fp)
-                                stream_url = f"http://{self.host_ip}:{PORT}/files/{urllib.parse.quote(f)}"
+                                stream_url = f"http://{effective_host}/files/{urllib.parse.quote(f)}"
                                 available_movies.append({
                                     "id": "avail-" + hashlib.md5(f.encode()).hexdigest()[:8],
                                     "name": f,
@@ -1022,7 +1024,7 @@ class TorrentStreamManager:
                         if os.path.isfile(fp):
                             seen_names.add(f)
                             fsize = os.path.getsize(fp)
-                            stream_url = f"http://{self.host_ip}:{PORT}/files/{urllib.parse.quote(f)}"
+                            stream_url = f"http://{effective_host}/files/{urllib.parse.quote(f)}"
                             available_movies.append({
                                 "id": "avail-" + hashlib.md5(f.encode()).hexdigest()[:8],
                                 "name": f,
@@ -1114,8 +1116,8 @@ class TorrentStreamManager:
                     "total_available": len(available_movies),
                     "total_downloading": len(currently_downloading),
                     "seeding_status": "Stopped (Zero Upload - BitTorrent Upload Disabled)",
-                    "api_endpoint": f"http://{self.host_ip}:{PORT}/api/downloads",
-                    "host_ip": self.host_ip,
+                    "api_endpoint": f"http://{effective_host}/api/downloads",
+                    "host_ip": effective_ip,
                     "port": PORT
                 },
                 "available_movies": available_movies,
@@ -1398,7 +1400,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.end_headers()
-            dashboard_data = TORRENT_MANAGER.get_downloads_dashboard_data()
+            dashboard_data = TORRENT_MANAGER.get_downloads_dashboard_data(req_host=self.headers.get('Host'))
             self.wfile.write(json.dumps(dashboard_data).encode('utf-8'))
             return
 
