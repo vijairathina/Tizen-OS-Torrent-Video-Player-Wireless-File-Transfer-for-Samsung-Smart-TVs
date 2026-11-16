@@ -3,6 +3,25 @@
  * Supports Tizen TV WebAPIs and Standard DOM Key Events
  */
 
+// Global Companion Server Configuration Helpers
+window.getServerHostIP = function() {
+    return localStorage.getItem('tvhub_server_ip') || '192.168.0.14';
+};
+window.setServerHostIP = function(ip) {
+    if (ip) {
+        localStorage.setItem('tvhub_server_ip', ip);
+        if (window.FileReceiver && window.FileReceiver.setServerHostIP) {
+            window.FileReceiver.setServerHostIP(ip);
+        }
+    }
+};
+window.getServerBaseUrl = function() {
+    return 'http://' + window.getServerHostIP() + ':8080';
+};
+window.getTorrentStreamBaseUrl = function() {
+    return 'http://' + window.getServerHostIP() + ':8889';
+};
+
 window.Navigation = (function() {
     'use strict';
 

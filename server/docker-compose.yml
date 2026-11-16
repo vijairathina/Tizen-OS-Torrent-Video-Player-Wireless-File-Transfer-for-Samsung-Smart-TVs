@@ -1,0 +1,24 @@
+services:
+  samsung-tv-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local/samsung-tv-hub:latest
+    container_name: samsung_tv_hub
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOST_IP=192.168.0.14
+      - BIND_IP=192.168.0.14
+      - PORT=8080
+      - TORRENT_STREAM_PORT=8889
+    volumes:
+      - /home/pi/docker/samsung-tv-hub/uploads:/app/uploads
+      - /home/pi/docker/samsung-tv-hub/downloads:/app/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://192.168.0.14:8080/torrent_stats"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

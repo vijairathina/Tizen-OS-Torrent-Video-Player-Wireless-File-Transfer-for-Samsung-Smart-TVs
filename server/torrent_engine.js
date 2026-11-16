@@ -36,7 +36,8 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
     const server = torrent.createServer();
     const port = 8889;
     server.listen(port, () => {
-        const streamUrl = `http://192.168.0.13:${port}/${fileIdx}`;
+        const hostIp = process.env.HOST_IP || '192.168.0.14';
+        const streamUrl = `http://${hostIp}:${port}/${fileIdx}`;
         console.log(`[ENGINE_STREAM_URL] ${streamUrl}`);
     });
 

@@ -172,7 +172,8 @@ window.Player = (function() {
 
     function checkTorrentProgress() {
         if (!isPlayerOpen) return;
-        fetch('http://192.168.0.13:8080/torrent_stats')
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/torrent_stats`)
             .then(res => res.json())
             .then(data => {
                 if (!isPlayerOpen || !data || !data.active || !data.stats) {
@@ -1197,7 +1198,8 @@ window.Player = (function() {
         } else {
             // Fallback: query companion server /media_info?file=...
             const queryName = currentTitle || currentMediaUrl || '';
-            fetch(`http://192.168.0.13:8080/media_info?file=${encodeURIComponent(queryName)}`)
+            const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+            fetch(`${srvUrl}/media_info?file=${encodeURIComponent(queryName)}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.audioTracks && data.audioTracks.length > 0) {

@@ -11,7 +11,7 @@ window.VideoPlayer = (function() {
     const SAMPLE_STREAMS = [
         {
             title: 'Local Hub High Speed Demo (1080p)',
-            url: 'http://192.168.0.13:8080/files/sample.mp4',
+            url: (window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080') + '/files/sample.mp4',
             subtitleUrl: ''
         },
         {
@@ -26,7 +26,7 @@ window.VideoPlayer = (function() {
         },
         {
             title: 'Sintel Open Movie 4K',
-            url: 'http://192.168.0.13:8080/files/sample.mp4',
+            url: (window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080') + '/files/sample.mp4',
             subtitleUrl: ''
         }
     ];
@@ -378,7 +378,8 @@ window.VideoPlayer = (function() {
                 }
 
                 // Query server for stream URL (starts stream or gives direct completed file link)
-                fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(item.name)}`)
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/start_torrent?file=${encodeURIComponent(item.name)}`)
                     .then(res => res.json())
                     .then(data => {
                         const finalUrl = (data && data.streamUrl) ? data.streamUrl : null;
@@ -438,7 +439,8 @@ window.VideoPlayer = (function() {
         console.log('[VideoPlayer] Deleting torrent download:', item.name);
 
         // 1. Delete from host server & disk
-        fetch(`http://192.168.0.13:8080/delete_file?file=${encodeURIComponent(item.name)}`)
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/delete_file?file=${encodeURIComponent(item.name)}`)
             .catch(e => console.warn('[VideoPlayer] Server delete error:', e));
 
         // 2. Remove from TV storage if copied
@@ -605,7 +607,8 @@ window.VideoPlayer = (function() {
                     magnet: url
                 });
             }
-            fetch(`http://192.168.0.13:8080/start_torrent?magnet=${encodeURIComponent(url)}`)
+            const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+            fetch(`${srvUrl}/start_torrent?magnet=${encodeURIComponent(url)}`)
                 .catch(() => {});
             return;
         }
@@ -638,7 +641,8 @@ window.VideoPlayer = (function() {
     }
 
     function fetchTorrentStats() {
-        fetch('http://192.168.0.13:8080/torrent_stats')
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/torrent_stats`)
             .then(res => res.json())
             .then(data => {
                 if (data) {
@@ -713,7 +717,8 @@ window.VideoPlayer = (function() {
         }
 
         // 2. HTTP request to start torrent engine
-        fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(rawName)}`)
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/start_torrent?file=${encodeURIComponent(rawName)}`)
             .then(res => res.json())
             .then(data => {
                 if (data && data.streamUrl && !data.streamUrl.toLowerCase().endsWith('.torrent')) {
@@ -1031,7 +1036,8 @@ window.VideoPlayer = (function() {
 
     function fetchTorrentHudStats(targetName) {
         const query = targetName || currentHudTorrentTarget || torrentStats.name || '';
-        fetch(`http://192.168.0.13:8080/torrent_stats?file=${encodeURIComponent(query)}`)
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/torrent_stats?file=${encodeURIComponent(query)}`)
             .then(res => res.json())
             .then(data => {
                 if (!data) return;
@@ -1060,7 +1066,8 @@ window.VideoPlayer = (function() {
     function checkTorrentEpisodes(item) {
         if (!item || item.episodesChecked) return;
         item.episodesChecked = true;
-        fetch(`http://192.168.0.13:8080/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
             .then(res => res.json())
             .then(data => {
                 if (data && data.episodes && data.episodes.length > 1) {
@@ -1148,7 +1155,8 @@ window.VideoPlayer = (function() {
         } else {
             listEl.innerHTML = '<div style="color:var(--text-muted); padding:20px; text-align:center;">Loading episodes from server...</div>';
             dialog.classList.add('dialog-open');
-            fetch(`http://192.168.0.13:8080/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
+            const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+            fetch(`${srvUrl}/torrent_files?file=${encodeURIComponent(item.name || item.cleanTitle)}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.episodes && data.episodes.length > 0) {
@@ -1177,17 +1185,20 @@ window.VideoPlayer = (function() {
             return;
         }
 
-        fetch(`http://192.168.0.13:8080/start_torrent?file=${encodeURIComponent(item.name)}&fileIdx=${ep.index}&episode=${encodeURIComponent(ep.name)}`)
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        const streamBase = window.getTorrentStreamBaseUrl ? window.getTorrentStreamBaseUrl() : 'http://192.168.0.14:8889';
+
+        fetch(`${srvUrl}/start_torrent?file=${encodeURIComponent(item.name)}&fileIdx=${ep.index}&episode=${encodeURIComponent(ep.name)}`)
             .then(res => res.json())
             .then(data => {
-                const finalUrl = (data && data.streamUrl) ? data.streamUrl : `http://192.168.0.13:8889/${ep.index}`;
+                const finalUrl = (data && data.streamUrl) ? data.streamUrl : `${streamBase}/${ep.index}`;
                 isUserInitiatedPlay = false;
                 pendingPlayTarget = null;
                 window.Player.openMedia(finalUrl, ep.name);
             })
             .catch(err => {
                 console.warn('[VideoPlayer] start_torrent episode error:', err);
-                const fallbackUrl = `http://192.168.0.13:8889/${ep.index}`;
+                const fallbackUrl = `${streamBase}/${ep.index}`;
                 isUserInitiatedPlay = false;
                 pendingPlayTarget = null;
                 window.Player.openMedia(fallbackUrl, ep.name);
@@ -1344,7 +1355,8 @@ window.VideoPlayer = (function() {
                 streamUrl = activeDownloads[0].streamUrl;
             }
             if (!streamUrl) {
-                streamUrl = 'http://192.168.0.13:8889/';
+                const streamBase = window.getTorrentStreamBaseUrl ? window.getTorrentStreamBaseUrl() : 'http://192.168.0.14:8889';
+                streamUrl = `${streamBase}/`;
             }
             window.Player.openMedia(streamUrl, torrentStats.name);
         });

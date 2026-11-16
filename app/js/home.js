@@ -404,8 +404,12 @@ window.HomeLauncher = (function() {
         const serverEl = document.getElementById('home-server-url');
         const adShieldEl = document.getElementById('home-adshield-status');
 
-        if (ipEl) ipEl.textContent = '192.168.0.12';
-        if (serverEl) serverEl.textContent = 'http://192.168.0.13:8080';
+        if (ipEl) {
+            ipEl.textContent = (window.FileReceiver && window.FileReceiver.getLocalIP) ? window.FileReceiver.getLocalIP() : '192.168.0.12';
+        }
+        if (serverEl) {
+            serverEl.textContent = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        }
         if (adShieldEl) {
             adShieldEl.innerHTML = `
                 <span class="status-dot active"></span>

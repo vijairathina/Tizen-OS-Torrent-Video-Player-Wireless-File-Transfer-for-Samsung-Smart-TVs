@@ -169,6 +169,14 @@ sdb install build/TVFileHub.wgt
 
 ### Step 3: Start the Companion Transfer & Streaming Bridge
 
+#### Option A: Docker Deployment (Recommended for Raspberry Pi, Linux, NAS & HomeLab)
+```bash
+cd server
+docker compose up -d
+```
+The containerized service automatically sets up the Node.js WebTorrent sequential streaming daemon, Python 3 companion bridge, persistent volume mounts (`uploads/` and `downloads/`), and health checks on port 8080.
+
+#### Option B: Direct Python & Node.js Execution
 In your terminal or command prompt, navigate to the project directory and run:
 ```bash
 python server/server.py

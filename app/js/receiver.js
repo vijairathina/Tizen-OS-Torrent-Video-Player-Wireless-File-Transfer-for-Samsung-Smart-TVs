@@ -9,7 +9,7 @@ window.FileReceiver = (function() {
     'use strict';
 
     let localIP = '192.168.0.12';
-    let serverHostIP = '192.168.0.13';
+    let serverHostIP = (window.getServerHostIP ? window.getServerHostIP() : (localStorage.getItem('tvhub_server_ip') || '192.168.0.14'));
     let transferPort = 8080;
     let senderUrl = '';
     let qrcodeInstance = null;
@@ -705,6 +705,12 @@ window.FileReceiver = (function() {
         sendSocketMessage: sendSocketMessage,
         triggerReceiverTabAlert: triggerReceiverTabAlert,
         clearReceiverTabAlert: clearReceiverTabAlert,
+        getServerHostIP: function() {
+            return serverHostIP;
+        },
+        getLocalIP: function() {
+            return localIP;
+        },
         setServerHostIP: function(ip) {
             serverHostIP = ip;
             updateNetworkDisplay();

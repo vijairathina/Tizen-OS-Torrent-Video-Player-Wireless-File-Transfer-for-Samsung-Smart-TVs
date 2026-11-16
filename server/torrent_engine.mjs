@@ -159,7 +159,8 @@ client.add(torrentInput, { path: downloadDir }, torrent => {
             console.error('[TorrentEngine] HTTP server error:', err.message);
         });
         server.listen(port, '0.0.0.0', () => {
-            const streamUrl = `http://192.168.0.13:${port}/${fileIdx}`;
+            const hostIp = process.env.HOST_IP || '192.168.0.14';
+            const streamUrl = `http://${hostIp}:${port}/${fileIdx}`;
             console.log(`[ENGINE_STREAM_URL] ${streamUrl}`);
         });
     } else {

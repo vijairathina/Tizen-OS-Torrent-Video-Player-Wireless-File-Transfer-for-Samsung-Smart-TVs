@@ -379,7 +379,8 @@ window.FileManager = (function() {
 
             // Also notify companion server if applicable
             try {
-                fetch(`http://192.168.0.13:8080/delete_file?file=${encodeURIComponent(name)}`).catch(() => {});
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/delete_file?file=${encodeURIComponent(name)}`).catch(() => {});
             } catch (e) {}
 
             // Remove from receiver history if it was received

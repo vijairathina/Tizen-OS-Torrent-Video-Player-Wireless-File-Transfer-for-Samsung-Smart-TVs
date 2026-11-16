@@ -21,8 +21,10 @@ import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
-PORT = 8080
-TORRENT_STREAM_PORT = 8889
+PORT = int(os.environ.get("PORT", 8080))
+TORRENT_STREAM_PORT = int(os.environ.get("TORRENT_STREAM_PORT", 8889))
+HOST_IP = os.environ.get("HOST_IP", "192.168.0.14")
+BIND_IP = os.environ.get("BIND_IP", "")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(BASE_DIR, 'public')
 UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
@@ -256,7 +258,7 @@ def parse_torrent_files(torrent_path):
                 if file_name.lower().endswith(video_exts):
                     downloaded_path = find_media_file(file_name)
                     is_downloaded = bool(downloaded_path and os.path.exists(downloaded_path) and os.path.getsize(downloaded_path) > 0)
-                    url = f"http://192.168.0.13:{PORT}/files/{urllib.parse.quote(file_name)}" if is_downloaded else f"http://192.168.0.13:8889/{idx}"
+                    url = f"http://{HOST_IP}:{PORT}/files/{urllib.parse.quote(file_name)}" if is_downloaded else f"http://{HOST_IP}:8889/{idx}"
                     files_list.append({
                         'index': idx,
                         'name': file_name,
@@ -272,7 +274,7 @@ def parse_torrent_files(torrent_path):
             if name.lower().endswith(video_exts):
                 downloaded_path = find_media_file(name)
                 is_downloaded = bool(downloaded_path and os.path.exists(downloaded_path) and os.path.getsize(downloaded_path) > 0)
-                url = f"http://192.168.0.13:{PORT}/files/{urllib.parse.quote(name)}" if is_downloaded else f"http://192.168.0.13:8889/0"
+                url = f"http://{HOST_IP}:{PORT}/files/{urllib.parse.quote(name)}" if is_downloaded else f"http://{HOST_IP}:8889/0"
                 files_list.append({
                     'index': 0,
                     'name': name,
@@ -358,8 +360,8 @@ def get_media_audio_tracks(filename_or_path):
 
 
 class TorrentStreamManager:
-    def __init__(self, host_ip="192.168.0.13"):
-        self.host_ip = host_ip
+    def __init__(self, host_ip=None):
+        self.host_ip = host_ip or HOST_IP
         self.process = None
         self.current_stream_url = None
         self.current_title = ""
@@ -528,13 +530,16 @@ class TorrentStreamManager:
 
     def _kill_port_8889(self):
         try:
-            out = subprocess.check_output("netstat -ano", shell=True, text=True)
-            for line in out.splitlines():
-                if ':8889 ' in line and ('LISTENING' in line or 'ESTABLISHED' in line):
-                    parts = line.strip().split()
-                    pid = parts[-1]
-                    if pid.isdigit() and int(pid) != os.getpid():
-                        subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+            if sys.platform == 'win32':
+                out = subprocess.check_output("netstat -ano", shell=True, text=True)
+                for line in out.splitlines():
+                    if ':8889 ' in line and ('LISTENING' in line or 'ESTABLISHED' in line):
+                        parts = line.strip().split()
+                        pid = parts[-1]
+                        if pid.isdigit() and int(pid) != os.getpid():
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+            else:
+                subprocess.run(["fuser", "-k", "8889/tcp"], capture_output=True)
         except Exception:
             pass
 
@@ -676,9 +681,16 @@ class TorrentStreamManager:
     def stop(self):
         if self.process:
             try:
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
+                if sys.platform == 'win32':
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
+                else:
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
             except Exception:
-                try: self.process.terminate()
+                try: self.process.kill()
                 except Exception: pass
             self.process = None
         self._kill_port_8889()
@@ -705,7 +717,7 @@ class TorrentStreamManager:
                 "stats": self.stats
             }
 
-TORRENT_MANAGER = TorrentStreamManager(host_ip="192.168.0.13")
+TORRENT_MANAGER = TorrentStreamManager(host_ip=HOST_IP)
 
 # Active clients
 WS_CLIENTS_LOCK = threading.Lock()
@@ -1111,9 +1123,16 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     bg_entry = TORRENT_MANAGER.bg_downloads.pop(fname, None)
                     if bg_entry and bg_entry.get("proc"):
                         try:
-                            subprocess.run(["taskkill", "/F", "/T", "/PID", str(bg_entry["proc"].pid)], capture_output=True)
+                            if sys.platform == 'win32':
+                                subprocess.run(["taskkill", "/F", "/T", "/PID", str(bg_entry["proc"].pid)], capture_output=True)
+                            else:
+                                bg_entry["proc"].terminate()
+                                try:
+                                    bg_entry["proc"].wait(timeout=2)
+                                except subprocess.TimeoutExpired:
+                                    bg_entry["proc"].kill()
                         except Exception:
-                            try: bg_entry["proc"].terminate()
+                            try: bg_entry["proc"].kill()
                             except Exception: pass
                 
                 up_path = os.path.join(UPLOADS_DIR, fname)
@@ -1348,11 +1367,22 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
         self.send_error(404, 'Not Found')
 
 def run_server(port=PORT):
-    server = ThreadedHTTPServer(('0.0.0.0', port), FileHubRequestHandler)
+    bind_target = BIND_IP if BIND_IP else '0.0.0.0'
+    try:
+        server = ThreadedHTTPServer((bind_target, port), FileHubRequestHandler)
+    except OSError as e:
+        if bind_target == '0.0.0.0':
+            print(f"[Server] 0.0.0.0:{port} busy/unavailable ({e}), binding to {HOST_IP}:{port} instead...")
+            server = ThreadedHTTPServer((HOST_IP, port), FileHubRequestHandler)
+            bind_target = HOST_IP
+        else:
+            raise
     print(f"================================================================")
     print(f" Samsung TV File Hub - Companion Transfer Bridge")
+    print(f" Bound Interface:       {bind_target}:{port}")
     print(f" Web Sender running at: http://localhost:{port}/")
-    print(f" Network Sender URL:    http://192.168.0.13:{port}/")
+    print(f" Network Sender URL:    http://{HOST_IP}:{port}/")
+    print(f" Torrent Stream Port:   {TORRENT_STREAM_PORT}")
     print(f" Storage Directory:     {UPLOADS_DIR}")
     print(f"================================================================")
     try:
