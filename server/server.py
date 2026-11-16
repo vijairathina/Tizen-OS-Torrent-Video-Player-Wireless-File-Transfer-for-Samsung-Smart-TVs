@@ -1219,7 +1219,15 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         path = self.path.split('?')[0]
-        if path.startswith('/files/') or path.startswith('/downloads/') or path.startswith('/stream/'):
+        norm_path = path.rstrip('/') if path != '/' else '/'
+
+        if norm_path in ('/', '/index.html', '/sender', '/dashboard', '/downloads', '/downloads.html', '/dashboard.html'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            return
+
+        if path.startswith('/files/') or path.startswith('/stream/') or (path.startswith('/downloads/') and len(path.strip('/')) > len('downloads')):
             import urllib.parse
             filename = urllib.parse.unquote(path.split('/', 2)[-1])
             filepath = find_media_file(filename)
@@ -1260,6 +1268,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split('?')[0]
+        norm_path = path.rstrip('/') if path != '/' else '/'
 
         # 1. WebSocket Upgrade for TV App
         if path == '/ws':
@@ -1272,7 +1281,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 return
 
         # 2. Web Sender UI
-        if path in ('/', '/index.html', '/sender'):
+        if norm_path in ('/', '/index.html', '/sender'):
             sender_file = os.path.join(PUBLIC_DIR, 'sender.html')
             if os.path.exists(sender_file):
                 self.send_response(200)
@@ -1287,7 +1296,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         # 2.1. Download Management Dashboard UI (for Mobile & PC Browser)
-        elif path in ('/dashboard', '/downloads', '/downloads.html', '/dashboard.html'):
+        elif norm_path in ('/dashboard', '/downloads', '/downloads.html', '/dashboard.html'):
             dash_file = os.path.join(PUBLIC_DIR, 'dashboard.html')
             if os.path.exists(dash_file):
                 self.send_response(200)
@@ -1302,7 +1311,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(404, 'dashboard.html not found')
             return
 
-        elif path == '/storage_target':
+        elif norm_path == '/storage_target':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -1311,7 +1320,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         # 3. Static Files & Streaming Downloads
-        elif path.startswith('/files/') or path.startswith('/downloads/') or path.startswith('/stream/'):
+        elif path.startswith('/files/') or path.startswith('/stream/') or (path.startswith('/downloads/') and len(path.strip('/')) > len('downloads')):
             import urllib.parse
             filename = urllib.parse.unquote(path.split('/', 2)[-1])
             filepath = find_media_file(filename)
@@ -1384,7 +1393,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
         # 4.5. Download Management Dashboard API
         # Dynamic API for Download Dashboard: available movies, downloading movies, status, progress, speed, completion
-        elif path in ('/api/downloads', '/api/queue'):
+        elif norm_path in ('/api/downloads', '/api/queue'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -1393,7 +1402,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(dashboard_data).encode('utf-8'))
             return
 
-        elif path in ('/api/prioritize', '/prioritize'):
+        elif norm_path in ('/api/prioritize', '/prioritize'):
             import urllib.parse
             qs = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
             fnames = qs.get('file', [])
