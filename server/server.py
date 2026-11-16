@@ -586,7 +586,7 @@ class TorrentStreamManager:
                 "status": "Highest Priority (Streaming)" if high_priority else "Queued in Background",
                 "progress": 0,
                 "speed": "0 B/s",
-                "upload_speed": "0 B/s (Seeding Stopped)",
+                "upload_speed": "0 B/s (Active)",
                 "downloaded": "0 B",
                 "total": format_bytes(exp_size) if exp_size > 0 else "Calculating...",
                 "peers": 0,
@@ -997,7 +997,7 @@ class TorrentStreamManager:
                         with self.lock:
                             item["progress"] = st.get("progress", item.get("progress", 0))
                             item["speed"] = st.get("downloadSpeed", "0 B/s")
-                            item["upload_speed"] = st.get("uploadSpeed", "0 B/s (Seeding Stopped)")
+                            item["upload_speed"] = st.get("uploadSpeed", "0 B/s")
                             item["downloaded"] = st.get("downloaded", item.get("downloaded", "0 B"))
                             item["total"] = st.get("total", item.get("total", "0 B"))
                             item["peers"] = st.get("peers", 0)
@@ -1244,7 +1244,7 @@ class TorrentStreamManager:
                         "status": "Downloading & Streaming (Highest Priority)",
                         "progress": self.stats.get("progress", 0),
                         "speed": self.stats.get("speed", "0 B/s"),
-                        "upload_speed": "0 B/s (Seeding Stopped)",
+                        "upload_speed": self.stats.get("upload_speed", "0 B/s"),
                         "downloaded": self.stats.get("downloaded", "0 B"),
                         "total": self.stats.get("total", "Calculating..."),
                         "peers": self.stats.get("peers", 0),
@@ -1287,7 +1287,7 @@ class TorrentStreamManager:
                     "status": item.get("status", "Queued in Background"),
                     "progress": progress_val,
                     "speed": item.get("speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)",
-                    "upload_speed": "0 B/s (Seeding Stopped)",
+                    "upload_speed": item.get("upload_speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)",
                     "downloaded": downloaded_str,
                     "total": total_str,
                     "peers": item.get("peers", 0) if is_active_bg else 0,
@@ -1315,6 +1315,9 @@ class TorrentStreamManager:
                 else:
                     active_stream_name = f"{self.current_title} (Completed - Playing)"
 
+            is_downloading_any = is_stream_downloading or bool(self.active_bg_proc and self.active_bg_proc.poll() is None)
+            seeding_status_text = "Active (Tit-for-Tat Peer Sharing; Seeding Stops at 100%)" if is_downloading_any else "Stopped (Zero Upload - BitTorrent Upload Disabled)"
+
             return {
                 "system_status": {
                     "mode": system_mode,
@@ -1323,7 +1326,7 @@ class TorrentStreamManager:
                     "active_bg_download": self.active_bg_title if (self.active_bg_proc and self.active_bg_proc.poll() is None) else None,
                     "total_available": len(available_movies),
                     "total_downloading": len(currently_downloading),
-                    "seeding_status": "Stopped (Zero Upload - BitTorrent Upload Disabled)",
+                    "seeding_status": seeding_status_text,
                     "api_endpoint": f"http://{effective_host}/api/downloads",
                     "host_ip": effective_ip,
                     "port": PORT

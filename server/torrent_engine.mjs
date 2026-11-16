@@ -43,7 +43,13 @@ const PUBLIC_TRACKERS = [
     'udp://tracker.theoks.net:6969/announce',
     'udp://tracker.filemail.com:6969/announce',
     'http://tracker.bt4g.com:2095/announce',
-    'https://tr.zukizuki.org:443/announce'
+    'https://tr.zukizuki.org:443/announce',
+    'udp://p4p.arenabg.com:1337/announce',
+    'udp://tracker.cyberia.is:6969/announce',
+    'udp://tracker.birkenwald.de:6969/announce',
+    'udp://tracker.zerobytes.xyz:1337/announce',
+    'udp://tracker.altrosky.nl:6969/announce',
+    'udp://new-line.net:6969/announce'
 ];
 
 // 3. WebTorrent Client with high peer limits and peer discovery protocols enabled
@@ -67,9 +73,15 @@ function formatBytes(bytes) {
 client.add(torrentInput, {
     path: downloadDir,
     announce: PUBLIC_TRACKERS,
-    maxWebConns: 10
+    maxWebConns: 20,
+    uploads: 50         // Allow up to 50 active upload slots for reciprocal tit-for-tat peer trading
 }, torrent => {
     console.log('[TorrentEngine] Torrent ready:', torrent.name);
+
+    // Unchoke wires on connect to enable full reciprocal peer communication
+    torrent.on('wire', (wire, addr) => {
+        try { wire.unchoke(); } catch (e) {}
+    });
 
     // Parse optional target file index from command-line argument: --file-idx=N
     let targetFileIdx = -1;
@@ -98,7 +110,7 @@ client.add(torrentInput, {
 
     // Select ALL valid media and subtitle files for high-speed parallel swarm downloading
     torrent.files.forEach((f, idx) => {
-        const isJunk = f.name.startsWith('.pad') || f.path.includes('.pad');
+        const isJunk = f.name.startsWith('.pad') || f.path.includes('.pad') || /^\d+$/.test(f.name) || !/\.(mkv|mp4|avi|mov|webm|ts|srt|vtt)$/i.test(f.name);
         if (isJunk) {
             try { f.deselect(); } catch (e) {}
         } else {
@@ -285,16 +297,18 @@ client.add(torrentInput, {
 
     setInterval(() => {
         const isDone = !!torrent.done;
+        const uploadStr = isDone ? '0 B/s (Seeding Stopped)' : (torrent.uploadSpeed > 0 ? (formatBytes(torrent.uploadSpeed) + '/s') : '0 B/s (Active)');
+        const statusStr = isDone ? 'Completed (Seeding Stopped)' : (torrent.numPeers > 0 ? (isDownloadOnly ? 'Downloading in Background' : 'Downloading & Streaming') : 'Connecting to Peers...');
         const stats = {
             name: torrent.name,
             progress: isDone ? 100 : Math.floor(torrent.progress * 100),
             downloadSpeed: isDone ? '0 B/s' : (formatBytes(torrent.downloadSpeed) + '/s'),
-            uploadSpeed: isDone ? '0 B/s (Seeding Stopped)' : (formatBytes(torrent.uploadSpeed) + '/s'),
+            uploadSpeed: uploadStr,
             downloaded: formatBytes(torrent.downloaded),
             total: formatBytes(torrent.length),
             peers: isDone ? 0 : torrent.numPeers,
             timeRemaining: isDone ? '0s' : (torrent.timeRemaining ? Math.round(torrent.timeRemaining / 1000) + 's' : '0s'),
-            status: isDone ? 'Completed (Seeding Stopped)' : (torrent.numPeers > 0 ? 'Downloading & Streaming' : 'Connecting to Peers...'),
+            status: statusStr,
             completed: isDone
         };
         console.log(`[ENGINE_STATS] ${JSON.stringify(stats)}`);
