@@ -379,23 +379,22 @@ window.HomeLauncher = (function() {
 
         const storages = window.TVFilesystem.getStorages() || [];
         const selected = window.TVFilesystem.getSelectedStorage();
+        const pref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
         const usbCount = storages.filter(s => s.isUsb).length;
 
-        if (titleEl) {
-            titleEl.textContent = selected && selected.isUsb ? selected.displayName : 'Internal TV Storage';
-        }
-
-        if (descEl) {
-            const path = (selected && selected.isUsb) ? `${selected.label}/TVFileHub/Received/` : 'wgt-private/TVFileHub/Received/';
-            descEl.textContent = `Save Target: ${path}`;
-        }
-
-        if (barEl) {
-            barEl.style.width = '35%';
-        }
-
-        if (detailsEl) {
-            detailsEl.textContent = `${usbCount} USB Drive(s) Connected • Storage Active ✓`;
+        if (pref === 'server' || (selected && selected.isServer)) {
+            if (titleEl) titleEl.textContent = 'Companion Server (Zero TV Memory)';
+            if (descEl) descEl.textContent = 'Save Target: Pi / Host /app/uploads/ (Streaming)';
+            if (detailsEl) detailsEl.textContent = 'Server Storage Active • Zero TV Space Consumed ✓';
+        } else if (titleEl) {
+            titleEl.textContent = selected && selected.isUsb ? (selected.displayName || selected.label) : 'Local TV Storage';
+            if (descEl) {
+                const path = (selected && selected.isUsb) ? `${selected.label}/TVFileHub/Received/` : 'downloads/TVFileHub/Received/';
+                descEl.textContent = `Save Target: ${path}`;
+            }
+            if (detailsEl) {
+                detailsEl.textContent = `${usbCount} USB Drive(s) Connected • Storage Active ✓`;
+            }
         }
     }
 

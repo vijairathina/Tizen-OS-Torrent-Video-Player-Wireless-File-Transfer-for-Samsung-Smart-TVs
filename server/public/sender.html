@@ -214,7 +214,7 @@
             <p>Send videos, audio, images &amp; files to Samsung Smart TV</p>
             <div class="target-tv-badge">
                 <span>●</span>
-                <span>Target: Samsung TV (USB /TVFileHub/Received/)</span>
+                <span id="target-tv-text">Target: Samsung TV (Detecting...)</span>
             </div>
         </div>
 
@@ -358,6 +358,20 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        function updateStorageTarget() {
+            fetch('/storage_target')
+                .then(r => r.json())
+                .then(data => {
+                    const el = document.getElementById('target-tv-text');
+                    if (el && data && data.target) {
+                        el.textContent = `Target: Samsung TV (${data.target})`;
+                    }
+                })
+                .catch(() => {});
+        }
+        updateStorageTarget();
+        setInterval(updateStorageTarget, 4000);
     </script>
 </body>
 </html>

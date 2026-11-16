@@ -34,6 +34,8 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(PUBLIC_DIR, exist_ok=True)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
+CURRENT_STORAGE_TARGET = "USB Drive"
+
 def format_bytes(bytes_num):
     if not bytes_num or bytes_num <= 0:
         return "0 B"
@@ -881,6 +883,14 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(404, 'sender.html not found')
             return
 
+        elif path == '/storage_target':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'target': CURRENT_STORAGE_TARGET}).encode('utf-8'))
+            return
+
         # 3. Static Files & Streaming Downloads
         elif path.startswith('/files/') or path.startswith('/downloads/') or path.startswith('/stream/'):
             import urllib.parse
@@ -1287,6 +1297,20 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                                         TORRENT_MANAGER.start_torrent(magnet, title="Magnet Stream")
                                 elif ctype == 'stop_torrent':
                                     TORRENT_MANAGER.stop()
+                                elif ctype == 'storage_mode_changed':
+                                    mode = cmd_data.get('mode', 'usb')
+                                    global CURRENT_STORAGE_TARGET
+                                    if mode == 'server':
+                                        CURRENT_STORAGE_TARGET = 'Server (Pi / Zero TV Memory)'
+                                    elif mode in ('local', 'internal'):
+                                        CURRENT_STORAGE_TARGET = 'Local Storage (TV Flash)'
+                                    else:
+                                        CURRENT_STORAGE_TARGET = 'USB Drive'
+                                    print(f"  [STORAGE TARGET] Updated to: {CURRENT_STORAGE_TARGET}")
+                                    broadcast_ws_message({
+                                        'type': 'storage_target_update',
+                                        'target': CURRENT_STORAGE_TARGET
+                                    })
                         except Exception:
                             pass
                     except Exception as e:

@@ -935,70 +935,114 @@ window.VideoPlayer = (function() {
         }
     }
 
-    /* Storage Preference in Settings */
+    /* Storage Preference in Settings (Local Storage / USB / Server) */
     function renderStorageSettingsOptions() {
         const container = document.getElementById('settings-storage-options');
         if (!container) return;
         container.innerHTML = '';
 
-        const currentPref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'auto';
+        const currentPref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
         const storages = window.TVFilesystem ? window.TVFilesystem.getStorages() : [];
         const usbStorages = storages.filter(s => s.isUsb);
 
-        // 1. Auto (Prefer USB)
-        const autoBtn = document.createElement('button');
-        autoBtn.className = `settings-pill focusable ${currentPref === 'auto' ? 'active' : ''}`;
-        autoBtn.id = 'btn-storage-auto';
-        autoBtn.tabIndex = 0;
-        autoBtn.innerHTML = `<span>⚡</span><span>Auto (Prefer USB)</span>`;
-        autoBtn.addEventListener('click', function() {
+        // 1. Local Storage (TV Internal Flash)
+        const localBtn = document.createElement('button');
+        const isLocalActive = currentPref === 'internal' || currentPref === 'local';
+        localBtn.className = `settings-pill focusable ${isLocalActive ? 'active' : ''}`;
+        localBtn.id = 'btn-storage-local';
+        localBtn.tabIndex = 0;
+        localBtn.innerHTML = `<span>📱</span><span>Local Storage (TV)</span>`;
+        localBtn.addEventListener('click', function() {
             if (window.TVFilesystem) {
-                window.TVFilesystem.setPreferredStorage('auto', function() {
+                window.TVFilesystem.setPreferredStorage('local', function(allStorages, selected) {
                     renderStorageSettingsOptions();
                     updateSettingsFolderInfo();
-                    window.FileReceiver.showToast('Storage destination set to: Auto (Prefer USB)');
+                    if (window.FileReceiver && window.FileReceiver.showToast) {
+                        window.FileReceiver.showToast('Receive Storage set to: Local Storage (TV Flash)');
+                    }
+                    if (window.App && window.App.updateTargetUsbBadge) {
+                        window.App.updateTargetUsbBadge(selected);
+                    }
                 });
             }
         });
-        container.appendChild(autoBtn);
+        container.appendChild(localBtn);
 
-        // 2. Internal TV Storage
-        const internalBtn = document.createElement('button');
-        internalBtn.className = `settings-pill focusable ${currentPref === 'internal' ? 'active' : ''}`;
-        internalBtn.id = 'btn-storage-internal';
-        internalBtn.tabIndex = 0;
-        internalBtn.innerHTML = `<span>📱</span><span>Internal TV Storage</span>`;
-        internalBtn.addEventListener('click', function() {
+        // 2. USB Drive (External Storage)
+        const isUsbActive = (currentPref === 'usb' || currentPref === 'auto' || usbStorages.some(u => u.label === currentPref)) && currentPref !== 'server' && currentPref !== 'local' && currentPref !== 'internal';
+        const usbBtn = document.createElement('button');
+        usbBtn.className = `settings-pill focusable ${isUsbActive ? 'active' : ''}`;
+        usbBtn.id = 'btn-storage-usb';
+        usbBtn.tabIndex = 0;
+        const usbTitle = usbStorages.length > 0 ? `USB Drive (${usbStorages[0].displayName || usbStorages[0].label})` : 'USB Drive';
+        usbBtn.innerHTML = `<span>💾</span><span>${usbTitle}</span>`;
+        usbBtn.addEventListener('click', function() {
             if (window.TVFilesystem) {
-                window.TVFilesystem.setPreferredStorage('internal', function() {
+                const targetLabel = usbStorages.length > 0 ? usbStorages[0].label : 'usb';
+                window.TVFilesystem.setPreferredStorage(targetLabel, function(allStorages, selected) {
                     renderStorageSettingsOptions();
                     updateSettingsFolderInfo();
-                    window.FileReceiver.showToast('Storage destination set to: Internal TV Storage');
+                    const toastMsg = usbStorages.length > 0 ? `Receive Storage set to: ${usbTitle}` : 'Receive Storage set to: USB Drive (Auto)';
+                    if (window.FileReceiver && window.FileReceiver.showToast) {
+                        window.FileReceiver.showToast(toastMsg);
+                    }
+                    if (window.App && window.App.updateTargetUsbBadge) {
+                        window.App.updateTargetUsbBadge(selected);
+                    }
                 });
             }
         });
-        container.appendChild(internalBtn);
+        container.appendChild(usbBtn);
 
-        // 3. Each detected USB drive (e.g. USB 1, USB 2, USB 3)
-        usbStorages.forEach(function(usb, index) {
-            const usbBtn = document.createElement('button');
-            const isActive = currentPref === usb.label;
-            usbBtn.className = `settings-pill focusable ${isActive ? 'active' : ''}`;
-            usbBtn.id = `btn-storage-usb-${index}`;
-            usbBtn.tabIndex = 0;
-            const labelText = usb.displayName || `USB ${index + 1}: ${usb.label}`;
-            usbBtn.innerHTML = `<span>💾</span><span>${labelText}</span>`;
-            usbBtn.addEventListener('click', function() {
-                if (window.TVFilesystem) {
-                    window.TVFilesystem.setPreferredStorage(usb.label, function() {
-                        renderStorageSettingsOptions();
-                        updateSettingsFolderInfo();
-                        window.FileReceiver.showToast(`Storage destination set to: ${labelText}`);
-                    });
-                }
+        // If multiple USB drives are connected, let user select specific drive
+        if (usbStorages.length > 1) {
+            usbStorages.forEach(function(usb, index) {
+                const specificBtn = document.createElement('button');
+                const isSpecActive = currentPref === usb.label;
+                specificBtn.className = `settings-pill focusable ${isSpecActive ? 'active' : ''}`;
+                specificBtn.id = `btn-storage-usb-${index}`;
+                specificBtn.tabIndex = 0;
+                specificBtn.innerHTML = `<span>🔌</span><span>${usb.displayName || usb.label}</span>`;
+                specificBtn.addEventListener('click', function() {
+                    if (window.TVFilesystem) {
+                        window.TVFilesystem.setPreferredStorage(usb.label, function(allStorages, selected) {
+                            renderStorageSettingsOptions();
+                            updateSettingsFolderInfo();
+                            if (window.FileReceiver && window.FileReceiver.showToast) {
+                                window.FileReceiver.showToast(`Receive Storage set to: ${usb.displayName || usb.label}`);
+                            }
+                            if (window.App && window.App.updateTargetUsbBadge) {
+                                window.App.updateTargetUsbBadge(selected);
+                            }
+                        });
+                    }
+                });
+                container.appendChild(specificBtn);
             });
-            container.appendChild(usbBtn);
+        }
+
+        // 3. Companion Server (Raspberry Pi / Host - Zero TV Memory)
+        const serverBtn = document.createElement('button');
+        const isServerActive = currentPref === 'server';
+        serverBtn.className = `settings-pill focusable ${isServerActive ? 'active' : ''}`;
+        serverBtn.id = 'btn-storage-server';
+        serverBtn.tabIndex = 0;
+        serverBtn.innerHTML = `<span>🖥️</span><span>Server (Pi / Host)</span>`;
+        serverBtn.addEventListener('click', function() {
+            if (window.TVFilesystem) {
+                window.TVFilesystem.setPreferredStorage('server', function(allStorages, selected) {
+                    renderStorageSettingsOptions();
+                    updateSettingsFolderInfo();
+                    if (window.FileReceiver && window.FileReceiver.showToast) {
+                        window.FileReceiver.showToast('Receive Storage set to: Server (Zero TV space used, instant streaming)');
+                    }
+                    if (window.App && window.App.updateTargetUsbBadge) {
+                        window.App.updateTargetUsbBadge(selected);
+                    }
+                });
+            }
         });
+        container.appendChild(serverBtn);
 
         updateSettingsFolderInfo();
     }
@@ -1006,10 +1050,16 @@ window.VideoPlayer = (function() {
     function updateSettingsFolderInfo() {
         const folderInfoEl = document.getElementById('settings-target-folder-info');
         if (!folderInfoEl) return;
+        const currentPref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
         const sel = window.TVFilesystem ? window.TVFilesystem.getSelectedStorage() : null;
-        if (sel) {
-            const clean = sel.isUsb ? `${sel.label} (USB)` : 'Internal Storage';
-            folderInfoEl.textContent = `${clean} • /TVFileHub/Received/`;
+
+        if (currentPref === 'server' || (sel && sel.isServer)) {
+            const hostIp = (window.getServerHostIP ? window.getServerHostIP() : '192.168.0.14');
+            folderInfoEl.textContent = `Companion Server (${hostIp}) • /app/uploads/ (Zero TV Memory)`;
+        } else if (sel && sel.isUsb) {
+            folderInfoEl.textContent = `${sel.displayName || sel.label} • /TVFileHub/Received/`;
+        } else {
+            folderInfoEl.textContent = `Internal TV Storage • /TVFileHub/Received/`;
         }
     }
 

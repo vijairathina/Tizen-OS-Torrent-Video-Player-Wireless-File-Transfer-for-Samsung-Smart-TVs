@@ -233,12 +233,13 @@
                             </div>
                         </div>
 
-                        <div class="usb-target-box" id="receiver-usb-target">
+                        <div class="usb-target-box focusable" id="receiver-usb-target" tabindex="0" title="Click to Change Storage: Local Storage, USB Drive, or Server">
                             <div class="usb-target-title">
                                 <span>💾</span>
-                                <span>Target USB Drive</span>
+                                <span>Target Storage</span>
                             </div>
                             <div class="usb-target-path">Detecting storage...</div>
+                            <div class="usb-target-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">Press Enter to switch: Local / USB / Server</div>
                         </div>
                     </div>
 
@@ -632,16 +633,23 @@
             <div class="dialog-body" style="display:flex; flex-direction:column; gap:20px;">
                 <!-- Storage Destination Option -->
                 <div class="settings-group">
-                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">💾 Default Storage Destination:</div>
+                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">💾 Received Files Storage Destination:</div>
                     <div class="settings-options-row" id="settings-storage-options" style="display:flex; gap:12px; flex-wrap:wrap;">
-                        <button class="settings-pill focusable active" id="btn-storage-auto" tabindex="0">
-                            <span>⚡</span>
-                            <span>Auto (Prefer USB)</span>
-                        </button>
-                        <button class="settings-pill focusable" id="btn-storage-internal" tabindex="0">
+                        <button class="settings-pill focusable" id="btn-storage-local" tabindex="0">
                             <span>📱</span>
-                            <span>Internal TV Storage</span>
+                            <span>Local Storage (TV)</span>
                         </button>
+                        <button class="settings-pill focusable active" id="btn-storage-usb" tabindex="0">
+                            <span>💾</span>
+                            <span>USB Drive</span>
+                        </button>
+                        <button class="settings-pill focusable" id="btn-storage-server" tabindex="0">
+                            <span>🖥️</span>
+                            <span>Server (Pi / Host)</span>
+                        </button>
+                    </div>
+                    <div style="font-size:13px; color:var(--text-muted); margin-top:6px;" id="settings-storage-desc">
+                        Choose where received files are saved: <strong>Local Storage</strong> (TV internal flash), <strong>USB Drive</strong> (attached thumb drive/HDD), or <strong>Server</strong> (kept on companion host with zero TV space used).
                     </div>
                 </div>
 

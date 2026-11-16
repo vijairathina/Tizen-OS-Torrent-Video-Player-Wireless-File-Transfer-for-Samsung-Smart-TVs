@@ -108,10 +108,33 @@ window.App = (function() {
         const usbStatusBadge = document.getElementById('usb-status-badge');
         if (!badge) return;
 
-        if (selectedStorage && selectedStorage.isUsb) {
+        // Make receiver target box clickable to easily toggle storage mode
+        if (!badge._hasClickListener) {
+            badge._hasClickListener = true;
+            badge.addEventListener('click', function() {
+                if (window.VideoPlayer && window.VideoPlayer.openSettingsDialog) {
+                    window.VideoPlayer.openSettingsDialog();
+                }
+            });
+        }
+
+        const pref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
+
+        if (pref === 'server' || (selectedStorage && selectedStorage.isServer)) {
+            const hostIp = window.getServerHostIP ? window.getServerHostIP() : '192.168.0.14';
             badge.innerHTML = `
-                <div class="usb-target-title"><span>💾</span><span>Target: ${selectedStorage.label} (USB)</span></div>
+                <div class="usb-target-title" style="color:#c084fc;"><span>🖥️</span><span>Target: Server (Pi / Host)</span></div>
+                <div class="usb-target-path">${hostIp}:8080 • /app/uploads/ (Zero TV Space)</div>
+                <div class="usb-target-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">Press Enter to switch: Local / USB / Server</div>
+            `;
+            if (usbStatusBadge) {
+                usbStatusBadge.innerHTML = `<span class="status-dot active" style="background:#a855f7;box-shadow:0 0 8px #a855f7;"></span><span>Server Storage</span>`;
+            }
+        } else if (selectedStorage && selectedStorage.isUsb) {
+            badge.innerHTML = `
+                <div class="usb-target-title" style="color:#10b981;"><span>💾</span><span>Target: ${selectedStorage.displayName || selectedStorage.label} (USB)</span></div>
                 <div class="usb-target-path">${selectedStorage.label}/TVFileHub/Received/</div>
+                <div class="usb-target-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">Press Enter to switch: Local / USB / Server</div>
             `;
             if (usbStatusBadge) {
                 usbStatusBadge.innerHTML = `<span class="status-dot active"></span><span>USB: ${selectedStorage.label}</span>`;
@@ -119,8 +142,9 @@ window.App = (function() {
         } else {
             const locLabel = (selectedStorage && selectedStorage.label) ? selectedStorage.label : 'downloads';
             badge.innerHTML = `
-                <div class="usb-target-title" style="color:var(--cyan);"><span>📱</span><span>Target: Internal TV Storage (Local)</span></div>
+                <div class="usb-target-title" style="color:var(--primary-cyan);"><span>📱</span><span>Target: Local Storage (TV Flash)</span></div>
                 <div class="usb-target-path">${locLabel}/TVFileHub/Received/</div>
+                <div class="usb-target-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">Press Enter to switch: Local / USB / Server</div>
             `;
             if (usbStatusBadge) {
                 usbStatusBadge.innerHTML = `<span class="status-dot active" style="background:#00f2fe;box-shadow:0 0 8px #00f2fe;"></span><span>Local Storage</span>`;
@@ -131,7 +155,8 @@ window.App = (function() {
     return {
         init: init,
         switchView: switchView,
-        getCurrentView: function() { return currentView; }
+        getCurrentView: function() { return currentView; },
+        updateTargetUsbBadge: updateTargetUsbBadge
     };
 })();
 

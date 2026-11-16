@@ -188,12 +188,27 @@ window.TVFilesystem = (function() {
             storages.push(internalItem);
         }
 
-        // Check user's preferred storage setting in localStorage
+        // Check user's preferred storage setting in localStorage: 'local', 'usb', 'server', 'internal', or specific USB label
         const preferredLabel = getPreferredStorage();
         let targetStorage = null;
 
-        if (preferredLabel === 'internal') {
-            targetStorage = storages.find(function(s) { return !s.isUsb; });
+        const serverItem = {
+            label: 'server',
+            displayName: 'Companion Server (Zero TV Memory)',
+            type: 'SERVER',
+            isUsb: false,
+            isServer: true,
+            state: 'MOUNTED',
+            totalSize: 128 * 1024 * 1024 * 1024,
+            availableSize: 100 * 1024 * 1024 * 1024
+        };
+
+        if (preferredLabel === 'server') {
+            targetStorage = serverItem;
+        } else if (preferredLabel === 'internal' || preferredLabel === 'local') {
+            targetStorage = storages.find(function(s) { return !s.isUsb && !s.isServer; }) || internalItem;
+        } else if (preferredLabel === 'usb') {
+            targetStorage = storages.find(function(s) { return s.isUsb; }) || internalItem;
         } else if (preferredLabel !== 'auto') {
             targetStorage = storages.find(function(s) { return s.label === preferredLabel; });
         }
@@ -205,6 +220,12 @@ window.TVFilesystem = (function() {
 
         selectedStorage = targetStorage;
 
+        if (selectedStorage.isServer) {
+            targetDirHandle = null;
+            if (callback) callback(storages, selectedStorage);
+            return;
+        }
+
         ensureTargetDirectory(selectedStorage.label, function(err, dir) {
             if (!err && dir) targetDirHandle = dir;
             if (callback) callback(storages, selectedStorage);
@@ -214,6 +235,12 @@ window.TVFilesystem = (function() {
     function setPreferredStorage(label, callback) {
         try {
             localStorage.setItem('tvhub_storage_pref', label);
+            if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
+                window.FileReceiver.sendSocketMessage({
+                    type: 'storage_mode_changed',
+                    mode: label
+                });
+            }
         } catch (e) {}
         refreshStorages(function(allStorages, selected) {
             if (callback) callback(allStorages, selected);
@@ -222,9 +249,9 @@ window.TVFilesystem = (function() {
 
     function getPreferredStorage() {
         try {
-            return localStorage.getItem('tvhub_storage_pref') || 'auto';
+            return localStorage.getItem('tvhub_storage_pref') || 'usb';
         } catch (e) {
-            return 'auto';
+            return 'usb';
         }
     }
 
@@ -567,6 +594,19 @@ window.TVFilesystem = (function() {
     }
 
     function saveFileToStorage(filename, dataArrayBuffer, progressCallback, completionCallback) {
+        if (selectedStorage && selectedStorage.isServer) {
+            logFs(`saveFileToStorage: Storage is set to Server. Skipping local TV write for "${filename}".`);
+            if (progressCallback) progressCallback(100);
+            if (completionCallback) completionCallback(null, {
+                name: filename,
+                size: dataArrayBuffer ? dataArrayBuffer.byteLength : 0,
+                isUsb: false,
+                isServer: true,
+                path: 'server/uploads/' + filename
+            });
+            return;
+        }
+
         if (typeof tizen === 'undefined' || !tizen.filesystem) {
             if (progressCallback) progressCallback(100);
             if (completionCallback) completionCallback(null, {

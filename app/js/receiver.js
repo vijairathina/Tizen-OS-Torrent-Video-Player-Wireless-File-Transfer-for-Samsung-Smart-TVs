@@ -136,8 +136,8 @@ window.FileReceiver = (function() {
         const isUsb = !!item.isUsb;
         console.log('[FileReceiver] Deleting received item:', name);
 
-        // 1. Delete from local disk
-        if (window.TVFilesystem && window.TVFilesystem.deleteFile) {
+        // 1. Delete from local disk if stored locally
+        if (!item.isServer && window.TVFilesystem && window.TVFilesystem.deleteFile) {
             window.TVFilesystem.deleteFile(name, isUsb, function(err) {
                 if (err) console.warn('[FileReceiver] TVFilesystem delete error:', err);
             });
@@ -232,7 +232,7 @@ window.FileReceiver = (function() {
         itemsToDelete.forEach(item => {
             const name = item.name || item.filename;
             if (!name) return;
-            if (window.TVFilesystem && window.TVFilesystem.deleteFile) {
+            if (!item.isServer && window.TVFilesystem && window.TVFilesystem.deleteFile) {
                 window.TVFilesystem.deleteFile(name, !!item.isUsb, function() {});
             }
             fetch(`http://${serverHostIP}:${transferPort}/delete_file?file=${encodeURIComponent(name)}`)
@@ -257,6 +257,11 @@ window.FileReceiver = (function() {
                 if (badge) {
                     badge.innerHTML = '<span class="status-dot active"></span><span>Receiver Ready</span>';
                 }
+                const pref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
+                sendSocketMessage({
+                    type: 'storage_mode_changed',
+                    mode: pref
+                });
             };
 
             websocketClient.onmessage = function(event) {
@@ -376,7 +381,7 @@ window.FileReceiver = (function() {
         card.tabIndex = 0;
 
         const actionText = isTorrent ? '▶️ Play in Video Player' : (isVideo ? '▶️ Play Video' : '📁 Open in Manager');
-        const badgeText = item.isUsb ? 'Saved to USB ✓' : 'Saved to Local Storage ✓';
+        const badgeText = item.isServer ? 'Saved to Server ✓' : (item.isUsb ? 'Saved to USB ✓' : 'Saved to Local Storage ✓');
 
         card.innerHTML = `
             <div class="transfer-top">
@@ -454,14 +459,75 @@ window.FileReceiver = (function() {
     }
 
     /**
-     * Downloads file payload from companion bridge and writes directly to storage (USB or Internal)
+     * Downloads file payload from companion bridge and writes directly to storage (USB, Local, or Server)
      */
     function fetchAndSaveToStorage(fileId, filename, totalBytes, downloadUrl) {
         const statusBadge = document.getElementById(`status-badge-${fileId}`);
         const bytesText = document.getElementById(`transfer-bytes-${fileId}`);
         const bar = document.getElementById(`progress-bar-${fileId}`);
 
-        const storage = window.TVFilesystem.getSelectedStorage();
+        const currentPref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
+        const storage = window.TVFilesystem ? window.TVFilesystem.getSelectedStorage() : null;
+        const isServerMode = (currentPref === 'server') || (storage && storage.isServer);
+
+        const fetchUrl = downloadUrl.startsWith('http') ? downloadUrl : `http://${serverHostIP}:${transferPort}${downloadUrl}`;
+
+        // Option: SERVER STORAGE (Retain on companion server, Zero TV space used!)
+        if (isServerMode) {
+            console.log(`[FileReceiver] Server mode selected: Retaining '${filename}' on companion server.`);
+            sendSocketMessage(`[FileReceiver] File retained on server: ${filename} (${totalBytes} bytes). Zero TV flash consumed.`);
+
+            if (bar) bar.style.width = '100%';
+            if (statusBadge) {
+                statusBadge.className = 'transfer-status-badge status-completed';
+                statusBadge.textContent = 'Saved to Server ✓';
+            }
+            if (bytesText) bytesText.textContent = `${window.TVFilesystem.formatBytes(totalBytes)} • Ready on Server`;
+
+            markTransferCompleted(fileId, filename, false, fetchUrl, totalBytes, true);
+
+            saveToHistory({
+                id: fileId,
+                name: filename,
+                size: totalBytes,
+                isUsb: false,
+                isServer: true,
+                streamUrl: filename.toLowerCase().endsWith('.torrent') ? '' : fetchUrl,
+                timestamp: Date.now()
+            });
+
+            showToast(`☁️ Stored on Server: ${filename} (Zero TV space used)`);
+
+            // If user sent a .torrent file
+            if (filename.toLowerCase().endsWith('.torrent')) {
+                const isAutoDownload = (!window.VideoPlayer || !window.VideoPlayer.isAutoTorrentDownloadEnabled) ?
+                    (localStorage.getItem('tvhub_auto_torrent_download') !== 'false') :
+                    window.VideoPlayer.isAutoTorrentDownloadEnabled();
+
+                if (window.VideoPlayer && window.VideoPlayer.registerTorrentDownload) {
+                    window.VideoPlayer.registerTorrentDownload(filename, totalBytes, fetchUrl);
+                }
+
+                if (isAutoDownload) {
+                    fetch(`http://${serverHostIP}:${transferPort}/start_torrent?file=${encodeURIComponent(filename)}&downloadOnly=true`)
+                        .catch(() => {});
+                    showToast(`⚡ Auto-downloading in background: ${cleanTorrentTitle(filename)}`);
+                } else {
+                    showToast(`Torrent Ready! Click 'Play in Video Player' to start streaming.`);
+                }
+
+                if (window.HomeLauncher && window.HomeLauncher.refreshData) {
+                    window.HomeLauncher.refreshData();
+                }
+            }
+
+            if (window.FileManager && window.FileManager.refreshCurrentFolder) {
+                window.FileManager.refreshCurrentFolder();
+            }
+            return;
+        }
+
+        // Option: USB or LOCAL STORAGE
         const destType = (storage && storage.isUsb) ? 'USB' : 'Local Storage';
 
         if (statusBadge) {
@@ -470,8 +536,6 @@ window.FileReceiver = (function() {
         }
         if (bytesText) bytesText.textContent = 'Writing to storage...';
         if (bar) bar.style.width = '65%';
-
-        const fetchUrl = downloadUrl.startsWith('http') ? downloadUrl : `http://${serverHostIP}:${transferPort}${downloadUrl}`;
         
         sendSocketMessage(`[FileReceiver] Fetching file from ${fetchUrl} (${totalBytes} bytes)...`);
 
@@ -561,7 +625,7 @@ window.FileReceiver = (function() {
             });
     }
 
-    function markTransferCompleted(fileId, finalName, isUsb, streamUrl, totalBytes) {
+    function markTransferCompleted(fileId, finalName, isUsb, streamUrl, totalBytes, isServer) {
         const statusBadge = document.getElementById(`status-badge-${fileId}`);
         const bar = document.getElementById(`progress-bar-${fileId}`);
         const bytesText = document.getElementById(`transfer-bytes-${fileId}`);
@@ -574,7 +638,7 @@ window.FileReceiver = (function() {
 
         if (statusBadge) {
             statusBadge.className = 'transfer-status-badge status-completed';
-            statusBadge.textContent = isUsb ? 'Saved to USB ✓' : 'Saved to Local Storage ✓';
+            statusBadge.textContent = isServer ? 'Saved to Server ✓' : (isUsb ? 'Saved to USB ✓' : 'Saved to Local Storage ✓');
         }
         if (bar) bar.style.width = '100%';
         if (bytesText) bytesText.textContent = `${window.TVFilesystem.formatBytes(totalBytes)} • Ready`;
