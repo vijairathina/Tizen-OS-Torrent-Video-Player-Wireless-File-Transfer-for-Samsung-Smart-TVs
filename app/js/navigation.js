@@ -178,9 +178,23 @@ window.Navigation = (function() {
             }
         }
 
-        // If inside an active view, focus the first element inside that view!
+        // If inside an active view, focus the primary logical element inside that view!
         const activeView = document.querySelector('.app-view.active-view');
         if (activeView) {
+            if (activeView.id === 'view-home') {
+                const target = document.getElementById('hero-btn-play') || document.getElementById('home-tile-player');
+                if (target) { setFocus(target); return; }
+            } else if (activeView.id === 'view-player') {
+                const target = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
+                if (target) { setFocus(target); return; }
+            } else if (activeView.id === 'view-receiver') {
+                const target = document.getElementById('receiver-clear-list-btn') || document.getElementById('receiver-usb-target');
+                if (target) { setFocus(target); return; }
+            } else if (activeView.id === 'view-filemanager') {
+                const target = document.querySelector('.storage-pill.active') || document.querySelector('.storage-pill') || document.getElementById('fm-up-btn');
+                if (target) { setFocus(target); return; }
+            }
+
             const viewFocusables = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(el => {
                 const rect = el.getBoundingClientRect();
                 const style = window.getComputedStyle(el);
@@ -196,6 +210,13 @@ window.Navigation = (function() {
                 setFocus(viewFocusables[0]);
                 return;
             }
+        }
+
+        // If no view element, focus the active tab in header
+        const activeTab = document.querySelector('.nav-tab.active') || document.querySelector('.nav-tab');
+        if (activeTab) {
+            setFocus(activeTab);
+            return;
         }
 
         const focusables = getVisibleFocusables();
@@ -278,117 +299,231 @@ window.Navigation = (function() {
             }
         }
 
-        // If current focus is on a header nav-tab, allow natural left/right navigation between tabs and down to view
+        // 1. Header Navigation Tabs (Home, Video Player, Receiver, File Manager)
         const headerNav = document.querySelector('.app-nav');
         if (headerNav && headerNav.contains(currentFocusedElement)) {
             const tabs = Array.from(headerNav.querySelectorAll('.nav-tab.focusable:not([disabled])'));
             const tabIdx = tabs.indexOf(currentFocusedElement);
             if (tabIdx !== -1) {
-                if (direction === 'left' && tabIdx > 0) {
-                    setFocus(tabs[tabIdx - 1]);
+                if (direction === 'left') {
+                    if (tabIdx > 0) {
+                        const targetTab = tabs[tabIdx - 1];
+                        setFocus(targetTab);
+                        const vName = targetTab.id.replace('tab-', '');
+                        if (window.App && window.App.switchView) {
+                            window.App.switchView(vName, false);
+                        }
+                    }
                     return;
-                } else if (direction === 'right' && tabIdx < tabs.length - 1) {
-                    setFocus(tabs[tabIdx + 1]);
+                } else if (direction === 'right') {
+                    if (tabIdx < tabs.length - 1) {
+                        const targetTab = tabs[tabIdx + 1];
+                        setFocus(targetTab);
+                        const vName = targetTab.id.replace('tab-', '');
+                        if (window.App && window.App.switchView) {
+                            window.App.switchView(vName, false);
+                        }
+                    } else if (tabIdx === tabs.length - 1) {
+                        const boostBtn = document.getElementById('header-boost-btn');
+                        if (boostBtn) setFocus(boostBtn);
+                    }
                     return;
                 } else if (direction === 'down') {
-                    // If current focused tab is not active, switch to it immediately
-                    if (!currentFocusedElement.classList.contains('active')) {
-                        currentFocusedElement.click();
-                        return;
+                    // Navigate down into the first element of this view
+                    const vName = currentFocusedElement.id.replace('tab-', '');
+                    if (window.App && window.App.switchView) {
+                        window.App.switchView(vName, false);
                     }
 
-                    // Special case for Video Player: snap directly to active sub-tab (Available Movies / Downloads)
-                    if (currentFocusedElement.id === 'tab-player') {
-                        const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
-                        if (subtab) {
-                            setFocus(subtab);
-                            return;
-                        }
-                    }
-
-                    // Special case for File Manager: snap to active storage pill
-                    if (currentFocusedElement.id === 'tab-filemanager') {
-                        const target = document.querySelector('.storage-pill.active') || document.querySelector('.storage-pill') || document.getElementById('fm-up-btn');
-                        if (target) {
-                            setFocus(target);
-                            return;
-                        }
-                    }
-
-                    // Special case for File Receiver: snap to clear list btn or target storage
-                    if (currentFocusedElement.id === 'tab-receiver') {
-                        const target = document.getElementById('receiver-clear-list-btn') || document.getElementById('receiver-usb-target');
-                        if (target) {
-                            setFocus(target);
-                            return;
-                        }
-                    }
-
-                    // Special case for Home: snap to first quick launch tile
                     if (currentFocusedElement.id === 'tab-home') {
-                        const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
-                        if (tile) {
-                            setFocus(tile);
-                            return;
-                        }
+                        const target = document.getElementById('hero-btn-play') || document.getElementById('home-tile-player');
+                        if (target) { setFocus(target); return; }
+                    } else if (currentFocusedElement.id === 'tab-player') {
+                        const target = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
+                        if (target) { setFocus(target); return; }
+                    } else if (currentFocusedElement.id === 'tab-receiver') {
+                        const target = document.getElementById('receiver-clear-list-btn') || document.getElementById('receiver-usb-target');
+                        if (target) { setFocus(target); return; }
+                    } else if (currentFocusedElement.id === 'tab-filemanager') {
+                        const target = document.querySelector('.storage-pill.active') || document.querySelector('.storage-pill') || document.getElementById('fm-up-btn');
+                        if (target) { setFocus(target); return; }
                     }
-
-                    // Fallback: Navigate down into the first element of the active view
-                    const activeView = document.querySelector('.app-view.active-view');
-                    if (activeView) {
-                        const viewCandidates = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(el => {
-                            const rect = el.getBoundingClientRect();
-                            return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).display !== 'none';
-                        });
-                        if (viewCandidates.length > 0) {
-                            setFocus(viewCandidates[0]);
-                            return;
-                        }
-                    }
+                    return;
                 } else if (direction === 'up') {
-                    // Stay on current tab
                     return;
                 }
             }
         }
 
-        // Sub-tabs in Video Player (Available Movies vs Active Downloads)
+        // Header Boost button
+        if (currentFocusedElement.id === 'header-boost-btn') {
+            if (direction === 'left') {
+                const tabFm = document.getElementById('tab-filemanager');
+                if (tabFm) { setFocus(tabFm); return; }
+            } else if (direction === 'down') {
+                focusInitialElement();
+                return;
+            } else if (direction === 'up' || direction === 'right') {
+                return;
+            }
+        }
+
+        // 2. HOME VIEW: Hero primary/secondary action buttons
+        if (currentFocusedElement.id === 'hero-btn-play' || currentFocusedElement.id === 'hero-btn-secondary') {
+            if (direction === 'up') {
+                const tabHome = document.getElementById('tab-home');
+                if (tabHome) { setFocus(tabHome); return; }
+            } else if (direction === 'right' && currentFocusedElement.id === 'hero-btn-play') {
+                const sec = document.getElementById('hero-btn-secondary');
+                if (sec) { setFocus(sec); return; }
+            } else if (direction === 'left' && currentFocusedElement.id === 'hero-btn-secondary') {
+                const pri = document.getElementById('hero-btn-play');
+                if (pri) { setFocus(pri); return; }
+            } else if (direction === 'down') {
+                const tile = (currentFocusedElement.id === 'hero-btn-play')
+                    ? document.getElementById('home-tile-player')
+                    : document.getElementById('home-tile-receiver');
+                if (tile) { setFocus(tile); return; }
+            }
+        }
+
+        // 3. HOME VIEW: Quick Launch Tiles (Player, Receiver, FileManager, Boost)
+        if (currentFocusedElement.classList.contains('home-tile')) {
+            const tileGrid = currentFocusedElement.closest('.home-tiles-grid');
+            if (tileGrid) {
+                const tiles = Array.from(tileGrid.querySelectorAll('.home-tile.focusable'));
+                const tIdx = tiles.indexOf(currentFocusedElement);
+                if (direction === 'left' && tIdx > 0) {
+                    setFocus(tiles[tIdx - 1]);
+                    return;
+                } else if (direction === 'right' && tIdx < tiles.length - 1) {
+                    setFocus(tiles[tIdx + 1]);
+                    return;
+                } else if (direction === 'up') {
+                    const heroBtn = (tIdx === 0) ? document.getElementById('hero-btn-play') : document.getElementById('hero-btn-secondary');
+                    if (heroBtn) { setFocus(heroBtn); return; }
+                } else if (direction === 'down') {
+                    const carouselCard = document.querySelector('#continue-watching-carousel .carousel-card.focusable');
+                    if (carouselCard) { setFocus(carouselCard); return; }
+                    const widget = document.getElementById('widget-storage') || document.querySelector('.dashboard-widget.focusable');
+                    if (widget) { setFocus(widget); return; }
+                }
+            }
+        }
+
+        // 4. HOME VIEW: Continue Watching Carousel Cards
+        if (currentFocusedElement.classList.contains('carousel-card')) {
+            const carousel = currentFocusedElement.closest('.media-carousel-container');
+            if (carousel) {
+                const cards = Array.from(carousel.querySelectorAll('.carousel-card.focusable'));
+                const cIdx = cards.indexOf(currentFocusedElement);
+                if (direction === 'left' && cIdx > 0) {
+                    setFocus(cards[cIdx - 1]);
+                    return;
+                } else if (direction === 'right' && cIdx < cards.length - 1) {
+                    setFocus(cards[cIdx + 1]);
+                    return;
+                } else if (direction === 'up') {
+                    const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
+                    if (tile) { setFocus(tile); return; }
+                } else if (direction === 'down') {
+                    const widget = document.getElementById('widget-storage') || document.querySelector('.dashboard-widget.focusable');
+                    if (widget) { setFocus(widget); return; }
+                }
+            }
+        }
+
+        // 5. HOME VIEW: Dashboard Widgets
+        if (currentFocusedElement.classList.contains('dashboard-widget')) {
+            const wGrid = currentFocusedElement.closest('.home-widgets-grid');
+            if (wGrid) {
+                const widgets = Array.from(wGrid.querySelectorAll('.dashboard-widget.focusable'));
+                const wIdx = widgets.indexOf(currentFocusedElement);
+                if (direction === 'left' && wIdx > 0) {
+                    setFocus(widgets[wIdx - 1]);
+                    return;
+                } else if (direction === 'right' && wIdx < widgets.length - 1) {
+                    setFocus(widgets[wIdx + 1]);
+                    return;
+                } else if (direction === 'up') {
+                    const carouselCard = document.querySelector('#continue-watching-carousel .carousel-card.focusable');
+                    if (carouselCard) { setFocus(carouselCard); return; }
+                    const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
+                    if (tile) { setFocus(tile); return; }
+                } else if (direction === 'down') {
+                    return;
+                }
+            }
+        }
+
+        // 6. VIDEO PLAYER: Top Action Icon Buttons
+        if (currentFocusedElement.classList.contains('player-header-btn')) {
+            const container = document.getElementById('player-header-actions');
+            if (container) {
+                const btns = Array.from(container.querySelectorAll('.player-header-btn.focusable'));
+                const bIdx = btns.indexOf(currentFocusedElement);
+                if (direction === 'left') {
+                    if (bIdx > 0) {
+                        setFocus(btns[bIdx - 1]);
+                        return;
+                    } else {
+                        const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-downloads');
+                        if (subtab) { setFocus(subtab); return; }
+                    }
+                } else if (direction === 'right') {
+                    if (bIdx < btns.length - 1) {
+                        setFocus(btns[bIdx + 1]);
+                        return;
+                    }
+                } else if (direction === 'up') {
+                    const tabPlayer = document.getElementById('tab-player');
+                    if (tabPlayer) { setFocus(tabPlayer); return; }
+                } else if (direction === 'down') {
+                    const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
+                    if (subtab) { setFocus(subtab); return; }
+                }
+            }
+        }
+
+        // 7. VIDEO PLAYER: Sub-tabs (Available Movies vs Active Downloads)
         if (currentFocusedElement.id === 'subtab-available' || currentFocusedElement.id === 'subtab-downloads') {
             if (direction === 'up') {
                 const tabPlayer = document.getElementById('tab-player');
-                if (tabPlayer) {
-                    setFocus(tabPlayer);
-                    return;
+                if (tabPlayer) { setFocus(tabPlayer); return; }
+            } else if (direction === 'right') {
+                if (currentFocusedElement.id === 'subtab-available') {
+                    const subDls = document.getElementById('subtab-downloads');
+                    if (subDls) {
+                        subDls.click();
+                        setFocus(subDls);
+                        return;
+                    }
+                } else {
+                    const refreshBtn = document.getElementById('player-card-refresh');
+                    if (refreshBtn) { setFocus(refreshBtn); return; }
                 }
-            } else if (direction === 'right' && currentFocusedElement.id === 'subtab-available') {
-                const subDls = document.getElementById('subtab-downloads');
-                if (subDls) {
-                    subDls.click();
-                    setFocus(subDls);
-                    return;
-                }
-            } else if (direction === 'left' && currentFocusedElement.id === 'subtab-downloads') {
-                const subAvail = document.getElementById('subtab-available');
-                if (subAvail) {
-                    subAvail.click();
-                    setFocus(subAvail);
-                    return;
+            } else if (direction === 'left') {
+                if (currentFocusedElement.id === 'subtab-downloads') {
+                    const subAvail = document.getElementById('subtab-available');
+                    if (subAvail) {
+                        subAvail.click();
+                        setFocus(subAvail);
+                        return;
+                    }
                 }
             } else if (direction === 'down') {
-                const activeContainer = (currentFocusedElement.id === 'subtab-available')
+                const isAvail = currentFocusedElement.id === 'subtab-available';
+                const activeContainer = isAvail
                     ? document.getElementById('player-available-list')
                     : document.getElementById('player-downloads-list');
                 if (activeContainer) {
                     const firstBtn = activeContainer.querySelector('.action-btn-play.focusable, .player-download-card.focusable, .focusable:not([disabled])');
-                    if (firstBtn) {
-                        setFocus(firstBtn);
-                        return;
-                    }
+                    if (firstBtn) { setFocus(firstBtn); return; }
                 }
             }
         }
 
-        // Inside Video Player movie cards / download items
+        // 8. VIDEO PLAYER: Movie cards / Download items
         const playerCard = currentFocusedElement.closest('.player-download-card');
         if (playerCard) {
             const listContainer = playerCard.closest('.player-downloads-list, .amnis-downloads-list');
@@ -396,27 +531,18 @@ window.Navigation = (function() {
                 const prevCard = playerCard.previousElementSibling;
                 if (prevCard && prevCard.classList.contains('player-download-card')) {
                     const prevBtn = prevCard.querySelector('.action-btn-play.focusable') || prevCard.querySelector('.focusable');
-                    if (prevBtn) {
-                        setFocus(prevBtn);
-                        return;
-                    }
+                    if (prevBtn) { setFocus(prevBtn); return; }
                 } else {
                     const subtab = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
-                    if (subtab) {
-                        setFocus(subtab);
-                        return;
-                    }
+                    if (subtab) { setFocus(subtab); return; }
                 }
             } else if (direction === 'down') {
                 const nextCard = playerCard.nextElementSibling;
                 if (nextCard && nextCard.classList.contains('player-download-card')) {
                     const nextBtn = nextCard.querySelector('.action-btn-play.focusable') || nextCard.querySelector('.focusable');
-                    if (nextBtn) {
-                        setFocus(nextBtn);
-                        return;
-                    }
+                    if (nextBtn) { setFocus(nextBtn); return; }
                 } else if (listContainer && listContainer.id === 'player-available-list') {
-                    // At bottom of available movies, pressing DOWN moves to active downloads subtab
+                    // At bottom of available movies, pressing DOWN smoothly transitions to downloads subtab
                     const subDls = document.getElementById('subtab-downloads');
                     if (subDls) {
                         subDls.click();
@@ -426,61 +552,148 @@ window.Navigation = (function() {
                 }
             } else if (direction === 'right' && currentFocusedElement.classList.contains('action-btn-play')) {
                 const delBtn = playerCard.querySelector('.action-btn-delete.focusable');
-                if (delBtn) {
-                    setFocus(delBtn);
-                    return;
-                }
+                if (delBtn) { setFocus(delBtn); return; }
             } else if (direction === 'left' && currentFocusedElement.classList.contains('action-btn-delete')) {
                 const playBtn = playerCard.querySelector('.action-btn-play.focusable');
-                if (playBtn) {
-                    setFocus(playBtn);
+                if (playBtn) { setFocus(playBtn); return; }
+            }
+        }
+
+        // 9. FILE RECEIVER: Target box and Clear List button
+        if (currentFocusedElement.id === 'receiver-usb-target' || currentFocusedElement.id === 'receiver-clear-list-btn') {
+            if (direction === 'up') {
+                const tabReceiver = document.getElementById('tab-receiver');
+                if (tabReceiver) { setFocus(tabReceiver); return; }
+            } else if (direction === 'right' && currentFocusedElement.id === 'receiver-usb-target') {
+                const clearBtn = document.getElementById('receiver-clear-list-btn');
+                if (clearBtn) { setFocus(clearBtn); return; }
+            } else if (direction === 'left' && currentFocusedElement.id === 'receiver-clear-list-btn') {
+                const usbBox = document.getElementById('receiver-usb-target');
+                if (usbBox) { setFocus(usbBox); return; }
+            } else if (direction === 'down') {
+                const firstCard = document.querySelector('#transfer-queue-list .transfer-card.focusable, #transfer-queue-list .action-btn-play.focusable');
+                if (firstCard) { setFocus(firstCard); return; }
+            }
+        }
+
+        // 10. FILE RECEIVER: Transfer queue items
+        if (currentFocusedElement.closest('#transfer-queue-list')) {
+            const queueList = document.getElementById('transfer-queue-list');
+            const items = Array.from(queueList.querySelectorAll('.focusable:not([disabled])'));
+            const qIdx = items.indexOf(currentFocusedElement);
+            if (direction === 'up') {
+                if (qIdx > 0) {
+                    setFocus(items[qIdx - 1]);
+                    return;
+                } else {
+                    const clearBtn = document.getElementById('receiver-clear-list-btn') || document.getElementById('tab-receiver');
+                    if (clearBtn) { setFocus(clearBtn); return; }
+                }
+            } else if (direction === 'down') {
+                if (qIdx < items.length - 1) {
+                    setFocus(items[qIdx + 1]);
+                    return;
+                }
+            } else if (direction === 'left') {
+                const usbBox = document.getElementById('receiver-usb-target');
+                if (usbBox) { setFocus(usbBox); return; }
+            }
+        }
+
+        // 11. FILE MANAGER: Storage selector pills & refresh button
+        if (currentFocusedElement.classList.contains('storage-pill') || currentFocusedElement.id === 'fm-refresh-btn') {
+            const container = document.getElementById('storage-pills-container');
+            const pills = container ? Array.from(container.querySelectorAll('.storage-pill.focusable')) : [];
+            const refreshBtn = document.getElementById('fm-refresh-btn');
+            const allTop = refreshBtn ? pills.concat([refreshBtn]) : pills;
+            const pIdx = allTop.indexOf(currentFocusedElement);
+
+            if (direction === 'up') {
+                const tabFm = document.getElementById('tab-filemanager');
+                if (tabFm) { setFocus(tabFm); return; }
+            } else if (direction === 'left' && pIdx > 0) {
+                setFocus(allTop[pIdx - 1]);
+                return;
+            } else if (direction === 'right' && pIdx < allTop.length - 1) {
+                setFocus(allTop[pIdx + 1]);
+                return;
+            } else if (direction === 'down') {
+                const navBtn = document.getElementById('fm-up-btn') || document.getElementById('fm-root-btn');
+                if (navBtn) { setFocus(navBtn); return; }
+            }
+        }
+
+        // 12. FILE MANAGER: Action bar (Up Level, Root, Received)
+        if (currentFocusedElement.id === 'fm-up-btn' || currentFocusedElement.id === 'fm-root-btn' || currentFocusedElement.id === 'fm-received-btn') {
+            const bar = document.querySelector('.fm-quick-nav-actions');
+            const btns = bar ? Array.from(bar.querySelectorAll('.osd-btn.focusable')) : [];
+            const bIdx = btns.indexOf(currentFocusedElement);
+
+            if (direction === 'up') {
+                const pill = document.querySelector('.storage-pill.active') || document.querySelector('.storage-pill') || document.getElementById('tab-filemanager');
+                if (pill) { setFocus(pill); return; }
+            } else if (direction === 'left' && bIdx > 0) {
+                setFocus(btns[bIdx - 1]);
+                return;
+            } else if (direction === 'right' && bIdx < btns.length - 1) {
+                setFocus(btns[bIdx + 1]);
+                return;
+            } else if (direction === 'down') {
+                const cards = Array.from(document.querySelectorAll('#fm-file-grid .file-item-card.focusable'));
+                if (cards.length > 0) {
+                    const targetIdx = Math.min(bIdx, cards.length - 1);
+                    setFocus(cards[targetIdx]);
                     return;
                 }
             }
         }
 
-        // File Manager navigation rules
+        // 13. FILE MANAGER: File Grid cards (3-column layout)
         if (currentFocusedElement.classList.contains('file-item-card')) {
-            if (direction === 'up') {
-                const grid = currentFocusedElement.closest('.file-grid');
-                if (grid) {
-                    const cards = Array.from(grid.querySelectorAll('.file-item-card.focusable'));
-                    const idx = cards.indexOf(currentFocusedElement);
-                    if (idx < 3) { // Top row in 3-column grid
-                        const navBtn = document.getElementById('fm-up-btn') || document.querySelector('.storage-pill.active') || document.getElementById('tab-filemanager');
-                        if (navBtn) {
-                            setFocus(navBtn);
+            const grid = currentFocusedElement.closest('.file-grid') || document.getElementById('fm-file-grid');
+            if (grid) {
+                const cards = Array.from(grid.querySelectorAll('.file-item-card.focusable'));
+                const cIdx = cards.indexOf(currentFocusedElement);
+                if (cIdx !== -1) {
+                    const numCards = cards.length;
+                    const col = cIdx % 3;
+                    const row = Math.floor(cIdx / 3);
+
+                    if (direction === 'left') {
+                        if (col > 0) {
+                            setFocus(cards[cIdx - 1]);
                             return;
                         }
+                    } else if (direction === 'right') {
+                        if (col < 2 && cIdx + 1 < numCards) {
+                            setFocus(cards[cIdx + 1]);
+                            return;
+                        }
+                    } else if (direction === 'up') {
+                        if (row === 0) {
+                            const navBtns = [
+                                document.getElementById('fm-up-btn'),
+                                document.getElementById('fm-root-btn'),
+                                document.getElementById('fm-received-btn')
+                            ].filter(Boolean);
+                            const targetNav = navBtns[Math.min(col, navBtns.length - 1)] || document.getElementById('tab-filemanager');
+                            if (targetNav) { setFocus(targetNav); return; }
+                        } else {
+                            setFocus(cards[cIdx - 3]);
+                            return;
+                        }
+                    } else if (direction === 'down') {
+                        if (cIdx + 3 < numCards) {
+                            setFocus(cards[cIdx + 3]);
+                            return;
+                        } else {
+                            const lastCardIdx = numCards - 1;
+                            if (Math.floor(lastCardIdx / 3) > row) {
+                                setFocus(cards[lastCardIdx]);
+                                return;
+                            }
+                        }
                     }
-                }
-            }
-        } else if (currentFocusedElement.classList.contains('storage-pill')) {
-            if (direction === 'up') {
-                const tabFm = document.getElementById('tab-filemanager');
-                if (tabFm) {
-                    setFocus(tabFm);
-                    return;
-                }
-            } else if (direction === 'down') {
-                const navBtn = document.getElementById('fm-up-btn') || document.querySelector('.file-item-card.focusable');
-                if (navBtn) {
-                    setFocus(navBtn);
-                    return;
-                }
-            }
-        } else if (currentFocusedElement.id === 'fm-up-btn' || currentFocusedElement.id === 'fm-root-btn' || currentFocusedElement.id === 'fm-received-btn' || currentFocusedElement.id === 'fm-refresh-btn') {
-            if (direction === 'up') {
-                const pill = document.querySelector('.storage-pill.active') || document.getElementById('tab-filemanager');
-                if (pill) {
-                    setFocus(pill);
-                    return;
-                }
-            } else if (direction === 'down') {
-                const firstCard = document.querySelector('.file-item-card.focusable');
-                if (firstCard) {
-                    setFocus(firstCard);
-                    return;
                 }
             }
         }
@@ -526,13 +739,12 @@ window.Navigation = (function() {
         if (bestCandidate) {
             setFocus(bestCandidate);
         } else if (direction === 'up') {
-            // If moving UP from anywhere at the top of the view, focus the active tab in header!
+            // If moving UP and no candidate found, focus this view's corresponding tab in header!
             const activeView = document.querySelector('.app-view.active-view');
-            if (activeView && activeView.contains(currentFocusedElement)) {
-                const activeTab = document.querySelector('.nav-tab.active') || document.querySelector('.nav-tab');
-                if (activeTab) {
-                    setFocus(activeTab);
-                }
+            const targetTabId = 'tab-' + (activeView ? activeView.id.replace('view-', '') : 'home');
+            const targetTab = document.getElementById(targetTabId) || document.querySelector('.nav-tab.active');
+            if (targetTab) {
+                setFocus(targetTab);
             }
         }
     }

@@ -143,15 +143,15 @@ window.FileManager = (function() {
             });
         }
 
-        // Pill 3: Raspberry Pi Hub (Server)
+        // Pill 3: Server Hub
         const isServerActive = activeStorage ? (activeStorage.label === 'server' || activeStorage.isServer) : false;
         const serverPill = document.createElement('button');
         serverPill.tabIndex = 0;
         serverPill.id = 'pill-storage-server';
         serverPill.className = `storage-pill focusable ${isServerActive ? 'active' : ''}`;
-        serverPill.innerHTML = `<span>⚡</span><span>Raspberry Pi Hub (Server)</span>`;
+        serverPill.innerHTML = `<span>⚡</span><span>Server Hub</span>`;
         serverPill.addEventListener('click', function() {
-            const srvObj = { label: 'server', displayName: 'Raspberry Pi Hub', isUsb: false, isServer: true };
+            const srvObj = { label: 'server', displayName: 'Server Hub', isUsb: false, isServer: true };
             window.TVFilesystem.setSelectedStorage('server', function(sel) {
                 renderStoragePills(safeStorages, sel || srvObj);
                 currentStorageRoot = 'server';
@@ -165,7 +165,7 @@ window.FileManager = (function() {
         if (curStorage && capacityText) {
             const avail = window.TVFilesystem.formatBytes(curStorage.availableSize);
             const total = window.TVFilesystem.formatBytes(curStorage.totalSize);
-            const typeLabel = curStorage.isServer ? 'Raspberry Pi Server Storage' : (curStorage.isUsb ? 'USB Storage' : 'Internal TV Storage');
+            const typeLabel = curStorage.isServer ? 'Server Storage' : (curStorage.isUsb ? 'USB Storage' : 'Internal TV Storage');
             capacityText.textContent = `${typeLabel}: ${avail} available of ${total}`;
         }
     }
@@ -179,7 +179,7 @@ window.FileManager = (function() {
             if (err) {
                 console.warn('[FileManager] browsePath error for', currentPath, err);
                 if (currentPath !== 'server') {
-                    window.FileReceiver.showToast('Switching to Raspberry Pi server files...');
+                    window.FileReceiver.showToast('Switching to Server files...');
                     currentPath = 'server';
                     currentStorageRoot = 'server';
                     navigateTo('server');
@@ -243,7 +243,7 @@ window.FileManager = (function() {
             const crumbBtn = document.createElement('button');
             crumbBtn.className = `breadcrumb-crumb focusable ${isLast ? 'active-crumb' : ''}`;
             crumbBtn.tabIndex = 0;
-            crumbBtn.textContent = part === 'server' ? 'Raspberry Pi Hub' : part;
+            crumbBtn.textContent = part === 'server' ? 'Server Hub' : part;
             crumbBtn.title = `Go to ${targetPath}`;
 
             if (!isLast) {

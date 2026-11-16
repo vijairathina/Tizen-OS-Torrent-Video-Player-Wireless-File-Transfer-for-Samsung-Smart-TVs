@@ -287,9 +287,9 @@ window.VideoPlayer = (function() {
                 // Update system status header
                 const statusEl = document.getElementById('player-system-status-text');
                 if (statusEl && data.system_status) {
-                    const modeText = data.system_status.mode_label || 'Connected to RPi';
+                    const modeText = data.system_status.mode_label || 'Connected to Server';
                     const seedText = data.system_status.seeding_status || 'Seeding Stopped';
-                    statusEl.textContent = `Raspberry Pi: ${modeText} • ${seedText}`;
+                    statusEl.textContent = `Server: ${modeText} • ${seedText}`;
                 }
 
                 // 1. Available Movies
@@ -335,9 +335,9 @@ window.VideoPlayer = (function() {
             listEl.innerHTML = `
                 <div class="empty-state" style="padding: 40px 16px; text-align: center;">
                     <div style="font-size: 46px; margin-bottom: 12px; filter: drop-shadow(0 0 16px rgba(16,185,129,0.4));">🎬</div>
-                    <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Completed Movies on Raspberry Pi</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Completed Movies on Server</div>
                     <div style="font-size: 15px; color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.6;">
-                        When background downloads finish on the Raspberry Pi hub, they will appear here ready for direct AVPlay streaming.
+                        When background downloads finish on the Server, they will appear here ready for direct AVPlay streaming.
                     </div>
                 </div>
             `;
@@ -368,7 +368,7 @@ window.VideoPlayer = (function() {
                     <div class="progress-fill" style="width: 100%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);"></div>
                 </div>
                 <div class="player-download-meta amnis-download-meta">
-                    <span>Size: <strong style="color:#ffffff;">${sizeStr}</strong> • Ready on Raspberry Pi Hub (Port 8080)</span>
+                    <span>Size: <strong style="color:#ffffff;">${sizeStr}</strong> • Ready on Server (Port 8080)</span>
                     <div class="player-download-actions amnis-download-actions">
                         <button class="action-btn-play focusable" id="play-movie-${mId}" tabindex="0" style="
                             background: linear-gradient(135deg, #10b981 0%, #00f2fe 100%);
@@ -380,7 +380,7 @@ window.VideoPlayer = (function() {
                             font-weight: 700;
                             cursor: pointer;
                         ">▶ Play Movie</button>
-                        <button class="action-btn-delete focusable" id="del-movie-${mId}" tabindex="0" title="Delete from Pi">🗑️ Delete</button>
+                        <button class="action-btn-delete focusable" id="del-movie-${mId}" tabindex="0" title="Delete from Server">🗑️ Delete</button>
                     </div>
                 </div>
             `;
@@ -473,7 +473,7 @@ window.VideoPlayer = (function() {
                     <div style="font-size: 46px; margin-bottom: 12px; filter: drop-shadow(0 0 16px rgba(0,242,254,0.4));">⚡</div>
                     <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Active Background Downloads</div>
                     <div style="font-size: 15px; color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.6;">
-                        Raspberry Pi is in Idle Mode. Send a .torrent from phone, or click <strong>Stream URL / Magnet</strong> above to begin downloading.
+                        Server is in Idle Mode. Send a .torrent from phone, or click <strong>Stream URL / Magnet</strong> above to begin downloading.
                     </div>
                 </div>
             `;
@@ -682,7 +682,7 @@ window.VideoPlayer = (function() {
         if (refreshCard) {
             refreshCard.addEventListener('click', () => {
                 if (window.FileReceiver && window.FileReceiver.showToast) {
-                    window.FileReceiver.showToast('Syncing with Raspberry Pi...');
+                    window.FileReceiver.showToast('Syncing with Server...');
                 }
                 fetchRPiDownloads();
             });

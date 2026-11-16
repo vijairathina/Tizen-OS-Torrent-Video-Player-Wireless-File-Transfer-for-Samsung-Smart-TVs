@@ -29,17 +29,17 @@ window.HomeLauncher = (function() {
 
         if (tilePlayer) {
             tilePlayer.addEventListener('click', () => {
-                if (window.App) window.App.switchView('player');
+                if (window.App) window.App.switchView('player', true);
             });
         }
         if (tileReceiver) {
             tileReceiver.addEventListener('click', () => {
-                if (window.App) window.App.switchView('receiver');
+                if (window.App) window.App.switchView('receiver', true);
             });
         }
         if (tileFileManager) {
             tileFileManager.addEventListener('click', () => {
-                if (window.App) window.App.switchView('filemanager');
+                if (window.App) window.App.switchView('filemanager', true);
             });
         }
         if (tileBoost) {
@@ -58,7 +58,7 @@ window.HomeLauncher = (function() {
         }
         if (heroSecondaryBtn) {
             heroSecondaryBtn.addEventListener('click', () => {
-                if (window.App) window.App.switchView('receiver');
+                if (window.App) window.App.switchView('receiver', true);
             });
         }
 

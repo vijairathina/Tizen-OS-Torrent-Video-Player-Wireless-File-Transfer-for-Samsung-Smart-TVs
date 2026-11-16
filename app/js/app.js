@@ -27,16 +27,16 @@ window.App = (function() {
         const tabPlayer = document.getElementById('tab-player') || document.getElementById('tab-amnis');
 
         if (tabHome) {
-            tabHome.addEventListener('click', () => switchView('home'));
+            tabHome.addEventListener('click', () => switchView('home', false));
         }
         if (tabReceiver) {
-            tabReceiver.addEventListener('click', () => switchView('receiver'));
+            tabReceiver.addEventListener('click', () => switchView('receiver', false));
         }
         if (tabFileManager) {
-            tabFileManager.addEventListener('click', () => switchView('filemanager'));
+            tabFileManager.addEventListener('click', () => switchView('filemanager', false));
         }
         if (tabPlayer) {
-            tabPlayer.addEventListener('click', () => switchView('player'));
+            tabPlayer.addEventListener('click', () => switchView('player', false));
         }
 
         // Initialize modules
@@ -60,7 +60,7 @@ window.App = (function() {
         console.log('[App] Application ready on Home Launcher.');
     }
 
-    function switchView(viewName) {
+    function switchView(viewName, shouldFocusView = false) {
         if (viewName === 'amnis') viewName = 'player';
         if (currentView === viewName) return;
 
@@ -99,9 +99,9 @@ window.App = (function() {
             }
         }
 
-        // Re-focus first element in new view
-        if (window.Navigation) {
-            setTimeout(window.Navigation.focusInitialElement, 80);
+        // Only move focus into the view if explicitly requested (e.g. from Home tile click)
+        if (shouldFocusView && window.Navigation) {
+            setTimeout(window.Navigation.focusInitialElement, 50);
         }
     }
 

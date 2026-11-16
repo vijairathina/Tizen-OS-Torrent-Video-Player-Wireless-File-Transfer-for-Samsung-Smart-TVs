@@ -2033,7 +2033,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 # When a torrent file is received, start downloading it in the background on the Raspberry Pi,
                 # even if the TV is offline or disconnected.
                 if filename.lower().endswith('.torrent'):
-                    print(f"[Queue] Received torrent file '{filename}'. Enqueuing autonomous background download on Raspberry Pi.")
+                    print(f"[Queue] Received torrent file '{filename}'. Enqueuing autonomous background download on Server.")
                     TORRENT_MANAGER.enqueue_torrent(filepath, filename=filename, high_priority=False)
 
                 # Broadcast notification to connected TV apps
