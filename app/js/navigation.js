@@ -55,6 +55,11 @@ window.Navigation = (function() {
         registerTizenKeys();
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('scroll', function() {
+            if (window.scrollX !== 0 || window.scrollY !== 0) {
+                window.scrollTo(0, 0);
+            }
+        }, { passive: false });
         // Default focus on first available tab or card
         setTimeout(focusInitialElement, 200);
     }
@@ -213,7 +218,31 @@ window.Navigation = (function() {
         currentFocusedElement = element;
         currentFocusedElement.classList.add('focused');
         currentFocusedElement.focus();
-        currentFocusedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        
+        // Only scroll internal list containers (e.g. downloads list, carousel, dialog list)
+        // Never allow the outer window or document body to scroll or drift off-axis!
+        const scrollContainer = currentFocusedElement.closest('.amnis-downloads-list, .player-downloads-list, .media-carousel-container, .transfer-list, .storage-dialog-list, .settings-panel, .episodes-dialog-list');
+        if (scrollContainer) {
+            const cRect = scrollContainer.getBoundingClientRect();
+            const eRect = currentFocusedElement.getBoundingClientRect();
+            if (eRect.top < cRect.top + 20) {
+                scrollContainer.scrollTop -= (cRect.top + 20 - eRect.top);
+            } else if (eRect.bottom > cRect.bottom - 20) {
+                scrollContainer.scrollTop += (eRect.bottom - (cRect.bottom - 20));
+            }
+        }
+        // Force window coordinates to always stay rigidly locked at (0, 0)
+        if (window.scrollX !== 0 || window.scrollY !== 0 || window.pageXOffset !== 0 || window.pageYOffset !== 0) {
+            window.scrollTo(0, 0);
+        }
+        if (document.documentElement.scrollTop !== 0 || document.documentElement.scrollLeft !== 0) {
+            document.documentElement.scrollTop = 0;
+            document.documentElement.scrollLeft = 0;
+        }
+        if (document.body.scrollTop !== 0 || document.body.scrollLeft !== 0) {
+            document.body.scrollTop = 0;
+            document.body.scrollLeft = 0;
+        }
     }
 
     function move(direction) {

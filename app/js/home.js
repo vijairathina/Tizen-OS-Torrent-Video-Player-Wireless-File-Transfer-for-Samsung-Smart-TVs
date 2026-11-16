@@ -123,6 +123,35 @@ window.HomeLauncher = (function() {
                 }
             }
         } catch (e) {}
+
+        // Fetch completed movies from Raspberry Pi hub so Home spotlight and carousel match the browser dashboard
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/api/downloads`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && Array.isArray(data.available_movies) && data.available_movies.length > 0) {
+                    let hasNew = false;
+                    data.available_movies.forEach(m => {
+                        if (!cachedHistory.some(h => (h.name || h.filename) === m.name)) {
+                            cachedHistory.push({
+                                name: m.name,
+                                cleanTitle: m.clean_title,
+                                size: m.size || 0,
+                                isUsb: false,
+                                isTorrent: false,
+                                isVideo: true,
+                                streamUrl: m.stream_url
+                            });
+                            hasNew = true;
+                        }
+                    });
+                    if (hasNew) {
+                        renderSpotlight();
+                        renderContinueWatching();
+                    }
+                }
+            })
+            .catch(() => {});
     }
 
     function getResumeMap() {

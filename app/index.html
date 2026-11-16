@@ -326,16 +326,20 @@
                         <div class="player-banner-info">
                             <div class="player-title amnis-title">
                                 <span style="color:#d8b4fe;">🎬</span>
-                                <span>Video Player</span>
+                                <span>Video Player &amp; Downloads</span>
                             </div>
-                            <div class="player-tagline amnis-tagline">Stream Torrents, Network URLs, &amp; Local Media with AVPlay</div>
+                            <div class="player-tagline amnis-tagline" id="player-system-status-text">Synced with Raspberry Pi • Autonomous Torrent Engine</div>
                         </div>
 
                         <!-- Top-Right Action Icon Buttons -->
                         <div class="player-header-actions" id="player-header-actions">
+                            <button class="player-header-btn focusable" id="player-card-refresh" tabindex="0" title="Refresh from Pi">
+                                <span class="btn-icon">🔄</span>
+                                <span class="btn-text">Refresh</span>
+                            </button>
                             <button class="player-header-btn focusable" id="player-card-load-file" tabindex="0" title="Browse Storage">
                                 <span class="btn-icon">📁</span>
-                                <span class="btn-text">Browse Storage</span>
+                                <span class="btn-text">Storage</span>
                             </button>
                             <button class="player-header-btn focusable" id="player-card-load-url" tabindex="0" title="From URL / Magnet">
                                 <span class="btn-icon">🔗</span>
@@ -352,28 +356,43 @@
                         </div>
                     </div>
 
-                    <!-- Active Downloads / Torrents Section (Expands to Large Screen) -->
-                    <div class="player-downloads-container amnis-downloads-container" id="player-downloads-container">
+                    <!-- Sub-tabs: Available Movies vs Active Downloads (Synced with Raspberry Pi) -->
+                    <div class="player-subtabs-row">
+                        <button class="player-subtab focusable active" id="subtab-available" tabindex="0">
+                            <span>✅ Available Movies</span>
+                            <span class="subtab-badge" id="badge-available-count">0</span>
+                        </button>
+                        <button class="player-subtab focusable" id="subtab-downloads" tabindex="0">
+                            <span>⚡ Active Downloads &amp; Queue</span>
+                            <span class="subtab-badge" id="badge-downloads-count">0</span>
+                        </button>
+                    </div>
+
+                    <!-- Panel 1: Available Movies on Raspberry Pi (Completed & Ready to Play) -->
+                    <div class="player-downloads-container amnis-downloads-container" id="player-available-container">
+                        <div class="player-downloads-header amnis-downloads-header">
+                            <div class="panel-title" style="margin-bottom:0; font-size:22px; display:flex; align-items:center; gap:10px;">
+                                <span style="color:#10b981;">🎬</span>
+                                <span>Completed Movies on Raspberry Pi</span>
+                            </div>
+                            <div class="queue-stats" id="player-available-stats">Loading...</div>
+                        </div>
+                        <div class="player-downloads-list amnis-downloads-list" id="player-available-list">
+                            <!-- Populated dynamically from /api/downloads available_movies -->
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Active & Queued Downloads on Raspberry Pi (Toggled via subtab) -->
+                    <div class="player-downloads-container amnis-downloads-container" id="player-downloads-container" style="display:none;">
                         <div class="player-downloads-header amnis-downloads-header">
                             <div class="panel-title" style="margin-bottom:0; font-size:22px; display:flex; align-items:center; gap:10px;">
                                 <span style="color:#00f2fe;">⚡</span>
-                                <span>Active Downloads &amp; Streams</span>
+                                <span>Active Downloads &amp; Background Queue</span>
                             </div>
                             <div class="queue-stats" id="player-downloads-stats">0 active streams</div>
                         </div>
                         <div class="player-downloads-list amnis-downloads-list" id="player-downloads-list">
-                            <!-- Empty State Placeholder -->
-                            <div class="empty-state" id="player-downloads-empty" style="padding: 60px 24px; text-align: center;">
-                                <div style="font-size: 52px; margin-bottom: 14px; filter: drop-shadow(0 0 18px rgba(0,242,254,0.45));">⚡</div>
-                                <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Active Downloads or Streams</div>
-                                <div style="font-size: 15px; color: var(--text-muted); max-width: 580px; margin: 0 auto 20px; line-height: 1.6;">
-                                    Send a <strong style="color:#00f2fe;">.torrent</strong> file wirelessly from your phone, stream from a <strong style="color:#d8b4fe;">🔗 URL / Magnet</strong>, or <strong style="color:#10b981;">📁 Browse Storage</strong> using the buttons in the top right.
-                                </div>
-                                <div style="display:flex; justify-content:center; gap:14px;">
-                                    <button class="btn-primary focusable" onclick="document.getElementById('player-card-load-url').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">🔗 Stream URL / Magnet</button>
-                                    <button class="btn-secondary focusable" onclick="document.getElementById('player-card-load-file').click();" tabindex="0" style="padding: 10px 24px; border-radius: 12px; font-size: 14px;">📁 Browse Storage Devices</button>
-                                </div>
-                            </div>
+                            <!-- Populated dynamically from /api/downloads currently_downloading -->
                         </div>
                     </div>
                 </div>

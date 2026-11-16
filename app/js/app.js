@@ -92,7 +92,9 @@ window.App = (function() {
             });
         } else if (viewName === 'player' || viewName === 'amnis') {
             const playerModule = window.VideoPlayer || window.Amnis;
-            if (playerModule && playerModule.renderDownloadsList) {
+            if (playerModule && playerModule.refreshRPiDownloads) {
+                playerModule.refreshRPiDownloads();
+            } else if (playerModule && playerModule.renderDownloadsList) {
                 playerModule.renderDownloadsList();
             }
         }

@@ -53,6 +53,9 @@ window.VideoPlayer = (function() {
     let pendingPlayTarget = null;
     let hudRefreshInterval = null;
     let currentHudTorrentTarget = null;
+    let rpiAvailableMovies = [];
+    let rpiDownloadingItems = [];
+    let activeSubtab = 'available';
 
     try {
         currentTheme = localStorage.getItem('tvhub_theme') || 'night';
@@ -63,9 +66,20 @@ window.VideoPlayer = (function() {
         setupCardEvents();
         setupDialogEvents();
         loadSavedDownloads();
+        fetchRPiDownloads();
         startStatsPolling();
         applyTheme(currentTheme);
         applyFontSize(currentFontSize);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     function cleanTorrentTitle(rawName) {
@@ -263,169 +277,135 @@ window.VideoPlayer = (function() {
         return existing;
     }
 
+    function fetchRPiDownloads() {
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/api/downloads`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data) return;
+
+                // Update system status header
+                const statusEl = document.getElementById('player-system-status-text');
+                if (statusEl && data.system_status) {
+                    const modeText = data.system_status.mode_label || 'Connected to RPi';
+                    const seedText = data.system_status.seeding_status || 'Seeding Stopped';
+                    statusEl.textContent = `Raspberry Pi: ${modeText} • ${seedText}`;
+                }
+
+                // 1. Available Movies
+                rpiAvailableMovies = Array.isArray(data.available_movies) ? data.available_movies : [];
+                renderAvailableMoviesList(rpiAvailableMovies);
+
+                // 2. Active & Queued Downloads
+                rpiDownloadingItems = Array.isArray(data.currently_downloading) ? data.currently_downloading : [];
+                renderRPiDownloadsList(rpiDownloadingItems);
+
+                // 3. Update badges & stats
+                const availBadge = document.getElementById('badge-available-count');
+                if (availBadge) availBadge.textContent = rpiAvailableMovies.length;
+
+                const dlBadge = document.getElementById('badge-downloads-count');
+                if (dlBadge) dlBadge.textContent = rpiDownloadingItems.length;
+
+                const availStats = document.getElementById('player-available-stats');
+                if (availStats) {
+                    availStats.textContent = `${rpiAvailableMovies.length} movie${rpiAvailableMovies.length === 1 ? '' : 's'} ready to stream`;
+                }
+
+                const dlStats = document.getElementById('player-downloads-stats');
+                if (dlStats) {
+                    dlStats.textContent = `${rpiDownloadingItems.length} active stream${rpiDownloadingItems.length === 1 ? '' : 's'}`;
+                }
+            })
+            .catch(err => {
+                console.warn('[VideoPlayer] fetchRPiDownloads error:', err);
+            });
+    }
+
     function renderDownloadsList() {
-        const listEl = document.getElementById('player-downloads-list') || document.getElementById('amnis-downloads-list');
-        const statsEl = document.getElementById('player-downloads-stats') || document.getElementById('amnis-downloads-stats');
+        renderAvailableMoviesList(rpiAvailableMovies);
+        renderRPiDownloadsList(rpiDownloadingItems);
+    }
+
+    function renderAvailableMoviesList(movies) {
+        const listEl = document.getElementById('player-available-list');
         if (!listEl) return;
 
-        if (statsEl) {
-            statsEl.textContent = `${activeDownloads.length} active stream${activeDownloads.length === 1 ? '' : 's'}`;
-        }
-
-        if (activeDownloads.length === 0) {
+        if (!movies || movies.length === 0) {
             listEl.innerHTML = `
-                <div class="empty-state" id="player-downloads-empty" style="padding: 24px 0;">
-                    <div style="font-size: 15px; color: var(--text-muted); text-align: center;">
-                        No active torrent downloads. Send a .torrent from phone, enter magnet URL, or browse storage.
+                <div class="empty-state" style="padding: 40px 16px; text-align: center;">
+                    <div style="font-size: 46px; margin-bottom: 12px; filter: drop-shadow(0 0 16px rgba(16,185,129,0.4));">🎬</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Completed Movies on Raspberry Pi</div>
+                    <div style="font-size: 15px; color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                        When background downloads finish on the Raspberry Pi hub, they will appear here ready for direct AVPlay streaming.
                     </div>
                 </div>
             `;
             return;
         }
 
+        const focusedId = document.activeElement ? document.activeElement.id : null;
+
         listEl.innerHTML = '';
-        activeDownloads.forEach(item => {
+        movies.forEach((movie, idx) => {
             const card = document.createElement('div');
-            // Remove 'focusable' from the outer card container so D-pad navigation targets the action buttons directly
             card.className = 'player-download-card amnis-download-card';
-            card.id = `player-card-${item.id}`;
+            const mId = movie.id || `avail-${idx}`;
+            card.id = `movie-card-${mId}`;
 
-            const progress = item.progress || 0;
-            const speed = item.speed || 'Connecting...';
-            const peers = item.peers || 0;
-            let status = item.status;
-            if (progress >= 100) {
-                status = status || 'Downloaded 100%';
-            } else {
-                if (!status || /downloaded 100%/i.test(status)) {
-                    status = progress > 0 ? `Downloading ${progress}%` : 'Connecting...';
-                }
-            }
-            const isDone = progress >= 100 && /downloaded 100%/i.test(status);
-
-            const totalMBStr = (item.totalBytes && item.totalBytes > 50 * 1024 * 1024) ? window.TVFilesystem.formatBytes(item.totalBytes) : (item.totalMB || '1.73 GB');
-            const completedMBStr = item.completedMB || `${progress}%`;
-
-            const isTorrent = item.name.toLowerCase().endsWith('.torrent') || (item.streamUrl && item.streamUrl.toLowerCase().endsWith('.torrent'));
-
-            if (item.episodes === undefined && isTorrent) {
-                checkTorrentEpisodes(item);
-            }
-
-            const hasEpisodes = item.episodes && item.episodes.length > 1;
-            const episodeBadgeText = hasEpisodes ? ` • <strong style="color:var(--primary-cyan);">📑 ${item.episodes.length} Episodes</strong>` : '';
+            const title = movie.clean_title || cleanTorrentTitle(movie.name);
+            const sizeStr = movie.size_formatted || (movie.size && window.TVFilesystem ? window.TVFilesystem.formatBytes(movie.size) : 'Ready');
 
             card.innerHTML = `
                 <div class="player-download-top amnis-download-top">
-                    <span class="player-download-title amnis-download-title" title="${item.cleanTitle}">🎬 ${item.cleanTitle}</span>
-                    <span class="player-download-badge amnis-download-badge ${isDone ? 'status-done' : ''}" id="player-badge-${item.id}">${status}</span>
+                    <span class="player-download-title amnis-download-title" title="${escapeHtml(title)}">🎬 ${escapeHtml(title)}</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="player-download-badge amnis-download-badge status-done">✓ 100% Downloaded</span>
+                        <span class="player-download-badge amnis-download-badge" style="background:rgba(100,116,139,0.25); border-color:rgba(148,163,184,0.4); color:#94a3b8;">Seeding Stopped</span>
+                    </div>
                 </div>
-                <div class="progress-track" style="height: 12px; margin: 4px 0;">
-                    <div class="progress-fill" id="player-bar-${item.id}" style="width: ${Math.max(progress, 2)}%; background: linear-gradient(90deg, #10b981 0%, #00f2fe 100%);"></div>
+                <div class="progress-track" style="height: 10px; margin: 4px 0;">
+                    <div class="progress-fill" style="width: 100%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);"></div>
                 </div>
                 <div class="player-download-meta amnis-download-meta">
-                    <span id="player-meta-${item.id}">Completed: <strong>${completedMBStr}</strong> / ${totalMBStr} • Speed: <strong style="color:var(--primary-cyan);">${speed}</strong> • <strong>${peers}</strong> peers${episodeBadgeText}</span>
+                    <span>Size: <strong style="color:#ffffff;">${sizeStr}</strong> • Ready on Raspberry Pi Hub (Port 8080)</span>
                     <div class="player-download-actions amnis-download-actions">
-                        <button class="action-btn-play focusable" id="player-play-${item.id}" tabindex="0" style="
-                            background: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
-                            color: #fff;
+                        <button class="action-btn-play focusable" id="play-movie-${mId}" tabindex="0" style="
+                            background: linear-gradient(135deg, #10b981 0%, #00f2fe 100%);
+                            color: #000;
                             border: none;
                             border-radius: 8px;
-                            padding: 6px 14px;
-                            font-size: 13px;
+                            padding: 6px 18px;
+                            font-size: 14px;
                             font-weight: 700;
                             cursor: pointer;
-                        ">▶️ Play Stream</button>
-                        ${hasEpisodes ? `
-                        <button class="action-btn-episodes focusable" id="player-episodes-${item.id}" tabindex="0" title="View Episodes" style="
-                            background: linear-gradient(135deg, #0284c7 0%, #00f2fe 100%);
-                            color: #fff;
-                            border: none;
-                            border-radius: 8px;
-                            padding: 6px 14px;
-                            font-size: 13px;
-                            font-weight: 700;
-                            cursor: pointer;
-                        ">📑 Episodes (${item.episodes.length})</button>
-                        ` : ''}
-                        <button class="action-btn-info focusable" id="player-info-${item.id}" tabindex="0" title="Torrent Details">ℹ️ Torrent Info</button>
-                        <button class="action-btn-delete focusable" id="player-del-${item.id}" tabindex="0" title="Delete Torrent">🗑️ Delete</button>
+                        ">▶ Play Movie</button>
+                        <button class="action-btn-delete focusable" id="del-movie-${mId}" tabindex="0" title="Delete from Pi">🗑️ Delete</button>
                     </div>
                 </div>
             `;
 
             const playBtn = card.querySelector('.action-btn-play');
-            const episodesBtn = card.querySelector('.action-btn-episodes');
-            const infoBtn = card.querySelector('.action-btn-info');
             const delBtn = card.querySelector('.action-btn-delete');
 
             const playAction = () => {
-                if (hasEpisodes && item.episodes && item.episodes.length > 1) {
-                    openEpisodesDialog(item);
-                    return;
+                console.log('[VideoPlayer] Playing completed movie from RPi:', movie.stream_url);
+                if (window.FileReceiver && window.FileReceiver.showToast) {
+                    window.FileReceiver.showToast(`Starting: ${title}...`);
                 }
-                isUserInitiatedPlay = true;
-                pendingPlayTarget = item.cleanTitle;
-                window.FileReceiver.showToast(`Loading: ${item.cleanTitle}...`);
-
-                // If already has direct port 8080 streaming link for an actual VIDEO file (not a .torrent metadata file), play immediately
-                if (!isTorrent && item.streamUrl && item.streamUrl.includes(':8080') && !item.streamUrl.toLowerCase().endsWith('.torrent')) {
-                    console.log('[VideoPlayer] Opening direct video URL:', item.streamUrl);
-                    isUserInitiatedPlay = false;
-                    pendingPlayTarget = null;
-                    window.Player.openMedia(item.streamUrl, item.cleanTitle);
-                    return;
-                }
-
-                // Query server for stream URL (starts stream or gives direct completed file link)
-                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
-                fetch(`${srvUrl}/start_torrent?file=${encodeURIComponent(item.name)}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        const finalUrl = (data && data.streamUrl) ? data.streamUrl : null;
-                        if (!finalUrl || finalUrl.toLowerCase().endsWith('.torrent')) {
-                            console.log('[VideoPlayer] Torrent started, waiting for stream URL broadcast...');
-                            window.FileReceiver.showToast('Connecting to swarm for video stream...');
-                            return;
-                        }
-                        item.streamUrl = finalUrl;
-                        saveDownloads();
-                        console.log('[VideoPlayer] Playing stream from server:', finalUrl);
-                        isUserInitiatedPlay = false;
-                        pendingPlayTarget = null;
-                        window.Player.openMedia(finalUrl, item.cleanTitle);
-                    })
-                    .catch(err => {
-                        console.warn('[VideoPlayer] start_torrent error:', err);
-                        window.FileReceiver.showToast('Connecting to swarm for stream...');
-                    });
+                window.Player.openMedia(movie.stream_url, title);
             };
 
             if (playBtn) playBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 playAction();
             });
-            if (episodesBtn) episodesBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openEpisodesDialog(item);
-            });
-            if (infoBtn) infoBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                console.log('[VideoPlayer] Torrent Info clicked for:', item.cleanTitle);
-                torrentStats.name = item.cleanTitle;
-                if (item.speed) torrentStats.speed = item.speed;
-                if (item.progress !== undefined) torrentStats.progress = item.progress;
-                if (item.completedMB) torrentStats.completedMB = item.completedMB;
-                if (item.totalMB) torrentStats.totalMB = item.totalMB;
-                if (item.peers !== undefined) torrentStats.peers = item.peers;
-                if (item.status) torrentStats.status = item.status;
-                if (item.streamUrl) torrentStats.streamUrl = item.streamUrl;
-                toggleTorrentInfoHud(true, item.name || item.cleanTitle);
-            });
+
             if (delBtn) delBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                deleteDownload(item);
+                deleteRPiMovie(movie);
             });
+
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.player-download-actions') || e.target.closest('button')) return;
                 playAction();
@@ -433,6 +413,215 @@ window.VideoPlayer = (function() {
 
             listEl.appendChild(card);
         });
+
+        if (focusedId) {
+            const reFocus = document.getElementById(focusedId);
+            if (reFocus && window.Navigation) {
+                window.Navigation.setFocus(reFocus);
+            }
+        }
+    }
+
+    function deleteRPiMovie(movie) {
+        console.log('[VideoPlayer] Deleting movie from RPi:', movie.name);
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+        fetch(`${srvUrl}/delete_file?file=${encodeURIComponent(movie.name)}`)
+            .then(res => res.json())
+            .then(() => {
+                if (window.FileReceiver && window.FileReceiver.showToast) {
+                    window.FileReceiver.showToast(`Deleted: ${movie.clean_title || movie.name}`);
+                }
+                fetchRPiDownloads();
+            })
+            .catch(err => {
+                console.warn('[VideoPlayer] Error deleting movie:', err);
+                fetchRPiDownloads();
+            });
+    }
+
+    function renderRPiDownloadsList(items) {
+        const listEl = document.getElementById('player-downloads-list') || document.getElementById('amnis-downloads-list');
+        if (!listEl) return;
+
+        // Merge any local activeDownloads not yet indexed in RPi items
+        const allItems = [...(items || [])];
+        activeDownloads.forEach(localItem => {
+            const exists = allItems.some(it => (it.name || '').toLowerCase() === (localItem.name || '').toLowerCase());
+            if (!exists && localItem.progress < 100) {
+                allItems.unshift({
+                    id: localItem.id,
+                    name: localItem.name,
+                    clean_title: localItem.cleanTitle || cleanTorrentTitle(localItem.name),
+                    priority: 'Highest',
+                    priority_badge: '⚡ Local Request',
+                    progress: localItem.progress || 1,
+                    speed: localItem.speed || 'Connecting...',
+                    upload_speed: '0 B/s (Stopped)',
+                    downloaded: localItem.completedMB || '0 MB',
+                    total: localItem.totalMB || '1.7 GB',
+                    peers: localItem.peers || 0,
+                    time_remaining: 'Buffering...',
+                    status: localItem.status || 'Connecting...',
+                    stream_url: localItem.streamUrl || ''
+                });
+            }
+        });
+
+        if (allItems.length === 0) {
+            listEl.innerHTML = `
+                <div class="empty-state" id="player-downloads-empty" style="padding: 40px 16px; text-align: center;">
+                    <div style="font-size: 46px; margin-bottom: 12px; filter: drop-shadow(0 0 16px rgba(0,242,254,0.4));">⚡</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">No Active Background Downloads</div>
+                    <div style="font-size: 15px; color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                        Raspberry Pi is in Idle Mode. Send a .torrent from phone, or click <strong>Stream URL / Magnet</strong> above to begin downloading.
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const focusedId = document.activeElement ? document.activeElement.id : null;
+
+        listEl.innerHTML = '';
+        allItems.forEach((item, idx) => {
+            const card = document.createElement('div');
+            card.className = 'player-download-card amnis-download-card';
+            const itemId = item.id || `dl-${idx}`;
+            card.id = `player-card-${itemId}`;
+
+            const title = item.clean_title || cleanTorrentTitle(item.name);
+            const progress = Math.min(100, Math.max(0, item.progress || 0));
+            const speed = item.speed || 'Connecting...';
+            const uploadSpeed = item.upload_speed || '0 B/s (Stopped)';
+            const peers = item.peers || 0;
+            const downloaded = item.downloaded || '0 MB';
+            const total = item.total || '1.7 GB';
+            const status = item.status || `Downloading ${progress}%`;
+            const isHighest = item.priority === 'Highest';
+            const priorityBadge = item.priority_badge || (isHighest ? '⚡ Highest Priority' : '🕒 Queued');
+
+            card.innerHTML = `
+                <div class="player-download-top amnis-download-top">
+                    <span class="player-download-title amnis-download-title" title="${escapeHtml(title)}">⚡ ${escapeHtml(title)}</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="player-download-badge amnis-download-badge ${isHighest ? 'status-done' : ''}">${priorityBadge}</span>
+                        <span class="player-download-badge amnis-download-badge" id="player-badge-${itemId}">${status}</span>
+                    </div>
+                </div>
+                <div class="progress-track" style="height: 10px; margin: 4px 0;">
+                    <div class="progress-fill" id="player-bar-${itemId}" style="width: ${Math.max(progress, 2)}%; background: linear-gradient(90deg, #7b2cbf 0%, #00f2fe 100%);"></div>
+                </div>
+                <div class="player-download-meta amnis-download-meta">
+                    <span id="player-meta-${itemId}">Speed: <strong style="color:var(--primary-cyan);">${speed}</strong> • Upload: <strong style="color:#10b981;">${uploadSpeed}</strong> • Data: <strong>${downloaded} / ${total}</strong> • <strong>${peers}</strong> peers</span>
+                    <div class="player-download-actions amnis-download-actions">
+                        <button class="action-btn-play focusable" id="player-play-${itemId}" tabindex="0" style="
+                            background: linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%);
+                            color: #fff;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 6px 16px;
+                            font-size: 13px;
+                            font-weight: 700;
+                            cursor: pointer;
+                        ">${item.stream_url ? '▶ Play Stream' : '⚡ Prioritize &amp; Stream'}</button>
+                        ${!isHighest ? `
+                        <button class="action-btn-info focusable" id="player-pri-${itemId}" tabindex="0" title="Promote to Highest Priority" style="background:rgba(0,242,254,0.18); border-color:#00f2fe; color:#00f2fe;">⚡ Prioritize</button>
+                        ` : ''}
+                        <button class="action-btn-info focusable" id="player-info-${itemId}" tabindex="0" title="Torrent Details">ℹ️ Torrent Info</button>
+                        <button class="action-btn-delete focusable" id="player-del-${itemId}" tabindex="0" title="Cancel Download">🗑️ Cancel</button>
+                    </div>
+                </div>
+            `;
+
+            const playBtn = card.querySelector('.action-btn-play');
+            const priBtn = card.querySelector(`#player-pri-${itemId}`);
+            const infoBtn = card.querySelector(`#player-info-${itemId}`);
+            const delBtn = card.querySelector('.action-btn-delete');
+
+            const playAction = () => {
+                isUserInitiatedPlay = true;
+                pendingPlayTarget = title;
+                if (window.FileReceiver && window.FileReceiver.showToast) {
+                    window.FileReceiver.showToast(`Connecting stream for: ${title}...`);
+                }
+
+                if (item.stream_url && !item.stream_url.toLowerCase().endsWith('.torrent')) {
+                    isUserInitiatedPlay = false;
+                    pendingPlayTarget = null;
+                    window.Player.openMedia(item.stream_url, title);
+                    return;
+                }
+
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/start_torrent?file=${encodeURIComponent(item.name)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const finalUrl = (data && data.streamUrl) ? data.streamUrl : null;
+                        if (finalUrl && !finalUrl.toLowerCase().endsWith('.torrent')) {
+                            isUserInitiatedPlay = false;
+                            pendingPlayTarget = null;
+                            window.Player.openMedia(finalUrl, title);
+                        } else {
+                            if (window.FileReceiver && window.FileReceiver.showToast) {
+                                window.FileReceiver.showToast('Prioritized! Waiting for stream buffer...');
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('[VideoPlayer] Play stream error:', err);
+                    });
+            };
+
+            if (playBtn) playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playAction();
+            });
+
+            if (priBtn) priBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/api/prioritize?file=${encodeURIComponent(item.name)}`)
+                    .then(() => {
+                        if (window.FileReceiver && window.FileReceiver.showToast) {
+                            window.FileReceiver.showToast(`Promoted ${title} to Highest Priority!`);
+                        }
+                        fetchRPiDownloads();
+                    })
+                    .catch(() => {});
+            });
+
+            if (infoBtn) infoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                torrentStats.name = title;
+                if (item.speed) torrentStats.speed = item.speed;
+                if (item.progress !== undefined) torrentStats.progress = item.progress;
+                if (item.downloaded) torrentStats.completedMB = item.downloaded;
+                if (item.total) torrentStats.totalMB = item.total;
+                if (item.peers !== undefined) torrentStats.peers = item.peers;
+                if (item.status) torrentStats.status = item.status;
+                if (item.stream_url) torrentStats.streamUrl = item.stream_url;
+                toggleTorrentInfoHud(true, item.name || title);
+            });
+
+            if (delBtn) delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteDownload(item);
+            });
+
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.player-download-actions') || e.target.closest('button')) return;
+                playAction();
+            });
+
+            listEl.appendChild(card);
+        });
+
+        if (focusedId) {
+            const reFocus = document.getElementById(focusedId);
+            if (reFocus && window.Navigation) {
+                window.Navigation.setFocus(reFocus);
+            }
+        }
     }
 
     function deleteDownload(item) {
@@ -451,20 +640,11 @@ window.VideoPlayer = (function() {
         // 3. Remove from active downloads
         activeDownloads = activeDownloads.filter(d => d.id !== item.id && d.name !== item.name);
         saveDownloads();
-        renderDownloadsList();
+        fetchRPiDownloads();
 
-        window.FileReceiver.showToast(`Removed: ${item.cleanTitle}`);
-        setTimeout(() => {
-            const nextCard = document.querySelector('.player-download-card, .amnis-download-card');
-            if (nextCard && window.Navigation) {
-                window.Navigation.setFocus(nextCard);
-            } else {
-                const firstCard = document.getElementById('player-card-load-file') || document.getElementById('amnis-card-load-file');
-                if (firstCard && window.Navigation) {
-                    window.Navigation.setFocus(firstCard);
-                }
-            }
-        }, 50);
+        if (window.FileReceiver && window.FileReceiver.showToast) {
+            window.FileReceiver.showToast(`Removed: ${item.clean_title || item.cleanTitle || item.name}`);
+        }
     }
 
     function setupCardEvents() {
@@ -472,6 +652,41 @@ window.VideoPlayer = (function() {
         const loadUrlCard = document.getElementById('player-card-load-url') || document.getElementById('amnis-card-load-url');
         const addonsCard = document.getElementById('player-card-addons') || document.getElementById('amnis-card-addons');
         const settingsCard = document.getElementById('player-card-settings') || document.getElementById('amnis-card-settings');
+        const refreshCard = document.getElementById('player-card-refresh');
+
+        const subtabAvail = document.getElementById('subtab-available');
+        const subtabDls = document.getElementById('subtab-downloads');
+        const panelAvail = document.getElementById('player-available-container');
+        const panelDls = document.getElementById('player-downloads-container');
+
+        if (subtabAvail && subtabDls) {
+            subtabAvail.addEventListener('click', () => {
+                subtabAvail.classList.add('active');
+                subtabDls.classList.remove('active');
+                if (panelAvail) panelAvail.style.display = 'flex';
+                if (panelDls) panelDls.style.display = 'none';
+                activeSubtab = 'available';
+                fetchRPiDownloads();
+            });
+
+            subtabDls.addEventListener('click', () => {
+                subtabDls.classList.add('active');
+                subtabAvail.classList.remove('active');
+                if (panelAvail) panelAvail.style.display = 'none';
+                if (panelDls) panelDls.style.display = 'flex';
+                activeSubtab = 'downloads';
+                fetchRPiDownloads();
+            });
+        }
+
+        if (refreshCard) {
+            refreshCard.addEventListener('click', () => {
+                if (window.FileReceiver && window.FileReceiver.showToast) {
+                    window.FileReceiver.showToast('Syncing with Raspberry Pi...');
+                }
+                fetchRPiDownloads();
+            });
+        }
 
         if (loadFileCard) {
             loadFileCard.addEventListener('click', openStorageDialog);
@@ -637,7 +852,12 @@ window.VideoPlayer = (function() {
 
     function startStatsPolling() {
         if (statsPollInterval) return;
-        statsPollInterval = setInterval(fetchTorrentStats, 1500);
+        fetchRPiDownloads();
+        fetchTorrentStats();
+        statsPollInterval = setInterval(() => {
+            fetchRPiDownloads();
+            fetchTorrentStats();
+        }, 2500);
     }
 
     function fetchTorrentStats() {
@@ -1459,6 +1679,8 @@ window.VideoPlayer = (function() {
         onTorrentStatsUpdate: onTorrentStatsUpdate,
         registerTorrentDownload: registerTorrentDownload,
         renderDownloadsList: renderDownloadsList,
+        refreshRPiDownloads: fetchRPiDownloads,
+        getAvailableMovies: function() { return rpiAvailableMovies; },
         renderStorageSettingsOptions: renderStorageSettingsOptions,
         isAutoTorrentDownloadEnabled: isAutoTorrentDownloadEnabled,
         setAutoTorrentDownload: setAutoTorrentDownload,
