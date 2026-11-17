@@ -61,6 +61,39 @@ def get_mime_type(filepath):
     elif ext == 'torrent': return 'application/x-bittorrent'
     return 'application/octet-stream'
 
+def ensure_mkv_cues(filepath):
+    """Ensures an MKV file contains a valid Cues index table for Samsung TV AVPlay seeking."""
+    if not filepath or not os.path.exists(filepath) or not filepath.lower().endswith('.mkv'):
+        return False
+    try:
+        size = os.path.getsize(filepath)
+        if size < 1024 * 1024:
+            return False
+        with open(filepath, 'rb') as f:
+            f.seek(max(0, size - 500000))
+            tail = f.read()
+            if b'\x1c\x53\xbb\x6b' in tail:
+                return True
+
+        mkvmerge_bin = shutil.which('mkvmerge')
+        if not mkvmerge_bin:
+            return False
+
+        print(f"[MKV Cues] Repairing missing seek table in '{os.path.basename(filepath)}' using mkvmerge...")
+        tmp_fixed = filepath + '.cues_fix.mkv'
+        res = subprocess.run([mkvmerge_bin, '-o', tmp_fixed, filepath],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        if res.returncode in (0, 1) and os.path.exists(tmp_fixed):
+            os.replace(tmp_fixed, filepath)
+            print(f"[MKV Cues] Successfully rebuilt seek table for '{os.path.basename(filepath)}'")
+            return True
+        elif os.path.exists(tmp_fixed):
+            try: os.remove(tmp_fixed)
+            except Exception: pass
+    except Exception as e:
+        print(f"[MKV Cues] Error checking/fixing cues in '{filepath}': {e}")
+    return False
+
 def find_media_file(filename_or_query):
     """Finds an exact uploaded or downloaded file on disk."""
     if not filename_or_query:
@@ -283,7 +316,7 @@ def is_torrent_fully_downloaded(torrent_path_or_filename):
             for root, _, disk_files in os.walk(DOWNLOADS_DIR):
                 if exp_name in disk_files:
                     fp = os.path.join(root, exp_name)
-                    if os.path.exists(fp + '.done') or os.path.getsize(fp) >= exp_size * 0.99:
+                    if os.path.exists(fp + '.done') or os.path.getsize(fp) >= exp_size:
                         try:
                             with open(fp + '.done', 'w') as df: df.write('1')
                             with open(os.path.join(DOWNLOADS_DIR, stem + '.done'), 'w') as df: df.write('1')
@@ -311,11 +344,12 @@ def is_torrent_fully_downloaded(torrent_path_or_filename):
 
         actual_size = os.path.getsize(found_fp)
         has_marker = os.path.exists(found_fp + '.done') or os.path.exists(os.path.join(DOWNLOADS_DIR, v_name + '.done'))
-        if has_marker or (v_len > 0 and actual_size >= v_len * 0.99):
+        if has_marker or (v_len > 0 and actual_size >= v_len):
             found_count += 1
             if not has_marker:
                 try:
                     with open(found_fp + '.done', 'w') as df: df.write('1')
+                    ensure_mkv_cues(found_fp)
                 except Exception: pass
         else:
             all_done = False
@@ -758,6 +792,8 @@ class TorrentStreamManager:
                     try:
                         with open(done_path, 'w') as df:
                             df.write('1')
+                        fp = find_media_file(v_name)
+                        if fp: ensure_mkv_cues(fp)
                     except Exception:
                         pass
                     print(f"[TorrentEngine] 100% Downloaded! Direct HTTP stream available: {direct_url}")
@@ -1072,6 +1108,8 @@ class TorrentStreamManager:
                     try:
                         with open(done_path, 'w') as df:
                             df.write('1')
+                        fp = find_media_file(v_name)
+                        if fp: ensure_mkv_cues(fp)
                     except Exception:
                         pass
                     print(f"[Queue] Background Download 100% completed: {v_name}")
@@ -1646,6 +1684,8 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             filename = urllib.parse.unquote(path.split('/', 2)[-1])
             filepath = find_media_file(filename)
             if filepath and os.path.exists(filepath) and os.path.isfile(filepath):
+                if filepath.lower().endswith('.mkv'):
+                    ensure_mkv_cues(filepath)
                 file_size = os.path.getsize(filepath)
                 content_type = get_mime_type(filepath)
                 range_header = self.headers.get('Range')
@@ -1739,6 +1779,8 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             filename = urllib.parse.unquote(path.split('/', 2)[-1])
             filepath = find_media_file(filename)
             if filepath and os.path.exists(filepath) and os.path.isfile(filepath):
+                if filepath.lower().endswith('.mkv'):
+                    ensure_mkv_cues(filepath)
                 file_size = os.path.getsize(filepath)
                 range_header = self.headers.get('Range')
                 content_type = get_mime_type(filepath)

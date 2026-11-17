@@ -117,14 +117,12 @@ client.add(torrentInput, {
 
     const targetFile = torrent.files[fileIdx];
 
-    // Select ALL valid media and subtitle files for high-speed parallel swarm downloading
-    torrent.files.forEach((f, idx) => {
-        const isJunk = f.name.startsWith('.pad') || f.path.includes('.pad') || /^\d+$/.test(f.name) || !/\.(mkv|mp4|avi|mov|webm|ts|srt|vtt)$/i.test(f.name);
-        if (isJunk) {
-            try { f.deselect(); } catch (e) {}
-        } else {
-            try { f.select(); } catch (e) {}
-        }
+    // Select ALL files in the torrent swarm.
+    // CRITICAL: Do NOT deselect .pad files or small files!
+    // BitTorrent pieces span file boundaries; deselecting padding files deselects the shared
+    // boundary piece at the end of the video, which drops the MKV Cues (seek index table).
+    torrent.files.forEach((f) => {
+        try { f.select(); } catch (e) {}
     });
 
     console.log(`[TorrentEngine] High-speed swarm downloading enabled for all media files in: ${torrent.name}`);
@@ -251,7 +249,7 @@ client.add(torrentInput, {
     const checkCompletion = () => {
         if (hasCleanedUp) return;
         const videoFiles = torrent.files.filter(f => /\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name));
-        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.progress >= 0.999 || f.downloaded >= f.length));
+        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.downloaded >= f.length || f.progress >= 1.0));
 
         if (torrent.done || allVideosDone) {
             hasCleanedUp = true;
@@ -312,7 +310,7 @@ client.add(torrentInput, {
     setInterval(() => {
         checkCompletion();
         const videoFiles = torrent.files.filter(f => /\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name));
-        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.progress >= 0.999 || f.downloaded >= f.length));
+        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.downloaded >= f.length || f.progress >= 1.0));
         const isDone = !!torrent.done || allVideosDone;
         const uploadStr = isDone ? '0 B/s (Seeding Stopped)' : (torrent.uploadSpeed > 0 ? (formatBytes(torrent.uploadSpeed) + '/s') : '0 B/s (Active)');
         const statusStr = isDone ? 'Completed (Seeding Stopped)' : (torrent.numPeers > 0 ? (isDownloadOnly ? 'Downloading in Background' : 'Downloading & Streaming') : 'Connecting to Peers...');
