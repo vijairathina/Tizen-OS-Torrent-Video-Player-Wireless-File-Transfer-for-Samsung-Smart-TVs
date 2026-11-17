@@ -52,13 +52,22 @@ const PUBLIC_TRACKERS = [
     'udp://new-line.net:6969/announce'
 ];
 
+process.on('uncaughtException', err => {
+    if (err && (err.code === 'ECONNRESET' || err.message?.includes('ECONNRESET') || err.message?.includes('UTP'))) {
+        return;
+    }
+    console.error('[TorrentEngine] Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[TorrentEngine] Unhandled rejection:', reason);
+});
+
 // 3. WebTorrent Client with high peer limits and peer discovery protocols enabled
-// Note: utp is set to false because utp-native can crash with unhandled UTP_ECONNRESET on Linux / Raspberry Pi
 const client = new WebTorrent({
-    maxConns: 250,      // Allow up to 250 peer connections
+    maxConns: 300,      // Allow up to 300 peer connections
     dht: true,          // Distributed Hash Table peer discovery
     lsd: true,          // Local Peer Discovery
-    utp: false          // Pure TCP connections for rock-solid stability and throughput
+    utp: true           // Enable uTP (UDP) for high-speed swarm connections and peer discovery
 });
 
 function formatBytes(bytes) {
@@ -73,8 +82,8 @@ function formatBytes(bytes) {
 client.add(torrentInput, {
     path: downloadDir,
     announce: PUBLIC_TRACKERS,
-    maxWebConns: 20,
-    uploads: 50         // Allow up to 50 active upload slots for reciprocal tit-for-tat peer trading
+    maxWebConns: 25,
+    uploads: 100         // Allow up to 100 active upload slots for reciprocal tit-for-tat peer trading
 }, torrent => {
     console.log('[TorrentEngine] Torrent ready:', torrent.name);
 
@@ -238,65 +247,73 @@ client.add(torrentInput, {
         console.log(`[ENGINE_BG_DOWNLOAD] Background sequential downloading active for: ${torrent.name}`);
     }
 
-    torrent.on('done', () => {
-        console.log(`[ENGINE_DONE] ${torrent.name}`);
-        // Mark all video files as done
-        torrent.files.forEach(f => {
-            if (/\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name)) {
+    let hasCleanedUp = false;
+    const checkCompletion = () => {
+        if (hasCleanedUp) return;
+        const videoFiles = torrent.files.filter(f => /\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name));
+        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.progress >= 0.999 || f.downloaded >= f.length));
+
+        if (torrent.done || allVideosDone) {
+            hasCleanedUp = true;
+            console.log(`[ENGINE_DONE] ${torrent.name}`);
+            videoFiles.forEach(f => {
                 console.log(`[ENGINE_DOWNLOADED_FILE] ${f.name}`);
                 try {
                     const markerPath = path.join(downloadDir, `${f.name}.done`);
                     fs.writeFileSync(markerPath, '1', 'utf-8');
                 } catch (e) {}
+            });
+            try {
+                const torrentMarker = path.join(downloadDir, `${torrent.name}.done`);
+                fs.writeFileSync(torrentMarker, '1', 'utf-8');
+            } catch (e) {}
+
+            console.log(`[ENGINE_STOP_SEEDING] ${torrent.name}`);
+            console.log(`[TorrentEngine] Torrent 100% complete. Uploading/seeding stopped.`);
+            try {
+                torrent.pause();
+                if (torrent.wires) {
+                    torrent.wires.forEach(w => {
+                        try { w.choke(); } catch (e) {}
+                    });
+                }
+            } catch (e) {
+                console.warn('[TorrentEngine] Error pausing seeding wires:', e);
             }
-        });
-        try {
-            const torrentMarker = path.join(downloadDir, `${torrent.name}.done`);
-            fs.writeFileSync(torrentMarker, '1', 'utf-8');
-        } catch (e) {}
 
-        // Stop uploading/seeding as required by priority download system
-        console.log(`[ENGINE_STOP_SEEDING] ${torrent.name}`);
-        console.log(`[TorrentEngine] Torrent 100% complete. Uploading/seeding stopped.`);
-        try {
-            torrent.pause();
-            if (torrent.wires) {
-                torrent.wires.forEach(w => {
-                    try { w.choke(); } catch (e) {}
-                });
+            const finalStats = {
+                name: torrent.name,
+                progress: 100,
+                downloadSpeed: '0 B/s',
+                uploadSpeed: '0 B/s (Seeding Stopped)',
+                downloaded: formatBytes(torrent.length),
+                total: formatBytes(torrent.length),
+                peers: 0,
+                timeRemaining: '0s',
+                status: 'Completed (Seeding Stopped)',
+                completed: true
+            };
+            console.log(`[ENGINE_STATS] ${JSON.stringify(finalStats)}`);
+
+            if (isDownloadOnly) {
+                console.log(`[ENGINE_BG_COMPLETE] ${torrent.name}`);
+                console.log(`[TorrentEngine] Background download finished. Exiting process cleanly.`);
+                setTimeout(() => {
+                    try { torrent.destroy(); } catch (e) {}
+                    try { client.destroy(); } catch (e) {}
+                    process.exit(0);
+                }, 1000);
             }
-        } catch (e) {
-            console.warn('[TorrentEngine] Error pausing seeding wires:', e);
         }
+    };
 
-        // Final completion stats broadcast
-        const finalStats = {
-            name: torrent.name,
-            progress: 100,
-            downloadSpeed: '0 B/s',
-            uploadSpeed: '0 B/s (Seeding Stopped)',
-            downloaded: formatBytes(torrent.length),
-            total: formatBytes(torrent.length),
-            peers: 0,
-            timeRemaining: '0s',
-            status: 'Completed (Seeding Stopped)',
-            completed: true
-        };
-        console.log(`[ENGINE_STATS] ${JSON.stringify(finalStats)}`);
-
-        if (isDownloadOnly) {
-            console.log(`[ENGINE_BG_COMPLETE] ${torrent.name}`);
-            console.log(`[TorrentEngine] Background download finished. Exiting process cleanly.`);
-            setTimeout(() => {
-                try { torrent.destroy(); } catch (e) {}
-                try { client.destroy(); } catch (e) {}
-                process.exit(0);
-            }, 1000);
-        }
-    });
+    torrent.on('done', checkCompletion);
 
     setInterval(() => {
-        const isDone = !!torrent.done;
+        checkCompletion();
+        const videoFiles = torrent.files.filter(f => /\.(mkv|mp4|avi|mov|webm|ts)$/i.test(f.name));
+        const allVideosDone = videoFiles.length > 0 && videoFiles.every(f => (f.progress >= 0.999 || f.downloaded >= f.length));
+        const isDone = !!torrent.done || allVideosDone;
         const uploadStr = isDone ? '0 B/s (Seeding Stopped)' : (torrent.uploadSpeed > 0 ? (formatBytes(torrent.uploadSpeed) + '/s') : '0 B/s (Active)');
         const statusStr = isDone ? 'Completed (Seeding Stopped)' : (torrent.numPeers > 0 ? (isDownloadOnly ? 'Downloading in Background' : 'Downloading & Streaming') : 'Connecting to Peers...');
         const stats = {

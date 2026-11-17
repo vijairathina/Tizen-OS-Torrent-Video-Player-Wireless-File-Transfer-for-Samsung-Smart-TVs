@@ -513,7 +513,7 @@ class TorrentStreamManager:
         # Scan existing torrents in uploads on startup
         self.scan_and_enqueue_existing()
 
-        # Start autonomous queue worker loop (runs independently on Raspberry Pi)
+        # Start autonomous queue worker loop (runs independently on Server)
         self.worker_thread = threading.Thread(target=self._queue_worker_loop, daemon=True)
         self.worker_thread.start()
 
@@ -863,7 +863,7 @@ class TorrentStreamManager:
 
     def _queue_worker_loop(self):
         """
-        Autonomous priority queue manager loop running on Raspberry Pi.
+        Autonomous priority queue manager loop running on Server.
         - Highest priority: Active stream running -> normal downloads yield.
         - Idle mode: When no video is playing, automatically download incomplete queue items.
         - When download completes, stop seeding and start next item.
@@ -872,6 +872,18 @@ class TorrentStreamManager:
             try:
                 time.sleep(1.5)
                 with self.lock:
+                    # 0. Sync completion status against disk for all queue items
+                    for item in list(self.queue):
+                        if not item.get("completed", False):
+                            if is_torrent_fully_downloaded(item.get("torrent_path")) or find_downloaded_video(item.get("filename")):
+                                item["completed"] = True
+                                item["progress"] = 100
+                                item["speed"] = "0 B/s"
+                                item["upload_speed"] = "0 B/s (Seeding Stopped)"
+                                item["status"] = "Completed (Seeding Stopped)"
+                                item["priority"] = "Completed"
+                                print(f"[Queue] Verified completed on disk: {item['filename']}")
+
                     # 1. If active stream (HIGHEST PRIORITY) is running and downloading, keep normal downloads paused
                     if self.process and self.process.poll() is None:
                         is_stream_downloading = (self.stats.get("progress", 0) < 100) and not self.stats.get("completed", False)
@@ -881,13 +893,29 @@ class TorrentStreamManager:
                                 self._kill_bg_download()
                             continue
 
+                    # 1b. If the currently running background download is 100% completed on disk, terminate it immediately!
+                    if self.active_bg_proc and self.active_bg_proc.poll() is None and self.active_bg_title:
+                        is_active_done = bool(is_torrent_fully_downloaded(self.active_bg_title)) or bool(find_downloaded_video(self.active_bg_title))
+                        active_item = next((q for q in self.queue if q["filename"] == self.active_bg_title), None)
+                        if is_active_done or (active_item and active_item.get("completed", False)):
+                            print(f"[Queue] Active background download '{self.active_bg_title}' is 100% completed on disk. Releasing background worker.")
+                            if active_item:
+                                active_item["completed"] = True
+                                active_item["progress"] = 100
+                                active_item["speed"] = "0 B/s"
+                                active_item["upload_speed"] = "0 B/s (Seeding Stopped)"
+                                active_item["status"] = "Completed (Seeding Stopped)"
+                                active_item["priority"] = "Completed"
+                            self._kill_bg_download()
+                            continue
+
                     # 2. Check if background download process finished
                     if self.active_bg_proc:
                         if self.active_bg_proc.poll() is not None:
                             exit_code = self.active_bg_proc.poll()
                             print(f"[Queue] Background download process exited (code={exit_code}) for: {self.active_bg_title}")
                             if self.active_bg_title:
-                                is_actually_done = bool(find_downloaded_video(self.active_bg_title))
+                                is_actually_done = bool(find_downloaded_video(self.active_bg_title)) or bool(is_torrent_fully_downloaded(self.active_bg_title))
                                 for item in self.queue:
                                     if item["filename"] == self.active_bg_title:
                                         if is_actually_done or item.get("completed", False):
@@ -909,6 +937,32 @@ class TorrentStreamManager:
                                             print(f"[Queue] Process exited without completion (retries: {item['retry_count']}). Keeping queued: {self.active_bg_title}")
                             self.active_bg_proc = None
                             self.active_bg_title = None
+
+                    # 2b. Stall detection and automatic queue rotation
+                    if self.active_bg_proc and self.active_bg_proc.poll() is None and self.active_bg_title:
+                        active_item = next((q for q in self.queue if q["filename"] == self.active_bg_title), None)
+                        if active_item and not active_item.get("completed", False):
+                            now = time.time()
+                            started_at = active_item.get("started_at", now)
+                            last_prog = active_item.get("last_progress_time", now)
+                            # Check if other incomplete items are waiting in queue
+                            other_pending = [q for q in self.queue if not q.get("completed", False) and q["filename"] != self.active_bg_title and q.get("retry_count", 0) < 5]
+                            if other_pending:
+                                # Grace period of 30 seconds before checking stall, then 45 seconds of no progress
+                                if (now - started_at > 30) and (now - last_prog > 45):
+                                    print(f"[Queue] Stall detected for '{self.active_bg_title}' (0 B/s for 45s). Rotating to next queued download: '{other_pending[0]['clean_title']}'")
+                                    self._kill_bg_download()
+                                    if active_item in self.queue:
+                                        self.queue.remove(active_item)
+                                        self.queue.append(active_item)
+                                    active_item["status"] = "Queued (Waiting for Peers - Rotated)"
+                                    active_item["speed"] = "0 B/s (Waiting)"
+                                    active_item["last_progress_time"] = now
+                            else:
+                                # When this is the only active torrent but 0 peers, show clear status
+                                if active_item.get("peers", 0) == 0:
+                                    active_item["status"] = "Connecting to Peers (0 peers)"
+                                    active_item["speed"] = "0 B/s"
 
                     # 3. IDLE MODE: If no stream and no background download running, start next incomplete item
                     if not self.active_bg_proc:
@@ -953,6 +1007,9 @@ class TorrentStreamManager:
             self.active_bg_title = item["filename"]
             item["priority"] = "NORMAL"
             item["status"] = "Downloading (Normal Priority)"
+            item["started_at"] = time.time()
+            item["last_progress_time"] = time.time()
+            item["last_downloaded_str"] = item.get("downloaded", "0 B")
             self.bg_downloads[item["filename"]] = {
                 "proc": proc,
                 "torrent": torrent_path,
@@ -998,7 +1055,14 @@ class TorrentStreamManager:
                             item["progress"] = st.get("progress", item.get("progress", 0))
                             item["speed"] = st.get("downloadSpeed", "0 B/s")
                             item["upload_speed"] = st.get("uploadSpeed", "0 B/s")
-                            item["downloaded"] = st.get("downloaded", item.get("downloaded", "0 B"))
+                            dl_str = st.get("downloaded", item.get("downloaded", "0 B"))
+                            if dl_str != item.get("last_downloaded_str"):
+                                item["last_downloaded_str"] = dl_str
+                                item["last_progress_time"] = time.time()
+                            spd_str = item["speed"].strip().lower()
+                            if spd_str and not spd_str.startswith("0 ") and not spd_str.startswith("0.0 ") and spd_str != "0 b/s":
+                                item["last_progress_time"] = time.time()
+                            item["downloaded"] = dl_str
                             item["total"] = st.get("total", item.get("total", "0 B"))
                             item["peers"] = st.get("peers", 0)
                             item["time_remaining"] = st.get("timeRemaining", "0s")
@@ -1138,6 +1202,17 @@ class TorrentStreamManager:
             available_movies = []
             seen_names = set()
 
+            # Pre-sync completion status for all items in self.queue against disk
+            for q in self.queue:
+                if not q.get("completed", False):
+                    if is_torrent_fully_downloaded(q.get("torrent_path")) or find_downloaded_video(q.get("filename")):
+                        q["completed"] = True
+                        q["progress"] = 100
+                        q["speed"] = "0 B/s"
+                        q["upload_speed"] = "0 B/s (Seeding Stopped)"
+                        q["status"] = "Completed (Seeding Stopped)"
+                        q["priority"] = "Completed"
+
             # Build set of titles/filenames that are actively downloading or incomplete in queue
             incomplete_titles = set()
             if self.process and self.current_torrent:
@@ -1147,7 +1222,9 @@ class TorrentStreamManager:
                     if self.current_title:
                         incomplete_titles.add(self.current_title.lower())
             if self.active_bg_title:
-                incomplete_titles.add(self.active_bg_title.lower())
+                active_item = next((q for q in self.queue if q["filename"] == self.active_bg_title), None)
+                if not active_item or not active_item.get("completed", False):
+                    incomplete_titles.add(self.active_bg_title.lower())
             for q in self.queue:
                 if not q.get("completed", False):
                     incomplete_titles.add(q["filename"].lower())
@@ -1261,6 +1338,15 @@ class TorrentStreamManager:
                     if self.stats.get("progress", 0) >= 100 or self.stats.get("completed", False):
                         continue
 
+                if is_torrent_fully_downloaded(item.get("torrent_path")) or find_downloaded_video(item.get("filename")):
+                    item["completed"] = True
+                    item["progress"] = 100
+                    item["speed"] = "0 B/s"
+                    item["upload_speed"] = "0 B/s (Seeding Stopped)"
+                    item["status"] = "Completed (Seeding Stopped)"
+                    item["priority"] = "Completed"
+                    continue
+
                 is_active_bg = bool(self.active_bg_proc and self.active_bg_title == item["filename"])
                 priority_name = "Normal" if is_active_bg else "Queued"
                 priority_badge = "⏳ Normal Priority (Background)" if is_active_bg else "🕒 Queued (Idle Mode)"
@@ -1271,6 +1357,10 @@ class TorrentStreamManager:
                 progress_val = item.get("progress", 0)
                 if not is_active_bg and progress_val == 0:
                     disk_prog, disk_dl, disk_tot = get_torrent_disk_progress(item["torrent_path"])
+                    if disk_prog >= 100:
+                        item["completed"] = True
+                        item["progress"] = 100
+                        continue
                     if disk_prog > 0:
                         progress_val = disk_prog
                         downloaded_str = format_bytes(disk_dl)
@@ -2030,7 +2120,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                 print(f"[Upload] Finished '{filename}' ({file_size} bytes)")
 
                 # Background Torrent Download Management:
-                # When a torrent file is received, start downloading it in the background on the Raspberry Pi,
+                # When a torrent file is received, start downloading it in the background on the Server,
                 # even if the TV is offline or disconnected.
                 if filename.lower().endswith('.torrent'):
                     print(f"[Queue] Received torrent file '{filename}'. Enqueuing autonomous background download on Server.")
