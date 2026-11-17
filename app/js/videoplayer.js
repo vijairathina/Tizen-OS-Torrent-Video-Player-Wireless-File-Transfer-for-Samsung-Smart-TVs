@@ -498,7 +498,8 @@ window.VideoPlayer = (function() {
             const total = item.total || '1.7 GB';
             const status = item.status || `Downloading ${progress}%`;
             const isHighest = item.priority === 'Highest';
-            const priorityBadge = item.priority_badge || (isHighest ? '⚡ Highest Priority' : '🕒 Queued');
+            const isLow = item.priority === 'Low';
+            const priorityBadge = item.priority_badge || (isHighest ? '⚡ Highest Priority' : (isLow ? '💤 Low Priority (Downloads Last)' : '🕒 Queued'));
 
             card.innerHTML = `
                 <div class="player-download-top amnis-download-top">
@@ -527,6 +528,11 @@ window.VideoPlayer = (function() {
                         ${!isHighest ? `
                         <button class="action-btn-info focusable" id="player-pri-${itemId}" tabindex="0" title="Promote to Highest Priority" style="background:rgba(0,242,254,0.18); border-color:#00f2fe; color:#00f2fe;">⚡ Prioritize</button>
                         ` : ''}
+                        ${isLow ? `
+                        <button class="action-btn-info focusable" id="player-norm-${itemId}" tabindex="0" title="Restore to Normal Priority" style="background:rgba(59,130,246,0.18); border-color:#3b82f6; color:#60a5fa;">⏳ Normal</button>
+                        ` : `
+                        <button class="action-btn-info focusable" id="player-low-${itemId}" tabindex="0" title="Set to Low Priority (Downloads Last)" style="background:rgba(148,163,184,0.18); border-color:#94a3b8; color:#cbd5e1;">⬇️ Low Priority</button>
+                        `}
                         <button class="action-btn-info focusable" id="player-info-${itemId}" tabindex="0" title="Torrent Details">ℹ️ Torrent Info</button>
                         <button class="action-btn-delete focusable" id="player-del-${itemId}" tabindex="0" title="Cancel Download">🗑️ Cancel</button>
                     </div>
@@ -535,6 +541,8 @@ window.VideoPlayer = (function() {
 
             const playBtn = card.querySelector('.action-btn-play');
             const priBtn = card.querySelector(`#player-pri-${itemId}`);
+            const lowBtn = card.querySelector(`#player-low-${itemId}`);
+            const normBtn = card.querySelector(`#player-norm-${itemId}`);
             const infoBtn = card.querySelector(`#player-info-${itemId}`);
             const delBtn = card.querySelector('.action-btn-delete');
 
@@ -584,6 +592,32 @@ window.VideoPlayer = (function() {
                     .then(() => {
                         if (window.FileReceiver && window.FileReceiver.showToast) {
                             window.FileReceiver.showToast(`Promoted ${title} to Highest Priority!`);
+                        }
+                        fetchRPiDownloads();
+                    })
+                    .catch(() => {});
+            });
+
+            if (lowBtn) lowBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/api/low_priority?file=${encodeURIComponent(item.name)}`)
+                    .then(() => {
+                        if (window.FileReceiver && window.FileReceiver.showToast) {
+                            window.FileReceiver.showToast(`Set ${title} to Low Priority (Downloads Last)`);
+                        }
+                        fetchRPiDownloads();
+                    })
+                    .catch(() => {});
+            });
+
+            if (normBtn) normBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+                fetch(`${srvUrl}/api/normal_priority?file=${encodeURIComponent(item.name)}`)
+                    .then(() => {
+                        if (window.FileReceiver && window.FileReceiver.showToast) {
+                            window.FileReceiver.showToast(`Restored ${title} to Normal Priority`);
                         }
                         fetchRPiDownloads();
                     })
@@ -1241,13 +1275,13 @@ window.VideoPlayer = (function() {
             });
         }
 
-        // 3. Companion Server (Raspberry Pi / Host - Zero TV Memory)
+        // 3. Companion Server (Zero TV Memory)
         const serverBtn = document.createElement('button');
         const isServerActive = currentPref === 'server';
         serverBtn.className = `settings-pill focusable ${isServerActive ? 'active' : ''}`;
         serverBtn.id = 'btn-storage-server';
         serverBtn.tabIndex = 0;
-        serverBtn.innerHTML = `<span>🖥️</span><span>Server (Pi / Host)</span>`;
+        serverBtn.innerHTML = `<span>🖥️</span><span>Server</span>`;
         serverBtn.addEventListener('click', function() {
             if (window.TVFilesystem) {
                 window.TVFilesystem.setPreferredStorage('server', function(allStorages, selected) {

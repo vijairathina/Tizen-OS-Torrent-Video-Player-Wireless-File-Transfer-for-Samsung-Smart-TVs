@@ -561,7 +561,7 @@ class TorrentStreamManager:
                         self.queue.remove(item)
                         self.queue.insert(0, item)
                     elif not high_priority:
-                        # Move to front of queued items so user's newly uploaded torrent starts next
+                        # Move to front of queued items so user's newly uploaded torrent starts next (before LOW items)
                         self.queue.remove(item)
                         insert_idx = 0
                         for i, q in enumerate(self.queue):
@@ -569,6 +569,8 @@ class TorrentStreamManager:
                                 insert_idx = i + 1
                             else:
                                 break
+                        low_idx = next((i for i, q in enumerate(self.queue) if q.get("priority") == "LOW"), len(self.queue))
+                        insert_idx = min(insert_idx, low_idx)
                         self.queue.insert(insert_idx, item)
                     print(f"[Queue] Updated existing queue item for '{clean}' (Priority: {item['priority']})")
                     return True
@@ -601,14 +603,24 @@ class TorrentStreamManager:
             if high_priority:
                 self.queue.insert(0, item)
             else:
-                # Place before older queued items so newly uploaded torrent starts next in idle mode
+                # Place before older queued items so newly uploaded torrent starts next in idle mode,
+                # but always place before any LOW priority items!
                 insert_idx = 0
                 for i, q in enumerate(self.queue):
                     if q.get("priority") == "HIGHEST":
                         insert_idx = i + 1
                     else:
                         break
+                low_idx = next((i for i, q in enumerate(self.queue) if q.get("priority") == "LOW"), len(self.queue))
+                insert_idx = min(insert_idx, low_idx)
                 self.queue.insert(insert_idx, item)
+
+                # If an active background download is currently LOW priority, yield immediately so normal item runs
+                if self.active_bg_proc and self.active_bg_title:
+                    act = next((q for q in self.queue if q["filename"] == self.active_bg_title), None)
+                    if act and act.get("priority") == "LOW":
+                        print(f"[Queue] Pausing active LOW priority download '{self.active_bg_title}' to download newly queued item '{clean}'.")
+                        self._kill_bg_download()
 
             print(f"[Queue] Enqueued torrent: '{clean}' (Priority: {item['priority']})")
             return True
@@ -849,8 +861,11 @@ class TorrentStreamManager:
             if self.active_bg_title:
                 for item in self.queue:
                     if item["filename"] == self.active_bg_title and not item.get("completed", False):
-                        item["priority"] = "QUEUED"
-                        item["status"] = "Queued in Background"
+                        if item.get("priority") == "LOW":
+                            item["status"] = "Low Priority (Queued Last)"
+                        else:
+                            item["priority"] = "QUEUED"
+                            item["status"] = "Queued in Background"
                         item["speed"] = "0 B/s"
 
             self.active_bg_proc = None
@@ -964,12 +979,35 @@ class TorrentStreamManager:
                                     active_item["status"] = "Connecting to Peers (0 peers)"
                                     active_item["speed"] = "0 B/s"
 
+                    # 2c. If current active background download is LOW priority, but higher-priority items are queued, yield!
+                    if self.active_bg_proc and self.active_bg_title:
+                        active_item = next((q for q in self.queue if q["filename"] == self.active_bg_title), None)
+                        if active_item and active_item.get("priority") == "LOW":
+                            has_higher = any(
+                                not q.get("completed", False) and q["filename"] != self.active_bg_title and q.get("priority") != "LOW" and q.get("retry_count", 0) < 5
+                                for q in self.queue
+                            )
+                            if has_higher:
+                                print(f"[Queue] Yielding active LOW priority download '{self.active_bg_title}' to download higher priority items first.")
+                                self._kill_bg_download()
+                                active_item["status"] = "Low Priority (Queued Last)"
+                                continue
+
                     # 3. IDLE MODE: If no stream and no background download running, start next incomplete item
+                    # Normal items ALWAYS download before Low priority items! ("will download last")
                     if not self.active_bg_proc:
                         next_item = None
-                        for item in list(self.queue):
-                            if item.get("completed", False):
-                                continue
+                        # Separate candidates: normal items first, low items last
+                        normal_candidates = [
+                            item for item in self.queue
+                            if not item.get("completed", False) and item.get("priority") != "LOW" and item.get("retry_count", 0) < 5
+                        ]
+                        low_candidates = [
+                            item for item in self.queue
+                            if not item.get("completed", False) and item.get("priority") == "LOW" and item.get("retry_count", 0) < 5
+                        ]
+
+                        for item in (normal_candidates + low_candidates):
                             if is_torrent_fully_downloaded(item["torrent_path"]) or find_downloaded_video(item["filename"]):
                                 item["completed"] = True
                                 item["progress"] = 100
@@ -977,8 +1015,6 @@ class TorrentStreamManager:
                                 item["upload_speed"] = "0 B/s (Seeding Stopped)"
                                 item["status"] = "Completed (Seeding Stopped)"
                                 item["priority"] = "Completed"
-                                continue
-                            if item.get("retry_count", 0) >= 5:
                                 continue
                             next_item = item
                             break
@@ -1005,8 +1041,9 @@ class TorrentStreamManager:
             )
             self.active_bg_proc = proc
             self.active_bg_title = item["filename"]
-            item["priority"] = "NORMAL"
-            item["status"] = "Downloading (Normal Priority)"
+            is_low = (item.get("priority") == "LOW")
+            item["priority"] = "LOW" if is_low else "NORMAL"
+            item["status"] = "Downloading (Low Priority)" if is_low else "Downloading (Normal Priority)"
             item["started_at"] = time.time()
             item["last_progress_time"] = time.time()
             item["last_downloaded_str"] = item.get("downloaded", "0 B")
@@ -1071,7 +1108,8 @@ class TorrentStreamManager:
                                 item["status"] = "Completed (Seeding Stopped)"
                                 item["priority"] = "Completed"
                             else:
-                                item["status"] = "Downloading (Normal Priority)"
+                                is_low = (item.get("priority") == "LOW")
+                                item["status"] = "Downloading (Low Priority)" if is_low else "Downloading (Normal Priority)"
 
                             if item["filename"] in self.bg_downloads:
                                 self.bg_downloads[item["filename"]]["stats"] = dict(item)
@@ -1120,6 +1158,66 @@ class TorrentStreamManager:
                 target_item["priority"] = "HIGHEST"
                 return self.start_torrent(target_item["torrent_path"], title=target_item["clean_title"])
             return None
+
+    def set_low_priority(self, query):
+        """Sets a torrent to LOW priority so it downloads last."""
+        with self.lock:
+            if not query:
+                return False
+            clean_q = query.strip().lower()
+            target_item = None
+            for item in self.queue:
+                if clean_q in item["filename"].lower() or clean_q in item["clean_title"].lower():
+                    target_item = item
+                    break
+
+            if target_item:
+                print(f"[Queue] Demoting to LOW PRIORITY (Downloads Last): {target_item['clean_title']}")
+                target_item["priority"] = "LOW"
+                target_item["status"] = "Low Priority (Queued Last)"
+
+                # Move to the end of the queue
+                if target_item in self.queue:
+                    self.queue.remove(target_item)
+                    self.queue.append(target_item)
+
+                # If this item was actively downloading in background and other normal items exist, yield immediately
+                if self.active_bg_title == target_item["filename"]:
+                    other_pending = [q for q in self.queue if not q.get("completed", False) and q["filename"] != target_item["filename"] and q.get("priority") != "LOW"]
+                    if other_pending:
+                        print(f"[Queue] Yielding active background download for low priority '{target_item['clean_title']}' to let higher priority items run.")
+                        self._kill_bg_download()
+                return True
+            return False
+
+    def set_normal_priority(self, query):
+        """Restores a torrent to NORMAL priority."""
+        with self.lock:
+            if not query:
+                return False
+            clean_q = query.strip().lower()
+            target_item = None
+            for item in self.queue:
+                if clean_q in item["filename"].lower() or clean_q in item["clean_title"].lower():
+                    target_item = item
+                    break
+
+            if target_item:
+                print(f"[Queue] Restoring to NORMAL PRIORITY: {target_item['clean_title']}")
+                target_item["priority"] = "QUEUED"
+                target_item["status"] = "Queued in Background"
+
+                # Move before any LOW priority items
+                if target_item in self.queue:
+                    self.queue.remove(target_item)
+                    insert_idx = len(self.queue)
+                    for i, q in enumerate(self.queue):
+                        if q.get("priority") == "LOW":
+                            insert_idx = i
+                            break
+                    self.queue.insert(insert_idx, target_item)
+                return True
+            return False
 
     def remove_from_queue(self, query):
         """Cancels and removes a torrent from queue and stops any associated process."""
@@ -1348,8 +1446,16 @@ class TorrentStreamManager:
                     continue
 
                 is_active_bg = bool(self.active_bg_proc and self.active_bg_title == item["filename"])
-                priority_name = "Normal" if is_active_bg else "Queued"
-                priority_badge = "⏳ Normal Priority (Background)" if is_active_bg else "🕒 Queued (Idle Mode)"
+                is_low_pri = (item.get("priority") == "LOW")
+                if is_low_pri:
+                    priority_name = "Low"
+                    priority_badge = "💤 Low Priority (Active)" if is_active_bg else "💤 Low Priority (Downloads Last)"
+                elif is_active_bg:
+                    priority_name = "Normal"
+                    priority_badge = "⏳ Normal Priority (Background)"
+                else:
+                    priority_name = "Queued"
+                    priority_badge = "🕒 Queued (Idle Mode)"
 
                 # Compute on-disk downloaded size if queued
                 downloaded_str = item.get("downloaded", "0 B")
@@ -1385,6 +1491,11 @@ class TorrentStreamManager:
                     "completed": False,
                     "stream_url": None
                 })
+
+            # Sort currently_downloading: Active stream first, Normal/Queued items next, and Low Priority items always last!
+            currently_downloading.sort(key=lambda x: (
+                0 if x.get("is_active_stream") else (2 if x.get("priority") == "Low" else 1)
+            ))
 
             # System mode calculation
             is_stream_downloading = bool(self.process and self.process.poll() is None and self.stats.get("progress", 0) < 100 and not self.stats.get("completed", False))
@@ -1715,6 +1826,30 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'status': 'prioritized', 'streamUrl': stream_url, 'file': target}).encode('utf-8'))
+            return
+
+        elif norm_path in ('/api/low_priority', '/low_priority', '/api/deprioritize', '/deprioritize'):
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+            fnames = qs.get('file', [])
+            target = fnames[0] if fnames else ''
+            success = TORRENT_MANAGER.set_low_priority(target)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'low_priority_set', 'success': success, 'file': target}).encode('utf-8'))
+            return
+
+        elif norm_path in ('/api/normal_priority', '/normal_priority'):
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+            fnames = qs.get('file', [])
+            target = fnames[0] if fnames else ''
+            success = TORRENT_MANAGER.set_normal_priority(target)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'normal_priority_set', 'success': success, 'file': target}).encode('utf-8'))
             return
 
         # 5. Live BitTorrent Streaming Engine APIs (Video Player Integration)

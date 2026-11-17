@@ -125,7 +125,7 @@ window.App = (function() {
         if (pref === 'server' || (selectedStorage && selectedStorage.isServer)) {
             const hostIp = window.getServerHostIP ? window.getServerHostIP() : '192.168.0.14';
             badge.innerHTML = `
-                <div class="usb-target-title" style="color:#c084fc;"><span>🖥️</span><span>Target: Server (Pi / Host)</span></div>
+                <div class="usb-target-title" style="color:#c084fc;"><span>🖥️</span><span>Target: Server</span></div>
                 <div class="usb-target-path">${hostIp}:8080 • /app/uploads/ (Zero TV Space)</div>
                 <div class="usb-target-hint" style="font-size:11px; color:var(--text-muted); margin-top:4px;">Press Enter to switch: Local / USB / Server</div>
             `;
