@@ -268,7 +268,7 @@ window.TVFilesystem = (function() {
                     if (onStorageUpdated) onStorageUpdated(currentStorages, selected);
                 }
             });
-        }, 2500);
+        }, 15000);
     }
 
     function setupStorageListener(callback) {
@@ -695,7 +695,7 @@ window.TVFilesystem = (function() {
     function browsePath(pathString, callback) {
         let targetPath = pathString || (selectedStorage ? selectedStorage.label : 'server');
 
-        // Handle Server browsing (Raspberry Pi Hub)
+        // Handle Server browsing (Server Hub)
         if (targetPath === 'server' || (selectedStorage && selectedStorage.isServer && (!pathString || pathString === 'server'))) {
             const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
             fetch(`${srvUrl}/api/downloads`)
@@ -783,7 +783,7 @@ window.TVFilesystem = (function() {
 
             function tryNextCandidate() {
                 if (idx >= candidates.length) {
-                    // If no local directory resolves on TV, fall back to Raspberry Pi Server storage!
+                    // If no local directory resolves on TV, fall back to Server storage!
                     browsePath('server', callback);
                     return;
                 }

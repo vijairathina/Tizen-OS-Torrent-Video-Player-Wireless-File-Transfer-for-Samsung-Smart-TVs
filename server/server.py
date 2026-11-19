@@ -263,7 +263,9 @@ def parse_torrent_files(torrent_path):
                         'name': file_name,
                         'path': '/'.join(path_parts),
                         'length': length,
+                        'size': length,
                         'sizeStr': format_bytes(length),
+                        'sizeFormatted': format_bytes(length),
                         'isDownloaded': is_downloaded,
                         'streamUrl': url
                     })
@@ -279,7 +281,9 @@ def parse_torrent_files(torrent_path):
                     'name': name,
                     'path': name,
                     'length': length,
+                    'size': length,
                     'sizeStr': format_bytes(length),
+                    'sizeFormatted': format_bytes(length),
                     'isDownloaded': is_downloaded,
                     'streamUrl': url
                 })
@@ -432,6 +436,200 @@ def find_downloaded_video(filename_or_query):
                             return fp
 
     return None
+
+def delete_media_and_artifacts(filename_or_query):
+    """
+    Completely and recursively deletes a media file, episode, series folder,
+    or torrent from disk, including all associated .done markers, .part files,
+    .cues_fix files, and .torrent metadata files.
+    """
+    if not filename_or_query:
+        return False, []
+
+    import urllib.parse
+    raw_name = urllib.parse.unquote(str(filename_or_query).strip())
+    fname = os.path.basename(raw_name).strip()
+    if not fname:
+        return False, []
+
+    deleted_paths = []
+
+    # 1. Stop any active streaming or background download
+    try:
+        if 'TORRENT_MANAGER' in globals() and TORRENT_MANAGER:
+            TORRENT_MANAGER.remove_from_queue(fname)
+    except Exception as e:
+        print(f"[Delete] Warning removing from queue: {e}")
+
+    # Build target name variations
+    stem = re.sub(r'\.torrent$', '', fname, flags=re.I).strip()
+    clean_stem = re.sub(r'\.(mkv|mp4|avi|mov|webm|ts)$', '', stem, flags=re.I).strip()
+
+    target_names_lower = {
+        fname.lower(),
+        stem.lower(),
+        clean_stem.lower(),
+        (clean_stem + '.mkv').lower(),
+        (clean_stem + '.mp4').lower(),
+        (stem + '.mkv').lower(),
+        (stem + '.mp4').lower(),
+        (stem + '.torrent').lower(),
+        (fname + '.torrent').lower()
+    }
+
+    dirs_to_check_for_emptiness = set()
+
+    # 2. Check direct path via find_media_file
+    direct_path = find_media_file(fname)
+    if direct_path and os.path.exists(direct_path):
+        try:
+            if os.path.isfile(direct_path):
+                os.remove(direct_path)
+                deleted_paths.append(direct_path)
+                print(f"[Delete] Direct file removed: {direct_path}")
+                parent = os.path.dirname(direct_path)
+                if parent != DOWNLOADS_DIR and parent != UPLOADS_DIR:
+                    dirs_to_check_for_emptiness.add(parent)
+            elif os.path.isdir(direct_path):
+                shutil.rmtree(direct_path)
+                deleted_paths.append(direct_path)
+                print(f"[Delete] Direct directory removed: {direct_path}")
+        except Exception as e:
+            print(f"[Delete] Error removing direct path {direct_path}: {e}")
+
+    # 3. Search and delete matching files in UPLOADS_DIR
+    if os.path.exists(UPLOADS_DIR):
+        for root, dirs, files in os.walk(UPLOADS_DIR, topdown=False):
+            for f in files:
+                f_lower = f.lower()
+                f_stem = re.sub(r'\.torrent$', '', f_lower).strip()
+                if (f_lower in target_names_lower or
+                    f_stem in target_names_lower or
+                    f_stem == clean_stem.lower() or
+                    f_lower == (fname + '.torrent').lower() or
+                    f_lower == (stem + '.torrent').lower()):
+                    fp = os.path.join(root, f)
+                    try:
+                        os.remove(fp)
+                        deleted_paths.append(fp)
+                        print(f"[Delete] Removed upload: {fp}")
+                    except Exception as e:
+                        print(f"[Delete] Error removing upload {fp}: {e}")
+
+    # 4. Search and delete matching files/directories in DOWNLOADS_DIR recursively
+    if os.path.exists(DOWNLOADS_DIR):
+        for root, dirs, files in os.walk(DOWNLOADS_DIR, topdown=False):
+            # Check directories
+            for d in list(dirs):
+                d_lower = d.lower()
+                if (d_lower in target_names_lower or
+                    d_lower == stem.lower() or
+                    d_lower == clean_stem.lower() or
+                    d_lower == fname.lower()):
+                    dp = os.path.join(root, d)
+                    try:
+                        shutil.rmtree(dp)
+                        deleted_paths.append(dp)
+                        print(f"[Delete] Removed directory: {dp}")
+                    except Exception as e:
+                        print(f"[Delete] Error removing directory {dp}: {e}")
+                    # Also delete directory .done marker
+                    for cand_done in (dp + '.done', os.path.join(DOWNLOADS_DIR, d + '.done')):
+                        if os.path.exists(cand_done):
+                            try:
+                                os.remove(cand_done)
+                                deleted_paths.append(cand_done)
+                            except Exception: pass
+
+            # Check files
+            for f in list(files):
+                f_lower = f.lower()
+                f_noext = re.sub(r'\.(mkv|mp4|avi|mov|webm|ts)$', '', f_lower).strip()
+                is_match = (
+                    f_lower in target_names_lower or
+                    f_noext in target_names_lower or
+                    f_lower == fname.lower()
+                )
+                if is_match:
+                    fp = os.path.join(root, f)
+                    try:
+                        if os.path.exists(fp):
+                            os.remove(fp)
+                            deleted_paths.append(fp)
+                            print(f"[Delete] Removed media file: {fp}")
+                    except Exception as e:
+                        print(f"[Delete] Error removing file {fp}: {e}")
+
+                    if root != DOWNLOADS_DIR:
+                        dirs_to_check_for_emptiness.add(root)
+
+                    # Also remove associated markers/sidecars
+                    for sidecar in (
+                        fp + '.done',
+                        fp + '.part',
+                        fp + '.cues_fix.mkv',
+                        os.path.join(DOWNLOADS_DIR, f + '.done'),
+                        os.path.join(DOWNLOADS_DIR, f_noext + '.done')
+                    ):
+                        if os.path.exists(sidecar):
+                            try:
+                                os.remove(sidecar)
+                                deleted_paths.append(sidecar)
+                            except Exception: pass
+
+    # 5. Clean up any root .done markers in DOWNLOADS_DIR matching the targets
+    if os.path.exists(DOWNLOADS_DIR):
+        for f in os.listdir(DOWNLOADS_DIR):
+            if f.endswith('.done'):
+                base = f[:-5].strip().lower()
+                base_noext = re.sub(r'\.(mkv|mp4|avi|mov|webm|ts)$', '', base).strip()
+                if (base in target_names_lower or
+                    base_noext in target_names_lower or
+                    base == fname.lower() or
+                    base == stem.lower() or
+                    base == clean_stem.lower()):
+                    fp = os.path.join(DOWNLOADS_DIR, f)
+                    try:
+                        os.remove(fp)
+                        deleted_paths.append(fp)
+                    except Exception: pass
+
+    # 6. Check multi-file subdirectories that may now have no remaining media files
+    for dpath in dirs_to_check_for_emptiness:
+        if os.path.exists(dpath) and os.path.isdir(dpath):
+            remaining_media = [
+                x for x in os.listdir(dpath)
+                if x.lower().endswith(('.mkv', '.mp4', '.avi', '.mov', '.webm', '.ts'))
+                and not x.lower().endswith('.done')
+            ]
+            if not remaining_media:
+                folder_name = os.path.basename(dpath)
+                try:
+                    shutil.rmtree(dpath)
+                    deleted_paths.append(dpath)
+                    print(f"[Delete] Cleaned up now-empty series folder: {dpath}")
+                except Exception as e:
+                    print(f"[Delete] Error removing empty directory {dpath}: {e}")
+
+                # Clean up folder's .done marker in DOWNLOADS_DIR
+                parent_done = os.path.join(DOWNLOADS_DIR, folder_name + '.done')
+                if os.path.exists(parent_done):
+                    try:
+                        os.remove(parent_done)
+                        deleted_paths.append(parent_done)
+                    except Exception: pass
+
+                # Clean up matching .torrent in UPLOADS_DIR
+                if os.path.exists(UPLOADS_DIR):
+                    for up_cand in (folder_name, folder_name + '.torrent'):
+                        up_p = os.path.join(UPLOADS_DIR, up_cand)
+                        if os.path.exists(up_p):
+                            try:
+                                os.remove(up_p)
+                                deleted_paths.append(up_p)
+                            except Exception: pass
+
+    return len(deleted_paths) > 0, deleted_paths
 
 LANG_NAME_MAP = {
     'tam': 'Tamil', 'ta': 'Tamil',
@@ -666,6 +864,29 @@ class TorrentStreamManager:
         """
         with self.lock:
             clean_title = title or os.path.basename(torrent_path_or_magnet)
+
+            # Check if specific episode is ALREADY 100% in DOWNLOADS_DIR
+            if file_idx is not None and torrent_path_or_magnet and os.path.exists(torrent_path_or_magnet):
+                try:
+                    t_files = parse_torrent_files(torrent_path_or_magnet)
+                    if t_files and 0 <= file_idx < len(t_files):
+                        target_ep = t_files[file_idx]
+                        ep_name = target_ep.get("name")
+                        if ep_name:
+                            ep_found = find_media_file(ep_name)
+                            if ep_found and os.path.exists(ep_found) and os.path.getsize(ep_found) > 0:
+                                import urllib.parse
+                                direct_ep_url = f"http://{self.host_ip}:{PORT}/files/{urllib.parse.quote(os.path.basename(ep_found))}"
+                                print(f"[TorrentEngine] Episode #{file_idx} '{ep_name}' is ALREADY 100% DOWNLOADED at: {ep_found}")
+                                broadcast_message({
+                                    "type": "torrent_stream_started",
+                                    "streamUrl": direct_ep_url,
+                                    "title": ep_name,
+                                    "isDownloaded": True
+                                })
+                                return direct_ep_url
+                except Exception as ep_err:
+                    print(f"[TorrentEngine] Error checking episode on disk: {ep_err}")
 
             # Check if video is ALREADY 100% in DOWNLOADS_DIR
             downloaded = find_downloaded_video(clean_title)
@@ -919,9 +1140,17 @@ class TorrentStreamManager:
         - Idle mode: When no video is playing, automatically download incomplete queue items.
         - When download completes, stop seeding and start next item.
         """
+        last_scan_time = 0
         while not self.stop_worker:
             try:
                 time.sleep(1.5)
+                # Periodically scan uploads directory for newly uploaded torrent files
+                if time.time() - last_scan_time > 15:
+                    last_scan_time = time.time()
+                    try:
+                        self.scan_and_enqueue_existing()
+                    except Exception:
+                        pass
                 with self.lock:
                     # 0. Sync completion status against disk for all queue items
                     for item in list(self.queue):
@@ -1033,14 +1262,14 @@ class TorrentStreamManager:
                     # Normal items ALWAYS download before Low priority items! ("will download last")
                     if not self.active_bg_proc:
                         next_item = None
-                        # Separate candidates: normal items first, low items last
+                        # Separate candidates: normal items first, low items last (skip paused items)
                         normal_candidates = [
                             item for item in self.queue
-                            if not item.get("completed", False) and item.get("priority") != "LOW" and item.get("retry_count", 0) < 5
+                            if not item.get("completed", False) and not item.get("is_paused", False) and item.get("priority") != "LOW" and item.get("retry_count", 0) < 5
                         ]
                         low_candidates = [
                             item for item in self.queue
-                            if not item.get("completed", False) and item.get("priority") == "LOW" and item.get("retry_count", 0) < 5
+                            if not item.get("completed", False) and not item.get("is_paused", False) and item.get("priority") == "LOW" and item.get("retry_count", 0) < 5
                         ]
 
                         for item in (normal_candidates + low_candidates):
@@ -1193,6 +1422,7 @@ class TorrentStreamManager:
 
             if target_item:
                 print(f"[Queue] Promoting to HIGHEST PRIORITY: {target_item['clean_title']}")
+                target_item["is_paused"] = False
                 target_item["priority"] = "HIGHEST"
                 return self.start_torrent(target_item["torrent_path"], title=target_item["clean_title"])
             return None
@@ -1257,18 +1487,94 @@ class TorrentStreamManager:
                 return True
             return False
 
+    def pause_torrent(self, query):
+        """Pauses a background downloading or queued torrent."""
+        with self.lock:
+            if not query:
+                return False
+            clean_q = query.strip().lower()
+            target_item = None
+            for item in self.queue:
+                if clean_q in item["filename"].lower() or clean_q in item["clean_title"].lower():
+                    target_item = item
+                    break
+
+            if target_item:
+                print(f"[Queue] Pausing download: {target_item['clean_title']}")
+                target_item["is_paused"] = True
+                target_item["status"] = "Paused"
+                target_item["speed"] = "0 B/s (Paused)"
+                target_item["upload_speed"] = "0 B/s (Paused)"
+
+                # If actively running in background, stop process
+                if self.active_bg_title == target_item["filename"]:
+                    self._kill_bg_download()
+
+                # If actively streaming to player
+                if self.current_torrent and (clean_q in self.current_torrent.lower() or clean_q in (self.current_title or '').lower()):
+                    self.stats["status"] = "Paused"
+                    self.stats["speed"] = "0 B/s (Paused)"
+                return True
+            return False
+
+    def resume_torrent(self, query):
+        """Resumes a paused torrent."""
+        with self.lock:
+            if not query:
+                return False
+            clean_q = query.strip().lower()
+            target_item = None
+            for item in self.queue:
+                if clean_q in item["filename"].lower() or clean_q in item["clean_title"].lower():
+                    target_item = item
+                    break
+
+            if target_item:
+                print(f"[Queue] Resuming download: {target_item['clean_title']}")
+                target_item["is_paused"] = False
+                target_item["status"] = "Queued in Background"
+                target_item["speed"] = "0 B/s (Waiting)"
+                target_item["last_progress_time"] = time.time()
+                return True
+            return False
+
     def remove_from_queue(self, query):
         """Cancels and removes a torrent from queue and stops any associated process."""
         with self.lock:
             if not query:
                 return
             clean_q = query.strip().lower()
-            if self.current_torrent and clean_q in self.current_torrent.lower():
+            stem_q = re.sub(r'\.(torrent|mkv|mp4|avi|mov|webm|ts)$', '', clean_q, flags=re.I).strip()
+
+            # 1. Stop active streaming process if matching
+            cur_tor = (self.current_torrent or "").lower()
+            cur_tit = (self.current_title or "").lower()
+            if (clean_q in cur_tor or cur_tor in clean_q or
+                stem_q in cur_tor or cur_tor in stem_q or
+                clean_q in cur_tit or cur_tit in clean_q or
+                stem_q in cur_tit or cur_tit in stem_q):
                 self.stop()
-            if self.active_bg_title and clean_q in self.active_bg_title.lower():
+
+            # 2. Stop active background download process if matching
+            bg_tit = (self.active_bg_title or "").lower()
+            if (clean_q in bg_tit or bg_tit in clean_q or
+                stem_q in bg_tit or bg_tit in stem_q):
                 self._kill_bg_download()
-            self.queue = [item for item in self.queue if clean_q not in item["filename"].lower() and clean_q not in item["clean_title"].lower()]
-            self.bg_downloads.pop(query, None)
+
+            # 3. Remove matching items from queue
+            def matches_item(it):
+                fn = it.get("filename", "").lower()
+                ct = it.get("clean_title", "").lower()
+                tp = it.get("torrent_path", "").lower()
+                return (clean_q in fn or fn in clean_q or
+                        stem_q in fn or fn in stem_q or
+                        clean_q in ct or ct in clean_q or
+                        stem_q in ct or ct in stem_q or
+                        clean_q in tp or tp in clean_q or
+                        stem_q in tp or tp in stem_q)
+
+            self.queue = [item for item in self.queue if not matches_item(item)]
+            self.bg_downloads = {k: v for k, v in self.bg_downloads.items() if not matches_item({"filename": k, "clean_title": k, "torrent_path": k})}
 
     def stop(self):
         """Stops active stream and ports, allowing idle mode to resume in background."""
@@ -1411,6 +1717,8 @@ class TorrentStreamManager:
                                     "speed": "0 B/s",
                                     "seeding": "Stopped (0 B/s)",
                                     "completed": True,
+                                    "total_episodes": 0,
+                                    "episodes": [],
                                     "stream_url": stream_url
                                 })
 
@@ -1447,6 +1755,7 @@ class TorrentStreamManager:
                 is_stream_incomplete = (self.stats.get("progress", 0) < 100) and not self.stats.get("completed", False)
                 if is_stream_incomplete:
                     c_name = os.path.basename(self.current_torrent)
+                    eps = parse_torrent_files(self.current_torrent) if self.current_torrent else []
                     currently_downloading.append({
                         "id": "stream-" + hashlib.md5(c_name.encode()).hexdigest()[:8],
                         "name": c_name,
@@ -1463,6 +1772,8 @@ class TorrentStreamManager:
                         "peers": self.stats.get("peers", 0),
                         "time_remaining": self.stats.get("timeRemaining", "Calculating..."),
                         "completed": False,
+                        "total_episodes": len(eps),
+                        "episodes": eps,
                         "stream_url": self.current_stream_url
                     })
 
@@ -1483,9 +1794,13 @@ class TorrentStreamManager:
                     item["priority"] = "Completed"
                     continue
 
+                is_paused = item.get("is_paused", False)
                 is_active_bg = bool(self.active_bg_proc and self.active_bg_title == item["filename"])
                 is_low_pri = (item.get("priority") == "LOW")
-                if is_low_pri:
+                if is_paused:
+                    priority_name = "Paused"
+                    priority_badge = "⏸ Paused"
+                elif is_low_pri:
                     priority_name = "Low"
                     priority_badge = "💤 Low Priority (Active)" if is_active_bg else "💤 Low Priority (Downloads Last)"
                 elif is_active_bg:
@@ -1511,6 +1826,9 @@ class TorrentStreamManager:
                         if disk_tot > 0 and (total_str == "Calculating..." or total_str == "0 B"):
                             total_str = format_bytes(disk_tot)
 
+                item_stream_url = self.current_stream_url if (self.current_torrent and item["filename"] in self.current_torrent) else f"http://{effective_ip}:{TORRENT_STREAM_PORT}/"
+                t_path = item.get("torrent_path") or find_torrent_file(item["filename"])
+                eps = parse_torrent_files(t_path) if t_path else []
                 currently_downloading.append({
                     "id": item["id"],
                     "name": item["filename"],
@@ -1518,21 +1836,52 @@ class TorrentStreamManager:
                     "priority": priority_name,
                     "priority_badge": priority_badge,
                     "is_active_stream": False,
-                    "status": item.get("status", "Queued in Background"),
+                    "is_paused": is_paused,
+                    "status": "Paused" if is_paused else item.get("status", "Queued in Background"),
                     "progress": progress_val,
-                    "speed": item.get("speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)",
-                    "upload_speed": item.get("upload_speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)",
+                    "speed": "0 B/s (Paused)" if is_paused else (item.get("speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)"),
+                    "upload_speed": "0 B/s (Paused)" if is_paused else (item.get("upload_speed", "0 B/s") if is_active_bg else "0 B/s (Waiting)"),
                     "downloaded": downloaded_str,
                     "total": total_str,
-                    "peers": item.get("peers", 0) if is_active_bg else 0,
-                    "time_remaining": item.get("time_remaining", "In Queue") if is_active_bg else "In Queue",
+                    "peers": 0 if is_paused else (item.get("peers", 0) if is_active_bg else 0),
+                    "time_remaining": "Paused" if is_paused else (item.get("time_remaining", "In Queue") if is_active_bg else "In Queue"),
                     "completed": False,
-                    "stream_url": None
+                    "total_episodes": len(eps),
+                    "episodes": eps,
+                    "stream_url": item_stream_url
                 })
 
             # Sort currently_downloading: Active stream first, Normal/Queued items next, and Low Priority items always last!
             currently_downloading.sort(key=lambda x: (
                 0 if x.get("is_active_stream") else (2 if x.get("priority") == "Low" else 1)
+            ))
+
+            # Also surface streamable downloading items in available_movies so users can play from the Movie / Player list!
+            for dl in currently_downloading:
+                dl_name = dl["name"]
+                if dl_name not in seen_names:
+                    seen_names.add(dl_name)
+                    available_movies.append({
+                        "id": "avail-" + str(dl["id"]),
+                        "name": dl_name,
+                        "clean_title": dl["clean_title"],
+                        "size": 0,
+                        "size_formatted": dl.get("total", "Calculating..."),
+                        "status": f"Downloading ({dl.get('progress', 0)}%)",
+                        "progress": dl.get("progress", 0),
+                        "speed": dl.get("speed", "0 B/s"),
+                        "seeding": "N/A",
+                        "completed": False,
+                        "is_downloading": True,
+                        "is_paused": dl.get("is_paused", False),
+                        "total_episodes": dl.get("total_episodes", 0),
+                        "episodes": dl.get("episodes", []),
+                        "stream_url": dl.get("stream_url") or f"http://{effective_ip}:{TORRENT_STREAM_PORT}/"
+                    })
+
+            available_movies.sort(key=lambda m: (
+                0 if m.get("is_downloading") else 1,
+                m["clean_title"].lower()
             ))
 
             # System mode calculation
@@ -1750,7 +2099,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         # 2.1. Download Management Dashboard UI (for Mobile & PC Browser)
-        elif norm_path in ('/dashboard', '/downloads', '/downloads.html', '/dashboard.html'):
+        elif norm_path in ('/dashboard', '/downloads', '/downloads.html', '/dashboard.html', '/player', '/movies'):
             dash_file = os.path.join(PUBLIC_DIR, 'dashboard.html')
             if os.path.exists(dash_file):
                 self.send_response(200)
@@ -1894,6 +2243,30 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'status': 'normal_priority_set', 'success': success, 'file': target}).encode('utf-8'))
             return
 
+        elif norm_path in ('/api/pause_torrent', '/pause_torrent'):
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+            fnames = qs.get('file', [])
+            target = fnames[0] if fnames else ''
+            success = TORRENT_MANAGER.pause_torrent(target)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'paused' if success else 'failed', 'file': target, 'is_paused': True, 'success': success}).encode('utf-8'))
+            return
+
+        elif norm_path in ('/api/resume_torrent', '/resume_torrent'):
+            import urllib.parse
+            qs = urllib.parse.parse_qs(self.path.split('?', 1)[1] if '?' in self.path else '')
+            fnames = qs.get('file', [])
+            target = fnames[0] if fnames else ''
+            success = TORRENT_MANAGER.resume_torrent(target)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'resumed' if success else 'failed', 'file': target, 'is_paused': False, 'success': success}).encode('utf-8'))
+            return
+
         # 5. Live BitTorrent Streaming Engine APIs (Video Player Integration)
         elif path == '/start_torrent':
             import urllib.parse
@@ -1906,7 +2279,7 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
             # Handle unencoded '&' in filename parameter
             if 'file=' in raw_query:
                 file_part = raw_query.split('file=', 1)[1]
-                file_part = re.split(r'&(?:magnet|downloadOnly)=', file_part, flags=re.I)[0]
+                file_part = re.split(r'&(?:magnet|downloadOnly|downloadonly|fileIdx|file_idx|episode)=', file_part, flags=re.I)[0]
                 unquoted = urllib.parse.unquote(file_part).strip()
                 if unquoted:
                     fnames = [unquoted]
@@ -2054,30 +2427,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
         elif path == '/delete_file':
             import urllib.parse
-            qs = urllib.parse.parse_qs(self.path.split('?')[1] if '?' in self.path else '')
+            raw_query = self.path.split('?', 1)[1] if '?' in self.path else ''
+            qs = urllib.parse.parse_qs(raw_query)
             fnames = qs.get('file', [])
             if fnames:
-                fname = os.path.basename(fnames[0])
-                TORRENT_MANAGER.remove_from_queue(fname)
-
-                up_path = os.path.join(UPLOADS_DIR, fname)
-                if os.path.exists(up_path):
-                    try: os.remove(up_path)
-                    except Exception: pass
-
-                # Also delete associated download and .done markers in DOWNLOADS_DIR
-                stem = re.sub(r'\.torrent$', '', fname, flags=re.I)
-                for cand_name in (fname, stem, stem + '.mkv', stem + '.mp4'):
-                    cand_path = os.path.join(DOWNLOADS_DIR, cand_name)
-                    if os.path.exists(cand_path):
-                        try:
-                            if os.path.isfile(cand_path): os.remove(cand_path)
-                            elif os.path.isdir(cand_path): shutil.rmtree(cand_path)
-                        except Exception: pass
-                    done_marker = cand_path + '.done'
-                    if os.path.exists(done_marker):
-                        try: os.remove(done_marker)
-                        except Exception: pass
+                raw_target = fnames[0]
+                success, deleted = delete_media_and_artifacts(raw_target)
+                fname = os.path.basename(urllib.parse.unquote(raw_target)).strip()
 
                 broadcast_message({
                     "type": "file_deleted",
@@ -2086,8 +2442,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
+                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
                 self.end_headers()
-                self.wfile.write(json.dumps({'status': 'deleted', 'filename': fname}).encode('utf-8'))
+                self.wfile.write(json.dumps({
+                    'status': 'deleted',
+                    'filename': fname,
+                    'deleted_count': len(deleted)
+                }).encode('utf-8'))
                 return
             else:
                 self.send_error(400, 'Missing file parameter')
@@ -2253,7 +2614,13 @@ class FileHubRequestHandler(BaseHTTPRequestHandler):
                     WS_CLIENTS.remove(sock)
             print(f"[WebSocket] Samsung TV disconnected from {client_ip}")
 
+    def do_DELETE(self):
+        self.do_GET()
+
     def do_POST(self):
+        if self.path.startswith('/delete_file'):
+            self.do_GET()
+            return
         if self.path == '/upload':
             try:
                 content_type = self.headers.get('Content-Type')

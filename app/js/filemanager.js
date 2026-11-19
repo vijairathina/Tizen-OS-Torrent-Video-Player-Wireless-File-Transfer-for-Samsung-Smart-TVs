@@ -395,9 +395,12 @@ window.FileManager = (function() {
             grid.appendChild(card);
         });
 
-        // Focus first element inside the file grid
+        // Focus first element inside the file grid only if focus is not retained on header navigation
         if (window.Navigation) {
-            setTimeout(window.Navigation.focusInitialElement, 50);
+            const cur = window.Navigation.getCurrentFocusedElement ? window.Navigation.getCurrentFocusedElement() : null;
+            if (!cur || (!cur.classList.contains('nav-tab') && !cur.closest('.app-nav'))) {
+                setTimeout(window.Navigation.focusInitialElement, 50);
+            }
         }
     }
 

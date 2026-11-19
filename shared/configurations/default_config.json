@@ -1,0 +1,24 @@
+{
+  "server": {
+    "defaultHostIp": "192.168.0.14",
+    "httpPort": 8080,
+    "torrentStreamPort": 8889,
+    "webSocketPath": "/ws",
+    "ssePath": "/events"
+  },
+  "client": {
+    "networkTimeoutMs": 10000,
+    "statsPollIntervalMs": 2000,
+    "resumeSaveIntervalMs": 4000,
+    "osdTimeoutMs": 5000,
+    "defaultTheme": "night",
+    "defaultFontSize": "normal"
+  },
+  "player": {
+    "supportedVideoExtensions": ["mp4", "mkv", "avi", "mov", "webm", "ts", "m4v"],
+    "supportedAudioExtensions": ["mp3", "aac", "flac", "wav", "ogg", "m4a"],
+    "supportedSubtitleExtensions": ["srt", "vtt"],
+    "bufferForPlaybackMs": 2500,
+    "bufferForPlaybackAfterRebufferMs": 5000
+  }
+}

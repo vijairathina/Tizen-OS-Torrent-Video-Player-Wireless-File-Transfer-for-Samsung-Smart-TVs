@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Samsung Tizen TV: TV File Hub & Amnis Player
+   Samsung Tizen TV: LinkPlay Player
    Optimized for 10-foot UI, D-pad Spatial Navigation, and 4K Crystal UHD
    ========================================================================== */
 
@@ -26,7 +26,7 @@
     --color-danger: #ef4444;
 
     --font-stack: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    --transition-smooth: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-smooth: transform 0.12s ease-out, border-color 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 * {
@@ -86,8 +86,7 @@ header.app-header {
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border-subtle);
-    background: rgba(15, 12, 19, 0.85);
-    backdrop-filter: blur(12px);
+    background: rgba(15, 12, 19, 0.98);
     z-index: 50;
 }
 
@@ -267,17 +266,70 @@ main.app-main {
 }
 
 #qrcode-container {
+    width: 156px;
+    height: 156px;
+    min-width: 156px;
+    min-height: 156px;
     padding: 8px;
     background: #ffffff;
     border-radius: 10px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
     margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
-#qrcode-container canvas, #qrcode-container img {
+#qrcode-container canvas,
+#qrcode-container img,
+#qrcode-container svg {
     display: block;
     width: 140px;
     height: 140px;
+    min-width: 140px;
+    min-height: 140px;
+}
+
+.widget-network-layout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+}
+
+.widget-network-info {
+    flex: 1;
+    min-width: 0;
+}
+
+#home-qrcode-container {
+    width: 86px;
+    height: 86px;
+    min-width: 86px;
+    min-height: 86px;
+    padding: 5px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+#home-qrcode-container canvas,
+#home-qrcode-container img,
+#home-qrcode-container svg {
+    display: block;
+    width: 76px;
+    height: 76px;
+    min-width: 76px;
+    min-height: 76px;
 }
 
 .qr-caption {
@@ -795,9 +847,8 @@ main.app-main {
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
-    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
     border-radius: 12px;
     color: #ffffff;
     font-size: 14px;
@@ -828,19 +879,6 @@ main.app-main {
     background: rgba(0, 242, 254, 0.24) !important;
     box-shadow: 0 0 20px rgba(0, 242, 254, 0.65) !important;
     transform: scale(1.06);
-}
-
-body.theme-day .player-header-btn {
-    background: rgba(0, 0, 0, 0.06);
-    border-color: rgba(0, 0, 0, 0.16);
-    color: #1e1b4b;
-}
-
-body.theme-day .player-header-btn:focus,
-body.theme-day .player-header-btn.focused {
-    border-color: #6366f1 !important;
-    background: rgba(99, 102, 241, 0.15) !important;
-    box-shadow: 0 0 16px rgba(99, 102, 241, 0.4) !important;
 }
 
 /* Amnis 4 Main Action Cards Grid (2x2) */
@@ -966,18 +1004,6 @@ body.theme-day .player-header-btn.focused {
     font-size: 13px;
     font-weight: 800;
     color: #00f2fe;
-}
-
-body.theme-day .player-subtab {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-    color: #475569;
-}
-
-body.theme-day .player-subtab.active {
-    background: #0284c7;
-    border-color: #0284c7;
-    color: #ffffff;
 }
 
 /* Amnis Downloads & Streams Container (Large Screen Layout) */
@@ -1391,35 +1417,6 @@ body.media-playing-mode #app-container {
     white-space: nowrap !important;
 }
 
-.osd-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.osd-play-btn {
-    width: 110px;
-    height: 110px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 52px;
-    color: #ffffff;
-    cursor: pointer;
-    transition: var(--transition-smooth);
-}
-
-.osd-play-btn:focus, .osd-play-btn.focused {
-    outline: none;
-    border-color: var(--border-focus);
-    box-shadow: var(--glow-focus);
-    transform: scale(1.1);
-}
-
 .osd-bottom {
     display: flex;
     flex-direction: column;
@@ -1593,8 +1590,7 @@ body.media-playing-mode #app-container {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(15, 12, 19, 0.88);
-    backdrop-filter: blur(14px);
+    background: rgba(15, 12, 19, 0.96);
     border: 2px solid var(--border-focus);
     border-radius: 24px;
     padding: 32px 50px;
@@ -1720,8 +1716,7 @@ body.media-playing-mode #app-container {
     position: absolute;
     top: 50px;
     right: 70px;
-    background: rgba(15, 12, 19, 0.82);
-    backdrop-filter: blur(8px);
+    background: rgba(15, 12, 19, 0.96);
     border: 1px solid rgba(0, 242, 254, 0.45);
     box-shadow: 0 0 18px rgba(0, 242, 254, 0.35);
     border-radius: 12px;
@@ -1737,55 +1732,14 @@ body.media-playing-mode #app-container {
     transition: opacity 0.3s ease;
 }
 
-/* Amnis Torrent / Stream Information HUD Modal */
-.hud-overlay {
-    width: 780px;
-    background: #170f26;
-    border: 2px solid var(--border-focus);
-    border-radius: 24px;
-    padding: 36px 40px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95), var(--glow-focus);
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
-
-.hud-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #ffffff;
-    border-bottom: 1px solid var(--border-subtle);
-    padding-bottom: 12px;
-    text-align: center;
-}
-
-.hud-stat-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 16px;
-}
-
-.hud-label {
-    color: var(--text-muted);
-}
-
-.hud-value {
-    color: var(--primary-cyan);
-    font-weight: 600;
-    font-family: Consolas, monospace;
-}
-
-/* Modals & Dialogs (Input URL, Subtitles, Confirmation, Torrent HUD) */
-.app-dialog-backdrop,
-#amnis-hud-backdrop,
-#player-hud-backdrop {
+/* Modals & Dialogs (Settings, Episodes, Audio Selection) */
+.app-dialog-backdrop {
     position: fixed;
     top: 0;
     left: 0;
     width: 1920px;
     height: 1080px;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(14px);
+    background: rgba(0, 0, 0, 0.92);
     display: none;
     align-items: center;
     justify-content: center;
@@ -1793,100 +1747,8 @@ body.media-playing-mode #app-container {
 }
 
 .app-dialog-backdrop.dialog-open,
-.app-dialog-backdrop.hud-visible,
-#amnis-hud-backdrop.dialog-open,
-#amnis-hud-backdrop.hud-visible,
-#player-hud-backdrop.dialog-open,
-#player-hud-backdrop.hud-visible {
+.app-dialog-backdrop.hud-visible {
     display: flex !important;
-}
-
-/* Day Mode styling for Torrent Information HUD */
-body.theme-day #amnis-hud-backdrop,
-body.theme-day #player-hud-backdrop {
-    background: rgba(15, 23, 42, 0.7) !important;
-}
-
-body.theme-day .hud-overlay {
-    background: #ffffff !important;
-    border: 2px solid #0284c7 !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25), 0 0 24px rgba(2, 132, 199, 0.35) !important;
-}
-
-body.theme-day .hud-title {
-    color: #0f172a !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-
-body.theme-day .hud-label {
-    color: #475569 !important;
-}
-
-body.theme-day .hud-value {
-    color: #0284c7 !important;
-}
-
-body.theme-day #hud-stream-name {
-    color: #0f172a !important;
-}
-
-/* Distinct high-contrast focus styling for HUD buttons */
-#hud-close-btn,
-#hud-play-btn {
-    min-width: 140px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 700;
-    transition: var(--transition-smooth);
-}
-
-#hud-close-btn {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    color: #ffffff;
-}
-
-#hud-close-btn:focus,
-#hud-close-btn.focused {
-    outline: none;
-    border-color: #ef4444 !important;
-    background: #ef4444 !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 24px rgba(239, 68, 68, 0.9) !important;
-    transform: scale(1.08);
-}
-
-#hud-play-btn:focus,
-#hud-play-btn.focused {
-    outline: none;
-    border-color: var(--border-focus) !important;
-    box-shadow: var(--glow-focus) !important;
-    transform: scale(1.08);
-}
-
-body.theme-day #hud-close-btn {
-    background: #f1f5f9 !important;
-    color: #0f172a !important;
-    border: 1px solid #cbd5e1 !important;
-}
-
-body.theme-day #hud-close-btn:focus,
-body.theme-day #hud-close-btn.focused {
-    background: #ef4444 !important;
-    color: #ffffff !important;
-    border-color: #dc2626 !important;
-    box-shadow: 0 0 24px rgba(239, 68, 68, 0.8) !important;
-}
-
-body.theme-day #hud-play-btn {
-    background: #0284c7 !important;
-    color: #ffffff !important;
-}
-
-body.theme-day #hud-play-btn:focus,
-body.theme-day #hud-play-btn.focused {
-    background: #0369a1 !important;
-    box-shadow: 0 0 24px rgba(2, 132, 199, 0.8) !important;
 }
 
 .dialog-window {
@@ -1998,459 +1860,6 @@ body.theme-day #hud-play-btn.focused {
 }
 
 /* ==========================================================================
-   DAY MODE (LIGHT THEME) ENGINE
-   ========================================================================== */
-body.theme-day {
-    --bg-dark: #f8fafc;
-    --bg-surface: #ffffff;
-    --bg-card: #ffffff;
-    --bg-card-hover: #f1f5f9;
-    --border-subtle: rgba(15, 23, 42, 0.12);
-    --border-focus: #0284c7;
-    --glow-focus: 0 0 20px rgba(2, 132, 199, 0.5), 0 0 4px rgba(2, 132, 199, 0.8);
-    --text-primary: #0f172a;
-    --text-secondary: #334155;
-    --text-muted: #64748b;
-    --amnis-purple: #e0e7ff;
-    --amnis-purple-light: #c7d2fe;
-    background-color: #f8fafc;
-    color: #0f172a;
-    background-image: 
-        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 45%),
-        radial-gradient(circle at 85% 85%, rgba(14, 165, 233, 0.08) 0%, transparent 45%);
-}
-
-/* Header & Brand in Day Mode */
-body.theme-day header.app-header {
-    background: rgba(255, 255, 255, 0.96) !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04) !important;
-}
-
-body.theme-day .brand-title {
-    background: linear-gradient(90deg, #0f172a 30%, #0284c7 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-}
-
-body.theme-day .brand-subtitle {
-    color: #64748b !important;
-}
-
-body.theme-day .status-badge {
-    background: #f1f5f9 !important;
-    border: 1px solid #e2e8f0 !important;
-    color: #334155 !important;
-}
-
-/* Navigation Tabs in Day Mode */
-body.theme-day .nav-tab {
-    background: #f1f5f9 !important;
-    border: 1px solid #e2e8f0 !important;
-    color: #475569 !important;
-}
-
-body.theme-day .nav-tab:hover {
-    background: #e2e8f0 !important;
-    color: #0f172a !important;
-}
-
-body.theme-day .nav-tab.active {
-    background: #0284c7 !important;
-    border-color: #0284c7 !important;
-    color: #ffffff !important;
-    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
-}
-
-body.theme-day .nav-tab:focus,
-body.theme-day .nav-tab.focused {
-    outline: none;
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.6) !important;
-    color: #ffffff !important;
-    transform: scale(1.05);
-}
-
-/* Buttons in Day Mode */
-body.theme-day .btn-secondary {
-    background: #e2e8f0 !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #0f172a !important;
-}
-
-body.theme-day .btn-secondary:hover {
-    background: #cbd5e1 !important;
-}
-
-body.theme-day .btn-secondary:focus,
-body.theme-day .btn-secondary.focused {
-    border-color: #0284c7 !important;
-    color: #0f172a !important;
-    box-shadow: 0 0 16px rgba(2, 132, 199, 0.5) !important;
-    transform: scale(1.04);
-}
-
-body.theme-day .btn-primary {
-    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
-    color: #ffffff !important;
-}
-
-body.theme-day .action-btn-clean {
-    background: #f1f5f9 !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #334155 !important;
-}
-
-body.theme-day .action-btn-clean:focus,
-body.theme-day .action-btn-clean.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 16px rgba(2, 132, 199, 0.5) !important;
-    color: #0284c7 !important;
-}
-
-body.theme-day .action-btn-delete {
-    background: #fee2e2 !important;
-    border: 1px solid #fca5a5 !important;
-    color: #dc2626 !important;
-}
-
-body.theme-day .action-btn-delete:focus,
-body.theme-day .action-btn-delete.focused {
-    border-color: #ef4444 !important;
-    box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) !important;
-}
-
-body.theme-day .action-btn-info {
-    background: #e0f2fe !important;
-    border: 1px solid #bae6fd !important;
-    color: #0369a1 !important;
-}
-
-body.theme-day .action-btn-play {
-    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
-    color: #ffffff !important;
-    border: none !important;
-}
-
-body.theme-day .osd-btn {
-    background: #e2e8f0 !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #0f172a !important;
-}
-
-/* Settings Pills & Labels in Day Mode */
-body.theme-day .settings-pill {
-    background: #f1f5f9 !important;
-    border: 2px solid #cbd5e1 !important;
-    color: #334155 !important;
-}
-
-body.theme-day .settings-pill.active {
-    background: rgba(2, 132, 199, 0.14) !important;
-    border-color: #0284c7 !important;
-    color: #0284c7 !important;
-    box-shadow: 0 0 14px rgba(2, 132, 199, 0.3) !important;
-}
-
-body.theme-day .settings-pill:focus,
-body.theme-day .settings-pill.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 18px rgba(2, 132, 199, 0.5) !important;
-}
-
-body.theme-day .settings-label {
-    color: #0f172a !important;
-}
-
-/* Storage Pills in File Manager */
-body.theme-day .storage-pill {
-    background: #f1f5f9 !important;
-    border: 2px solid #cbd5e1 !important;
-    color: #1e293b !important;
-}
-
-body.theme-day .storage-pill.active {
-    background: rgba(2, 132, 199, 0.14) !important;
-    border-color: #0284c7 !important;
-    color: #0284c7 !important;
-    box-shadow: 0 0 14px rgba(2, 132, 199, 0.3) !important;
-}
-
-body.theme-day .storage-pill:focus,
-body.theme-day .storage-pill.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.6) !important;
-    background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%) !important;
-    color: #ffffff !important;
-}
-
-body.theme-day .storage-pill.storage-pill-disconnected {
-    background: #f8fafc !important;
-    border: 2px dashed #94a3b8 !important;
-    color: #64748b !important;
-}
-
-/* Receiver Panels & Cards in Day Mode */
-body.theme-day .receiver-panel {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
-}
-
-body.theme-day .panel-title {
-    color: #0f172a !important;
-}
-
-body.theme-day .qr-card {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-}
-
-body.theme-day .qr-caption {
-    color: #64748b !important;
-}
-
-body.theme-day .connection-info-box {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-}
-
-body.theme-day .info-row {
-    color: #334155 !important;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-body.theme-day .info-label {
-    color: #64748b !important;
-}
-
-body.theme-day .info-value {
-    color: #0284c7 !important;
-}
-
-body.theme-day .usb-target-box {
-    background: #eff6ff !important;
-    border: 1px solid #bfdbfe !important;
-}
-
-body.theme-day .usb-target-title {
-    color: #1d4ed8 !important;
-}
-
-body.theme-day .usb-target-path {
-    color: #334155 !important;
-}
-
-body.theme-day .transfer-card {
-    background: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04) !important;
-}
-
-body.theme-day .transfer-card:focus,
-body.theme-day .transfer-card.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.5) !important;
-}
-
-body.theme-day .transfer-filename {
-    color: #0f172a !important;
-}
-
-body.theme-day .transfer-meta {
-    color: #475569 !important;
-}
-
-body.theme-day .progress-track {
-    background: #e2e8f0 !important;
-}
-
-/* Video Player Cards & Active Downloads in Day Mode */
-body.theme-day .player-title,
-body.theme-day .amnis-title {
-    color: #0f172a !important;
-}
-
-body.theme-day .player-tagline,
-body.theme-day .amnis-tagline {
-    color: #64748b !important;
-}
-
-body.theme-day .player-card,
-body.theme-day .amnis-card {
-    background: #ffffff !important;
-    border: 2px solid #e2e8f0 !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06) !important;
-}
-
-body.theme-day .player-card:focus,
-body.theme-day .player-card.focused,
-body.theme-day .amnis-card:focus,
-body.theme-day .amnis-card.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 24px rgba(2, 132, 199, 0.6), 0 12px 30px rgba(0, 0, 0, 0.1) !important;
-    background: #f0f9ff !important;
-}
-
-body.theme-day .player-card-icon,
-body.theme-day .amnis-card-icon {
-    background: #e0f2fe !important;
-    color: #0284c7 !important;
-    box-shadow: inset 0 2px 6px rgba(2, 132, 199, 0.2) !important;
-}
-
-body.theme-day .player-card-title,
-body.theme-day .amnis-card-title {
-    color: #0f172a !important;
-}
-
-body.theme-day .player-card-desc,
-body.theme-day .amnis-card-desc {
-    color: #475569 !important;
-}
-
-body.theme-day .player-downloads-container,
-body.theme-day .amnis-downloads-container {
-    background: #ffffff !important;
-    border: 2px solid #e2e8f0 !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
-}
-
-body.theme-day .player-download-card,
-body.theme-day .amnis-download-card {
-    background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-}
-
-body.theme-day .player-download-card:focus,
-body.theme-day .player-download-card.focused,
-body.theme-day .amnis-download-card:focus,
-body.theme-day .amnis-download-card.focused {
-    border-color: #0284c7 !important;
-    background: #f0f9ff !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.4) !important;
-}
-
-body.theme-day .player-download-title,
-body.theme-day .amnis-download-title {
-    color: #0f172a !important;
-}
-
-body.theme-day .player-download-meta,
-body.theme-day .amnis-download-meta {
-    color: #475569 !important;
-}
-
-body.theme-day .queue-stats {
-    color: #64748b !important;
-}
-
-/* File Manager in Day Mode */
-body.theme-day .filemanager-toolbar {
-    border-bottom: 1px solid #e2e8f0 !important;
-}
-
-body.theme-day .fm-navigation-bar {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-}
-
-body.theme-day .capacity-text {
-    color: #475569 !important;
-}
-
-body.theme-day .file-card {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
-}
-
-body.theme-day .file-card:focus,
-body.theme-day .file-card.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 20px rgba(2, 132, 199, 0.5) !important;
-    background: #f0f9ff !important;
-}
-
-body.theme-day .file-name-text {
-    color: #0f172a !important;
-}
-
-body.theme-day .file-meta-text {
-    color: #64748b !important;
-}
-
-body.theme-day .folder-card .file-icon {
-    color: #0284c7 !important;
-}
-
-/* Status Badges in Day Mode */
-body.theme-day .status-completed {
-    background: #dcfce7 !important;
-    color: #15803d !important;
-    border: 1px solid #86efac !important;
-}
-
-body.theme-day .status-receiving {
-    background: #e0f2fe !important;
-    color: #0369a1 !important;
-    border: 1px solid #7dd3fc !important;
-}
-
-body.theme-day .status-failed {
-    background: #fee2e2 !important;
-    color: #b91c1c !important;
-    border: 1px solid #fca5a5 !important;
-}
-
-body.theme-day .status-saving {
-    background: #fef3c7 !important;
-    color: #b45309 !important;
-    border: 1px solid #fcd34d !important;
-}
-
-/* Dialogs in Day Mode */
-body.theme-day .dialog-window {
-    background: #ffffff !important;
-    border: 2px solid #0284c7 !important;
-    color: #0f172a !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25), 0 0 24px rgba(2, 132, 199, 0.3) !important;
-}
-
-body.theme-day .dialog-title {
-    color: #0f172a !important;
-}
-
-body.theme-day .dialog-body {
-    color: #334155 !important;
-}
-
-body.theme-day .dialog-input {
-    background: #f8fafc !important;
-    border: 2px solid #cbd5e1 !important;
-    color: #0f172a !important;
-}
-
-body.theme-day .dialog-input:focus,
-body.theme-day .dialog-input.focused {
-    border-color: #0284c7 !important;
-    box-shadow: 0 0 16px rgba(2, 132, 199, 0.5) !important;
-}
-
-body.theme-day .toast-msg {
-    background: rgba(255, 255, 255, 0.98) !important;
-    color: #0f172a !important;
-    border-color: #0284c7 !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
-}
-
-body.theme-day .preset-stream-btn {
-    background: #e2e8f0 !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #0f172a !important;
-}
-
-/* ==========================================================================
    APP FONT SIZE SCALING ENGINE
    ========================================================================== */
 body.font-large {
@@ -2518,11 +1927,7 @@ body.font-xlarge .amnis-title {
     color: #ffffff;
     box-shadow: 0 0 16px rgba(0, 242, 254, 0.45);
 }
-body.theme-day .settings-pill.active {
-    background: rgba(2, 132, 199, 0.16);
-    border-color: #0284c7;
-    color: #0284c7 !important;
-}
+
 .settings-pill:focus,
 .settings-pill.focused {
     outline: none;
@@ -2605,12 +2010,6 @@ body.theme-day .settings-pill.active {
     background: rgba(0, 242, 254, 0.15);
     border-color: var(--primary-cyan);
     color: #ffffff;
-}
-
-body.theme-day .breadcrumb-crumb.active-crumb {
-    background: rgba(2, 132, 199, 0.15);
-    border-color: #0284c7;
-    color: #0284c7;
 }
 
 .breadcrumb-crumb:focus,
@@ -2747,10 +2146,9 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     padding: 4px 10px;
     border-radius: 6px;
     text-transform: uppercase;
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.16);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .hero-badge.badge-accent {
@@ -2816,10 +2214,9 @@ body.theme-day .breadcrumb-crumb.active-crumb {
 }
 
 .hero-btn-secondary {
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(14px);
+    background: rgba(255, 255, 255, 0.16);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 12px;
     padding: 12px 22px;
     font-size: 15px;
@@ -2828,7 +2225,7 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.12s ease-out, border-color 0.12s ease-out;
 }
 
 .hero-btn-secondary:hover,
@@ -2860,17 +2257,30 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     letter-spacing: -0.3px;
 }
 
+#view-home {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    padding-right: 8px;
+}
+#view-home::-webkit-scrollbar {
+    width: 6px;
+}
+#view-home::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
 /* Quick Launcher Grid (Apple TV style tiles) */
 .home-tiles-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 18px;
 }
 
 .home-tile {
     position: relative;
-    background: var(--bg-panel);
-    backdrop-filter: blur(16px);
+    background: rgba(26, 20, 36, 0.95);
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
     padding: 20px;
@@ -2879,7 +2289,9 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     gap: 16px;
     cursor: pointer;
     overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+    transform: translateZ(0);
+    transition: transform 0.12s ease-out, border-color 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .tile-glow {
@@ -2968,12 +2380,14 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     flex-shrink: 0;
     border-radius: 18px;
     overflow: hidden;
-    background: var(--bg-panel);
+    background: rgba(26, 20, 36, 0.95);
     border: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+    transform: translateZ(0);
+    transition: transform 0.12s ease-out, border-color 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .media-poster-card:hover,
@@ -3021,8 +2435,7 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     text-transform: uppercase;
     padding: 3px 8px;
     border-radius: 5px;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.78);
     color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -3084,19 +2497,21 @@ body.theme-day .breadcrumb-crumb.active-crumb {
 /* System Dashboard & Storage Health Widgets */
 .home-widgets-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 18px;
 }
 
 .dashboard-widget {
-    background: var(--bg-panel);
+    background: rgba(26, 20, 36, 0.95);
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
     padding: 22px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+    transform: translateZ(0);
+    transition: transform 0.12s ease-out, border-color 0.12s ease-out, box-shadow 0.12s ease-out;
 }
 
 .dashboard-widget:hover,
@@ -3174,52 +2589,3 @@ body.theme-day .breadcrumb-crumb.active-crumb {
     background: rgba(255, 255, 255, 0.08);
     color: #cbd5e1;
 }
-
-/* Day Mode Color Overrides for Home Launcher */
-body.theme-day .home-hero-card {
-    background: #e2e8f0;
-    border-color: #cbd5e1;
-    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
-}
-
-body.theme-day .hero-overlay-gradient {
-    background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(248, 250, 252, 0.82) 45%, rgba(248, 250, 252, 0.25) 100%),
-                linear-gradient(0deg, rgba(248, 250, 252, 0.95) 0%, rgba(248, 250, 252, 0.3) 60%, transparent 100%);
-}
-
-body.theme-day .hero-title {
-    color: #0f172a;
-    text-shadow: none;
-}
-
-body.theme-day .hero-desc {
-    color: #475569;
-    text-shadow: none;
-}
-
-body.theme-day .section-title {
-    color: #0f172a;
-}
-
-body.theme-day .tile-title {
-    color: #0f172a;
-}
-
-body.theme-day .poster-title {
-    color: #0f172a;
-}
-
-body.theme-day .widget-main-stat {
-    color: #0f172a;
-}
-
-body.theme-day .guide-step-card {
-    background: #f1f5f9 !important;
-    border-color: #cbd5e1 !important;
-}
-
-body.theme-day .step-title {
-    color: #0f172a !important;
-}
-
-

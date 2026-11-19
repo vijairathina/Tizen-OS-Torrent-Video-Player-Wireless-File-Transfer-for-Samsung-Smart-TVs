@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">LinkPlay</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_player">Video Player</string>
+    <string name="tab_receiver">File Receiver</string>
+    <string name="tab_filemanager">File Manager</string>
+</resources>

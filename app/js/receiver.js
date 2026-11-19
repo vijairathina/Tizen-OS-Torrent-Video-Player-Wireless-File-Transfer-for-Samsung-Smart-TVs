@@ -56,26 +56,33 @@ window.FileReceiver = (function() {
         renderQRCode();
     }
 
-    function renderQRCode() {
-        const qrContainer = document.getElementById('qrcode-container');
-        if (!qrContainer) return;
+    function renderQRCode(targetContainerId) {
+        const targetIds = targetContainerId ? [targetContainerId] : ['qrcode-container', 'home-qrcode-container'];
+        targetIds.forEach(function(id) {
+            const qrContainer = document.getElementById(id);
+            if (!qrContainer) return;
 
-        qrContainer.innerHTML = '';
-        if (typeof QRCode !== 'undefined') {
-            try {
-                qrcodeInstance = new QRCode(qrContainer, {
-                    text: senderUrl,
-                    width: 140,
-                    height: 140,
-                    colorDark: '#0f0c13',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-            } catch (err) {
-                console.error('[FileReceiver] QR code error:', err);
-                qrContainer.innerHTML = `<div style="padding:20px;color:#fff;">${senderUrl}</div>`;
+            qrContainer.innerHTML = '';
+            if (typeof QRCode !== 'undefined') {
+                try {
+                    const isHome = (id === 'home-qrcode-container');
+                    const size = isHome ? 76 : 140;
+                    const urlToEncode = senderUrl || `http://${serverHostIP}:${transferPort}`;
+                    new QRCode(qrContainer, {
+                        text: urlToEncode,
+                        width: size,
+                        height: size,
+                        colorDark: '#0f0c13',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M,
+                        useSVG: true
+                    });
+                } catch (err) {
+                    console.error('[FileReceiver] QR code error for ' + id + ':', err);
+                    qrContainer.innerHTML = `<div style="padding:8px;color:#fff;font-size:11px;">${senderUrl}</div>`;
+                }
             }
-        }
+        });
     }
 
     /**
@@ -764,6 +771,7 @@ window.FileReceiver = (function() {
 
     return {
         init: init,
+        renderQRCode: renderQRCode,
         showToast: showToast,
         sendSocketMessage: sendSocketMessage,
         triggerReceiverTabAlert: triggerReceiverTabAlert,

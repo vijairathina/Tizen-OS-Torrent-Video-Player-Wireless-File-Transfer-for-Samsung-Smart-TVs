@@ -1,9 +1,12 @@
 /**
  * Home Launcher & Dashboard for Samsung Tizen TV
- * Inspired by Apple TV and Google TV modern UI paradigms.
- * Features Hero Spotlight banner, Continue Watching media carousel,
- * Quick Launch tiles, Storage Health gauges, TV Performance Boost,
- * and built-in Samsung TV Ad-Blocker setup guide.
+ * Optimized for low-latency D-pad navigation and 4K Crystal UHD.
+ * Features:
+ * - Dynamic Hero Spotlight: shows Last Played movie (with Continue Watch & Play from Start)
+ *   or Last Downloaded movie on fresh installs.
+ * - Continue Watching & Recent Media Carousel (directly below hero)
+ * - Quick Launch Tiles (moved down below media)
+ * - Storage Health & Companion Bridge Network Gauges
  */
 
 window.HomeLauncher = (function() {
@@ -11,7 +14,7 @@ window.HomeLauncher = (function() {
 
     let currentSpotlightItem = null;
     let cachedHistory = [];
-    let isBoostRunning = false;
+    let isFetching = false;
 
     function init() {
         console.log('[HomeLauncher] Initializing TV Home Dashboard...');
@@ -24,8 +27,6 @@ window.HomeLauncher = (function() {
         const tilePlayer = document.getElementById('home-tile-player');
         const tileReceiver = document.getElementById('home-tile-receiver');
         const tileFileManager = document.getElementById('home-tile-filemanager');
-        const tileBoost = document.getElementById('home-tile-boost');
-        const headerBoostBtn = document.getElementById('header-boost-btn');
 
         if (tilePlayer) {
             tilePlayer.addEventListener('click', () => {
@@ -42,123 +43,38 @@ window.HomeLauncher = (function() {
                 if (window.App) window.App.switchView('filemanager', true);
             });
         }
-        if (tileBoost) {
-            tileBoost.addEventListener('click', openAdBlockModal);
-        }
-        if (headerBoostBtn) {
-            headerBoostBtn.addEventListener('click', runTVBoost);
-        }
 
         // Hero Action Buttons
         const heroPlayBtn = document.getElementById('hero-btn-play');
         const heroSecondaryBtn = document.getElementById('hero-btn-secondary');
 
         if (heroPlayBtn) {
-            heroPlayBtn.addEventListener('click', launchSpotlightMedia);
+            heroPlayBtn.addEventListener('click', () => {
+                if (currentSpotlightItem) {
+                    launchSpotlightMedia(false);
+                } else if (window.App) {
+                    window.App.switchView('player', true);
+                }
+            });
         }
         if (heroSecondaryBtn) {
             heroSecondaryBtn.addEventListener('click', () => {
-                if (window.App) window.App.switchView('receiver', true);
-            });
-        }
-
-        // Ad-Blocker Guide Modal Actions
-        const modalBackdrop = document.getElementById('adblock-modal-backdrop');
-        const modalCloseBtn = document.getElementById('adblock-modal-close-btn');
-        const modalBoostBtn = document.getElementById('adblock-modal-boost-btn');
-
-        if (modalCloseBtn) {
-            modalCloseBtn.addEventListener('click', closeAdBlockModal);
-        }
-        if (modalBoostBtn) {
-            modalBoostBtn.addEventListener('click', () => {
-                closeAdBlockModal();
-                runTVBoost();
-            });
-        }
-        if (modalBackdrop) {
-            modalBackdrop.addEventListener('click', (e) => {
-                if (e.target === modalBackdrop) closeAdBlockModal();
+                if (currentSpotlightItem && currentSpotlightItem.resumeSec > 8) {
+                    launchSpotlightMedia(true); // Restart from beginning
+                } else if (window.App) {
+                    window.App.switchView('player', true);
+                }
             });
         }
     }
 
     function refresh() {
         loadHistoryData();
-        renderSpotlight();
-        renderContinueWatching();
         renderStorageHealth();
         renderSystemStatus();
     }
 
-    function loadHistoryData() {
-        cachedHistory = [];
-        let savedHistory = [];
-        try {
-            const raw = localStorage.getItem('tvfilehub_received_history_v2');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) savedHistory = parsed;
-            }
-        } catch (e) {
-            console.warn('[HomeLauncher] History parse error:', e);
-        }
-
-        // Fetch completed movies from Raspberry Pi hub - RPi is the SINGLE SOURCE OF TRUTH
-        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
-        fetch(`${srvUrl}/api/downloads`)
-            .then(res => res.json())
-            .then(data => {
-                const availableMovies = (data && Array.isArray(data.available_movies)) ? data.available_movies : [];
-                const downloadingItems = (data && Array.isArray(data.currently_downloading)) ? data.currently_downloading : [];
-
-                // 1. Validated RPi available movies take top priority
-                const validatedMovies = availableMovies.map(m => ({
-                    name: m.name,
-                    cleanTitle: m.clean_title,
-                    size: m.size || 0,
-                    isUsb: false,
-                    isTorrent: false,
-                    isVideo: true,
-                    streamUrl: m.stream_url
-                }));
-
-                // 2. Prune dead or non-existent history items (such as old test torrents like Lakshmikanthan)
-                const cleanedSaved = savedHistory.filter(h => {
-                    const hName = (h.name || h.filename || '').toLowerCase();
-                    // Keep if matches an available movie or active download on Pi
-                    const onPi = availableMovies.some(m => m.name.toLowerCase() === hName) ||
-                                 downloadingItems.some(d => d.name.toLowerCase() === hName);
-                    // Keep if physical USB storage item
-                    const isUsb = Boolean(h.isUsb);
-                    return onPi || isUsb;
-                });
-
-                // Update localStorage with cleaned history
-                try {
-                    localStorage.setItem('tvfilehub_received_history_v2', JSON.stringify(cleanedSaved));
-                } catch (eClean) {}
-
-                // Combine: RPi available movies at the front, followed by any valid USB items
-                cachedHistory = [...validatedMovies];
-                cleanedSaved.forEach(item => {
-                    if (!cachedHistory.some(c => (c.name || '').toLowerCase() === (item.name || item.filename || '').toLowerCase())) {
-                        cachedHistory.push(item);
-                    }
-                });
-
-                renderSpotlight();
-                renderContinueWatching();
-            })
-            .catch(() => {
-                // Offline fallback
-                cachedHistory = savedHistory.filter(h => h.isUsb || (h.streamUrl && h.streamUrl.length > 5));
-                renderSpotlight();
-                renderContinueWatching();
-            });
-    }
-
-    function getResumeMap() {
+    function getResumePoints() {
         try {
             const raw = localStorage.getItem('tvhub_resume_points');
             return raw ? JSON.parse(raw) : {};
@@ -167,11 +83,26 @@ window.HomeLauncher = (function() {
         }
     }
 
+    function getLastPlayedRecord() {
+        try {
+            const raw = localStorage.getItem('tvhub_last_played');
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function formatTime(seconds) {
+        if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
     function cleanTitle(filename) {
         if (!filename) return 'Live Media Stream';
         let name = filename.replace(/^www\.[a-zA-Z0-9.\-_]+\s*-\s*/i, '');
-        name = name.replace(/\.(mkv|mp4|avi|mov|webm|torrent)$/i, '');
-        // Clean out typical scene tags for crisp TV display
+        name = name.replace(/\.(mkv|mp4|avi|mov|webm|torrent|ts)$/i, '');
         name = name.replace(/-\s*\(.*?AAC.*?\)/gi, '');
         name = name.replace(/\[.*?\]/g, '').replace(/\(.*?\)/g, (match) => {
             return /^\(\d{4}\)$/.test(match) ? match : '';
@@ -180,97 +111,259 @@ window.HomeLauncher = (function() {
         return name || filename;
     }
 
-    function renderSpotlight() {
+    function loadHistoryData() {
+        if (isFetching) return;
+        isFetching = true;
+
+        let savedHistory = [];
+        try {
+            const raw = localStorage.getItem('tvfilehub_received_history_v2');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) savedHistory = parsed;
+            }
+        } catch (e) {}
+
+        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
+
+        // Fetch completed movies from Server hub
+        fetch(`${srvUrl}/api/downloads`, { cache: 'no-cache' })
+            .then(res => res.json())
+            .then(data => {
+                isFetching = false;
+                const availableMovies = (data && Array.isArray(data.available_movies)) ? data.available_movies : [];
+                const downloadingItems = (data && Array.isArray(data.currently_downloading)) ? data.currently_downloading : [];
+
+                const validatedMovies = availableMovies.map(m => ({
+                    name: m.name,
+                    cleanTitle: m.clean_title || cleanTitle(m.name),
+                    size: m.size || 0,
+                    sizeFormatted: m.size_formatted || '',
+                    isUsb: false,
+                    isTorrent: false,
+                    isVideo: true,
+                    streamUrl: m.stream_url
+                }));
+
+                const cleanedSaved = savedHistory.filter(h => {
+                    const hName = (h.name || h.filename || '').toLowerCase();
+                    const onPi = availableMovies.some(m => m.name.toLowerCase() === hName) ||
+                                 downloadingItems.some(d => d.name.toLowerCase() === hName);
+                    return onPi || Boolean(h.isUsb);
+                });
+
+                cachedHistory = [...validatedMovies];
+                cleanedSaved.forEach(item => {
+                    if (!cachedHistory.some(c => (c.name || '').toLowerCase() === (item.name || item.filename || '').toLowerCase())) {
+                        cachedHistory.push(item);
+                    }
+                });
+
+                determineAndRenderSpotlight();
+                renderContinueWatching();
+            })
+            .catch(() => {
+                isFetching = false;
+                // Offline fallback
+                cachedHistory = savedHistory.filter(h => h.isUsb || (h.streamUrl && h.streamUrl.length > 5));
+                determineAndRenderSpotlight();
+                renderContinueWatching();
+            });
+    }
+
+    function determineAndRenderSpotlight() {
+        const resumeMap = getResumePoints();
+        const lastPlayed = getLastPlayedRecord();
+
+        let spotlight = null;
+
+        // 1. Priority: Last Played Movie
+        if (lastPlayed && (lastPlayed.streamUrl || lastPlayed.name)) {
+            const resumeKey = lastPlayed.name || lastPlayed.title;
+            const rEntry = resumeMap[resumeKey];
+            const rSec = (rEntry && rEntry.time) ? rEntry.time : (typeof rEntry === 'number' ? rEntry : 0);
+
+            // Match with cachedHistory for file size or details if available
+            const matching = cachedHistory.find(c => (c.name || '').toLowerCase() === (lastPlayed.name || '').toLowerCase());
+
+            spotlight = {
+                name: lastPlayed.name || lastPlayed.title,
+                cleanTitle: cleanTitle(lastPlayed.title || lastPlayed.name),
+                streamUrl: lastPlayed.streamUrl || (matching ? matching.streamUrl : ''),
+                subtitleUrl: lastPlayed.subtitleUrl || '',
+                size: (matching && matching.size) ? matching.size : (lastPlayed.size || 0),
+                sizeFormatted: (matching && matching.sizeFormatted) ? matching.sizeFormatted : '',
+                isLastPlayed: true,
+                resumeSec: rSec,
+                isUsb: matching ? matching.isUsb : false
+            };
+        }
+
+        // Check if resumeMap has a more recent resume point
+        if (!spotlight || spotlight.resumeSec <= 0) {
+            let topResumeKey = null;
+            let topResumeEntry = null;
+            let topUpdated = 0;
+            for (const [key, val] of Object.entries(resumeMap)) {
+                if (val && typeof val === 'object' && val.time > 5) {
+                    if ((val.updatedAt || 0) > topUpdated) {
+                        topUpdated = val.updatedAt || 0;
+                        topResumeKey = key;
+                        topResumeEntry = val;
+                    }
+                }
+            }
+            if (topResumeKey && topResumeEntry) {
+                const matching = cachedHistory.find(c => (c.name || '').toLowerCase() === topResumeKey.toLowerCase());
+                spotlight = {
+                    name: topResumeKey,
+                    cleanTitle: cleanTitle(topResumeKey),
+                    streamUrl: matching ? matching.streamUrl : '',
+                    subtitleUrl: '',
+                    size: matching ? matching.size : 0,
+                    sizeFormatted: matching ? matching.sizeFormatted : '',
+                    isLastPlayed: true,
+                    resumeSec: topResumeEntry.time,
+                    isUsb: matching ? matching.isUsb : false
+                };
+            }
+        }
+
+        // 2. Fallback for First-Time Users: Last Downloaded Show
+        if (!spotlight && cachedHistory.length > 0) {
+            const lastDownloaded = cachedHistory[0]; // Server's newest/top completed movie
+            spotlight = {
+                name: lastDownloaded.name,
+                cleanTitle: lastDownloaded.cleanTitle || cleanTitle(lastDownloaded.name),
+                streamUrl: lastDownloaded.streamUrl,
+                subtitleUrl: '',
+                size: lastDownloaded.size || 0,
+                sizeFormatted: lastDownloaded.sizeFormatted || '',
+                isLastDownloaded: true,
+                resumeSec: 0,
+                isUsb: lastDownloaded.isUsb
+            };
+        }
+
+        currentSpotlightItem = spotlight;
+        renderSpotlightUI();
+    }
+
+    function renderSpotlightUI() {
         const titleEl = document.getElementById('hero-title');
         const descEl = document.getElementById('hero-desc');
         const badgesContainer = document.getElementById('hero-badges');
+        const playBtn = document.getElementById('hero-btn-play');
+        const playBtnIcon = document.getElementById('hero-play-icon');
         const playBtnText = document.getElementById('hero-play-text');
+        const secondaryBtn = document.getElementById('hero-btn-secondary');
+        const secondaryBtnIcon = document.getElementById('hero-secondary-icon');
+        const secondaryBtnText = document.getElementById('hero-secondary-text');
 
-        const resumeMap = getResumeMap();
-
-        // Pick top item from history if available
-        let topItem = cachedHistory.length > 0 ? cachedHistory[0] : null;
-        currentSpotlightItem = topItem;
-
-        if (topItem) {
-            const title = cleanTitle(topItem.name);
-            const isTorrent = topItem.name.toLowerCase().endsWith('.torrent');
-            const isVideo = /\.(mp4|mkv|avi|mov|webm|ts)$/i.test(topItem.name);
-
-            if (titleEl) titleEl.textContent = title;
-
-            // Check resume position
-            const resumeKey = topItem.name;
-            const resumeSec = resumeMap[resumeKey] || 0;
-
-            if (descEl) {
-                const sizeStr = topItem.size && window.TVFilesystem ? window.TVFilesystem.formatBytes(topItem.size) : 'Ready to Stream';
-                const locStr = topItem.isUsb ? 'USB Storage' : 'Internal TV Storage';
-                descEl.textContent = `${sizeStr} • Stored on ${locStr} • High-Fidelity AVPlay Streaming Engine`;
-            }
-
-            if (badgesContainer) {
-                badgesContainer.innerHTML = `
-                    <span class="hero-badge badge-accent">★ FEATURED</span>
-                    <span class="hero-badge">${isTorrent ? 'TORRENT STREAM' : 'LOCAL VIDEO'}</span>
-                    <span class="hero-badge">1080P HEVC</span>
-                    <span class="hero-badge">DD+ 5.1</span>
-                    ${resumeSec > 0 ? `<span class="hero-badge badge-resume">RESUME READY</span>` : ''}
-                `;
-            }
-
-            if (playBtnText) {
-                if (resumeSec > 0) {
-                    const mins = Math.floor(resumeSec / 60);
-                    const secs = Math.floor(resumeSec % 60);
-                    playBtnText.textContent = `Resume from ${mins}:${secs < 10 ? '0' : ''}${secs}`;
-                } else {
-                    playBtnText.textContent = isTorrent ? 'Stream in Video Player' : 'Play Video';
-                }
-            }
-        } else {
-            // Default showcase when fresh
-            if (titleEl) titleEl.textContent = 'TV File Hub & Video Player';
-            if (descEl) descEl.textContent = 'Ad-Free High-Performance Media Hub • Wireless Phone Transfer • Seamless Torrent Streaming';
+        if (!currentSpotlightItem) {
+            // Default Welcome Hero
+            if (titleEl) titleEl.textContent = 'LinkPlay';
+            if (descEl) descEl.textContent = 'High-Performance Media Hub • Wireless Phone Transfer • Seamless Video Streaming';
             if (badgesContainer) {
                 badgesContainer.innerHTML = `
                     <span class="hero-badge badge-accent">★ WELCOME</span>
-                    <span class="hero-badge">AD-FREE HUB</span>
                     <span class="hero-badge">AVPLAY 4K</span>
-                    <span class="hero-badge">USB AUTO-MOUNT</span>
+                    <span class="hero-badge">USB READY</span>
                 `;
             }
-            if (playBtnText) playBtnText.textContent = 'Explore Video Player';
-        }
-    }
-
-    function launchSpotlightMedia() {
-        if (!currentSpotlightItem) {
-            if (window.App) window.App.switchView('player');
+            if (playBtnIcon) playBtnIcon.textContent = '🎬';
+            if (playBtnText) playBtnText.textContent = 'Open Video Player';
+            if (secondaryBtnIcon) secondaryBtnIcon.textContent = '📥';
+            if (secondaryBtnText) secondaryBtnText.textContent = 'Wireless Receiver';
             return;
         }
 
-        const name = currentSpotlightItem.name;
+        const item = currentSpotlightItem;
+        const title = item.cleanTitle || cleanTitle(item.name);
+        const hasResume = item.resumeSec > 8;
+
+        if (titleEl) titleEl.textContent = title;
+
+        const sizeStr = item.sizeFormatted || (item.size && window.TVFilesystem ? window.TVFilesystem.formatBytes(item.size) : 'Ready to Stream');
+        const locStr = item.isUsb ? 'USB Drive' : 'Server Storage';
+
+        if (descEl) {
+            if (hasResume) {
+                descEl.textContent = `${sizeStr} • Stored on ${locStr} • Saved Resume Point: ${formatTime(item.resumeSec)}`;
+            } else if (item.isLastPlayed) {
+                descEl.textContent = `${sizeStr} • Stored on ${locStr} • Recently Played • High-Fidelity AVPlay Engine`;
+            } else {
+                descEl.textContent = `${sizeStr} • Stored on ${locStr} • Latest Download • High-Fidelity AVPlay Engine`;
+            }
+        }
+
+        if (badgesContainer) {
+            if (hasResume) {
+                badgesContainer.innerHTML = `
+                    <span class="hero-badge badge-accent">★ CONTINUE WATCHING</span>
+                    <span class="hero-badge">${item.isUsb ? 'USB MEDIA' : 'SERVER 4K'}</span>
+                    <span class="hero-badge badge-resume">RESUME AT ${formatTime(item.resumeSec)}</span>
+                `;
+            } else if (item.isLastPlayed) {
+                badgesContainer.innerHTML = `
+                    <span class="hero-badge badge-accent">★ LAST PLAYED</span>
+                    <span class="hero-badge">${item.isUsb ? 'USB MEDIA' : 'SERVER 4K'}</span>
+                    <span class="hero-badge">AVPLAY 1080P</span>
+                `;
+            } else {
+                badgesContainer.innerHTML = `
+                    <span class="hero-badge badge-accent">★ LATEST DOWNLOAD</span>
+                    <span class="hero-badge">${item.isUsb ? 'USB MEDIA' : 'SERVER 4K'}</span>
+                    <span class="hero-badge">READY TO STREAM</span>
+                `;
+            }
+        }
+
+        if (hasResume) {
+            // Continue Watch as primary, Play from Start as secondary
+            if (playBtnIcon) playBtnIcon.textContent = '▶';
+            if (playBtnText) playBtnText.textContent = `Continue Watch (${formatTime(item.resumeSec)})`;
+            if (secondaryBtnIcon) secondaryBtnIcon.textContent = '↺';
+            if (secondaryBtnText) secondaryBtnText.textContent = 'Play from Start';
+            if (secondaryBtn) secondaryBtn.style.display = 'inline-flex';
+        } else {
+            // Play Video as primary, Explore as secondary
+            if (playBtnIcon) playBtnIcon.textContent = '▶';
+            if (playBtnText) playBtnText.textContent = 'Play Video';
+            if (secondaryBtnIcon) secondaryBtnIcon.textContent = '🎬';
+            if (secondaryBtnText) secondaryBtnText.textContent = 'All Downloads';
+            if (secondaryBtn) secondaryBtn.style.display = 'inline-flex';
+        }
+    }
+
+    function launchSpotlightMedia(restartFromBeginning = false) {
+        if (!currentSpotlightItem) {
+            if (window.App) window.App.switchView('player', true);
+            return;
+        }
+
+        const item = currentSpotlightItem;
+        const name = item.name;
         const isTorrent = name.toLowerCase().endsWith('.torrent');
-        const isVideo = /\.(mp4|mkv|avi|mov|webm|ts)$/i.test(name);
 
         if (window.FileReceiver && window.FileReceiver.showToast) {
-            window.FileReceiver.showToast(`Launching ${cleanTitle(name)}...`);
+            const actionText = restartFromBeginning ? 'Restarting' : (item.resumeSec > 8 ? 'Continuing' : 'Playing');
+            window.FileReceiver.showToast(`${actionText} ${cleanTitle(name)}...`);
         }
 
         if (isTorrent) {
             if (window.App) window.App.switchView('player');
             const playerModule = window.VideoPlayer || window.Amnis;
             if (playerModule) {
-                playerModule.registerTorrentDownload(name, currentSpotlightItem.size, currentSpotlightItem.streamUrl);
-                playerModule.startTorrentStream(name, currentSpotlightItem.size, currentSpotlightItem.streamUrl);
-            }
-        } else if (isVideo) {
-            if (window.Player && window.Player.openMedia) {
-                window.Player.openMedia(currentSpotlightItem.streamUrl || currentSpotlightItem.path, name);
+                playerModule.registerTorrentDownload(name, item.size, item.streamUrl);
+                playerModule.startTorrentStream(name, item.size, item.streamUrl);
             }
         } else {
-            if (window.App) window.App.switchView('player');
+            if (window.Player && window.Player.openMedia) {
+                window.Player.openMedia(item.streamUrl || item.path, name, item.subtitleUrl, {
+                    restartFromBeginning: restartFromBeginning
+                });
+            }
         }
     }
 
@@ -279,34 +372,50 @@ window.HomeLauncher = (function() {
         if (!carousel) return;
 
         carousel.innerHTML = '';
-        const resumeMap = getResumeMap();
+        const resumeMap = getResumePoints();
 
-        if (cachedHistory.length === 0) {
-            // Show 3 attractive showcase quick-cards
+        // Separate items with active resume points vs others
+        const resumeItems = [];
+        const otherItems = [];
+
+        cachedHistory.forEach(item => {
+            const rEntry = resumeMap[item.name];
+            const rSec = (rEntry && rEntry.time) ? rEntry.time : (typeof rEntry === 'number' ? rEntry : 0);
+            const dur = (rEntry && rEntry.duration) ? rEntry.duration : 0;
+            if (rSec > 8) {
+                resumeItems.push({ ...item, resumeSec: rSec, durationSec: dur });
+            } else {
+                otherItems.push({ ...item, resumeSec: 0, durationSec: 0 });
+            }
+        });
+
+        const displayItems = [...resumeItems, ...otherItems].slice(0, 12);
+
+        if (displayItems.length === 0) {
             const starterCards = [
                 {
                     title: 'Wireless Phone Transfer',
-                    subtitle: 'Scan QR Code with Phone or PC',
+                    subtitle: 'Send Videos & Media from Mobile',
                     badge: 'FILE RECEIVER',
                     icon: '📱',
-                    color: 'linear-gradient(135deg, rgba(123,44,191,0.6) 0%, rgba(0,242,254,0.3) 100%)',
-                    action: () => window.App && window.App.switchView('receiver')
+                    color: 'linear-gradient(135deg, rgba(123,44,191,0.7) 0%, rgba(0,242,254,0.4) 100%)',
+                    action: () => window.App && window.App.switchView('receiver', true)
                 },
                 {
                     title: 'Stream BitTorrent Media',
-                    subtitle: 'Sequential AVPlay Hardware Playback',
+                    subtitle: 'AVPlay 4K Hardware Playback',
                     badge: 'VIDEO PLAYER',
-                    icon: '⚡',
-                    color: 'linear-gradient(135deg, rgba(239,68,68,0.5) 0%, rgba(147,51,234,0.3) 100%)',
-                    action: () => window.App && window.App.switchView('player')
+                    icon: '🎬',
+                    color: 'linear-gradient(135deg, rgba(37,99,235,0.7) 0%, rgba(56,189,248,0.4) 100%)',
+                    action: () => window.App && window.App.switchView('player', true)
                 },
                 {
                     title: 'Browse Connected Drives',
                     subtitle: 'USB Flash Drives & Local Storage',
                     badge: 'STORAGE',
                     icon: '💾',
-                    color: 'linear-gradient(135deg, rgba(16,185,129,0.5) 0%, rgba(59,130,246,0.3) 100%)',
-                    action: () => window.App && window.App.switchView('filemanager')
+                    color: 'linear-gradient(135deg, rgba(5,150,105,0.7) 0%, rgba(16,185,129,0.4) 100%)',
+                    action: () => window.App && window.App.switchView('filemanager', true)
                 }
             ];
 
@@ -331,41 +440,35 @@ window.HomeLauncher = (function() {
             return;
         }
 
-        // Render actual cards from history
-        cachedHistory.forEach((item, idx) => {
+        displayItems.forEach((item, idx) => {
             const card = document.createElement('div');
             card.className = 'media-poster-card focusable';
             card.id = `recent-card-${idx}`;
             card.tabIndex = 0;
 
-            const title = cleanTitle(item.name);
-            const isTorrent = item.name.toLowerCase().endsWith('.torrent');
-            const isVideo = /\.(mp4|mkv|avi|mov|webm|ts)$/i.test(item.name);
-            const sizeStr = item.size && window.TVFilesystem ? window.TVFilesystem.formatBytes(item.size) : 'Ready';
+            const title = cleanTitle(item.cleanTitle || item.name);
+            const isTorrent = (item.name || '').toLowerCase().endsWith('.torrent');
+            const sizeStr = item.sizeFormatted || (item.size && window.TVFilesystem ? window.TVFilesystem.formatBytes(item.size) : 'Ready');
+            const hasResume = item.resumeSec > 8;
+            const progressPercent = (hasResume && item.durationSec > 0) ? Math.min(Math.round((item.resumeSec / item.durationSec) * 100), 98) : 40;
 
-            const resumeKey = item.name;
-            const resumeSec = resumeMap[resumeKey] || 0;
-            const hasResume = resumeSec > 0;
-            const mins = Math.floor(resumeSec / 60);
-
-            // Dynamic color gradient based on index
             const gradients = [
                 'linear-gradient(135deg, #7b2cbf 0%, #00f2fe 100%)',
                 'linear-gradient(135deg, #2563eb 0%, #38bdf8 100%)',
                 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
                 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
-                'linear-gradient(135deg, #dc2626 0%, #f87171 100%)'
+                'linear-gradient(135deg, #9333ea 0%, #ec4899 100%)'
             ];
             const bgGrad = gradients[idx % gradients.length];
 
             card.innerHTML = `
                 <div class="poster-art" style="background:${bgGrad};">
                     <span class="poster-play-icon">▶</span>
-                    <span class="poster-badge">${isTorrent ? 'TORRENT' : 'VIDEO'}</span>
+                    <span class="poster-badge">${hasResume ? 'RESUME' : (item.isUsb ? 'USB' : 'SERVER')}</span>
                     ${item.isUsb ? '<span class="poster-usb-tag">💾 USB</span>' : ''}
                     ${hasResume ? `
                         <div class="poster-progress-track">
-                            <div class="poster-progress-fill" style="width: 45%;"></div>
+                            <div class="poster-progress-fill" style="width: ${progressPercent}%;"></div>
                         </div>
                     ` : ''}
                 </div>
@@ -373,7 +476,7 @@ window.HomeLauncher = (function() {
                     <div class="poster-title" title="${item.name}">${title}</div>
                     <div class="poster-desc">
                         <span>${sizeStr}</span>
-                        ${hasResume ? `<span style="color:#00f2fe;">• Resume: ${mins}m</span>` : ''}
+                        ${hasResume ? `<span style="color:#00f2fe; font-weight:600;">• ${formatTime(item.resumeSec)}</span>` : ''}
                     </div>
                 </div>
             `;
@@ -389,12 +492,10 @@ window.HomeLauncher = (function() {
                         playerModule.registerTorrentDownload(item.name, item.size, item.streamUrl);
                         playerModule.startTorrentStream(item.name, item.size, item.streamUrl);
                     }
-                } else if (isVideo) {
-                    if (window.Player && window.Player.openMedia) {
-                        window.Player.openMedia(item.streamUrl || item.path, item.name);
-                    }
-                } else {
-                    if (window.App) window.App.switchView('filemanager');
+                } else if (window.Player && window.Player.openMedia) {
+                    window.Player.openMedia(item.streamUrl || item.path, item.name, item.subtitleUrl);
+                } else if (window.App) {
+                    window.App.switchView('player');
                 }
             });
 
@@ -405,19 +506,18 @@ window.HomeLauncher = (function() {
     function renderStorageHealth() {
         const titleEl = document.getElementById('home-storage-title');
         const descEl = document.getElementById('home-storage-desc');
-        const barEl = document.getElementById('home-storage-bar');
         const detailsEl = document.getElementById('home-storage-details');
 
         if (!window.TVFilesystem) return;
 
         const storages = window.TVFilesystem.getStorages() || [];
         const selected = window.TVFilesystem.getSelectedStorage();
-        const pref = window.TVFilesystem ? window.TVFilesystem.getPreferredStorage() : 'usb';
+        const pref = window.TVFilesystem.getPreferredStorage ? window.TVFilesystem.getPreferredStorage() : 'usb';
         const usbCount = storages.filter(s => s.isUsb).length;
 
         if (pref === 'server' || (selected && selected.isServer)) {
             if (titleEl) titleEl.textContent = 'Companion Server (Zero TV Memory)';
-            if (descEl) descEl.textContent = 'Save Target: Pi / Host /app/uploads/ (Streaming)';
+            if (descEl) descEl.textContent = 'Save Target: Server Storage /app/uploads/ (Streaming)';
             if (detailsEl) detailsEl.textContent = 'Server Storage Active • Zero TV Space Consumed ✓';
         } else if (titleEl) {
             titleEl.textContent = selected && selected.isUsb ? (selected.displayName || selected.label) : 'Local TV Storage';
@@ -434,7 +534,6 @@ window.HomeLauncher = (function() {
     function renderSystemStatus() {
         const ipEl = document.getElementById('home-tv-ip');
         const serverEl = document.getElementById('home-server-url');
-        const adShieldEl = document.getElementById('home-adshield-status');
 
         if (ipEl) {
             ipEl.textContent = (window.FileReceiver && window.FileReceiver.getLocalIP) ? window.FileReceiver.getLocalIP() : '192.168.0.12';
@@ -442,74 +541,15 @@ window.HomeLauncher = (function() {
         if (serverEl) {
             serverEl.textContent = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
         }
-        if (adShieldEl) {
-            adShieldEl.innerHTML = `
-                <span class="status-dot active"></span>
-                <span>Ad-Free Clean Hub Active</span>
-            `;
-        }
-    }
 
-    function runTVBoost() {
-        if (isBoostRunning) return;
-        isBoostRunning = true;
-
-        if (window.FileReceiver && window.FileReceiver.showToast) {
-            window.FileReceiver.showToast('⚡ Boosting TV performance & cleaning memory...');
-        }
-
-        // Clean stale history entries (>30)
-        try {
-            const raw = localStorage.getItem('tvfilehub_received_history_v2');
-            if (raw) {
-                let list = JSON.parse(raw);
-                if (Array.isArray(list) && list.length > 25) {
-                    list = list.slice(0, 25);
-                    localStorage.setItem('tvfilehub_received_history_v2', JSON.stringify(list));
-                }
-            }
-        } catch (e) {}
-
-        // Trigger garbage collection & refresh
-        setTimeout(() => {
-            if (window.TVFilesystem && window.TVFilesystem.refreshStorages) {
-                window.TVFilesystem.refreshStorages();
-            }
-            refresh();
-            isBoostRunning = false;
-            if (window.FileReceiver && window.FileReceiver.showToast) {
-                window.FileReceiver.showToast('✓ TV Boost Complete: Memory purged & UI refreshed!');
-            }
-        }, 800);
-    }
-
-    function openAdBlockModal() {
-        const modal = document.getElementById('adblock-modal-backdrop');
-        if (modal) {
-            modal.classList.add('hud-visible');
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                if (window.Navigation) window.Navigation.focusInitialElement();
-            }, 60);
-        }
-    }
-
-    function closeAdBlockModal() {
-        const modal = document.getElementById('adblock-modal-backdrop');
-        if (modal) {
-            modal.classList.remove('hud-visible');
-            modal.style.display = 'none';
-            setTimeout(() => {
-                if (window.Navigation) window.Navigation.focusInitialElement();
-            }, 60);
+        if (window.FileReceiver && window.FileReceiver.renderQRCode) {
+            window.FileReceiver.renderQRCode('home-qrcode-container');
         }
     }
 
     return {
         init: init,
         refresh: refresh,
-        runTVBoost: runTVBoost,
-        openAdBlockModal: openAdBlockModal,
-        closeAdBlockModal: closeAdBlockModal
+        determineAndRenderSpotlight: determineAndRenderSpotlight
     };
 })();

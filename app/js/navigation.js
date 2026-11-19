@@ -88,17 +88,16 @@ window.Navigation = (function() {
         }
     }
 
+    function isCandidateVisible(el) {
+        if (!el || el.disabled) return false;
+        if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+        return el.offsetWidth > 0 && el.offsetHeight > 0;
+    }
+
     function getActiveModal() {
-        const modal = document.querySelector(
-            '#amnis-hud-backdrop.dialog-open, #amnis-hud-backdrop.hud-visible, ' +
-            '#player-hud-backdrop.dialog-open, #player-hud-backdrop.hud-visible, ' +
-            '.app-dialog-backdrop.dialog-open, .app-dialog-backdrop.hud-visible'
-        );
-        if (modal) {
-            const style = window.getComputedStyle(modal);
-            if (style.display !== 'none' && style.visibility !== 'hidden') {
-                return modal;
-            }
+        const modal = document.querySelector('.app-dialog-backdrop.dialog-open, .app-dialog-backdrop.hud-visible');
+        if (modal && (modal.offsetWidth > 0 || modal.offsetHeight > 0 || modal.style.display === 'flex' || modal.style.display === 'block')) {
+            return modal;
         }
         return null;
     }
@@ -109,17 +108,7 @@ window.Navigation = (function() {
         const activeModal = getActiveModal();
         if (activeModal) {
             const modalCandidates = Array.from(activeModal.querySelectorAll('.focusable:not([disabled])'));
-            return modalCandidates.filter(el => {
-                const rect = el.getBoundingClientRect();
-                const style = window.getComputedStyle(el);
-                return (
-                    rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.visibility !== 'hidden' &&
-                    style.display !== 'none' &&
-                    style.opacity !== '0'
-                );
-            });
+            return modalCandidates.filter(isCandidateVisible);
         }
 
         // 2. If player is active, ONLY search in player-container!
@@ -127,17 +116,7 @@ window.Navigation = (function() {
             const playerContainer = document.getElementById('player-container');
             if (playerContainer) {
                 const candidates = Array.from(playerContainer.querySelectorAll('.focusable:not([disabled])'));
-                return candidates.filter(el => {
-                    const rect = el.getBoundingClientRect();
-                    const style = window.getComputedStyle(el);
-                    return (
-                        rect.width > 0 &&
-                        rect.height > 0 &&
-                        style.visibility !== 'hidden' &&
-                        style.display !== 'none' &&
-                        style.opacity !== '0'
-                    );
-                });
+                return candidates.filter(isCandidateVisible);
             }
         }
 
@@ -149,20 +128,15 @@ window.Navigation = (function() {
         const viewCandidates = activeView ? Array.from(activeView.querySelectorAll('.focusable:not([disabled])')) : [];
         const candidates = headerCandidates.concat(viewCandidates);
 
-        return candidates.filter(el => {
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            return (
-                rect.width > 0 &&
-                rect.height > 0 &&
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                style.opacity !== '0'
-            );
-        });
+        return candidates.filter(isCandidateVisible);
     }
 
     function focusInitialElement() {
+        // If current focus is already on a top navigation tab, KEEP IT THERE! Do not jump down!
+        if (currentFocusedElement && (currentFocusedElement.classList.contains('nav-tab') || currentFocusedElement.closest('.app-nav'))) {
+            return;
+        }
+
         // If modal dialog is open, focus inside it (prefer Close button on HUD so user can easily dismiss)
         const activeModal = getActiveModal();
         if (activeModal) {
@@ -195,17 +169,7 @@ window.Navigation = (function() {
                 if (target) { setFocus(target); return; }
             }
 
-            const viewFocusables = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(el => {
-                const rect = el.getBoundingClientRect();
-                const style = window.getComputedStyle(el);
-                return (
-                    rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.visibility !== 'hidden' &&
-                    style.display !== 'none' &&
-                    style.opacity !== '0'
-                );
-            });
+            const viewFocusables = Array.from(activeView.querySelectorAll('.focusable:not([disabled])')).filter(isCandidateVisible);
             if (viewFocusables.length > 0) {
                 setFocus(viewFocusables[0]);
                 return;
@@ -239,10 +203,17 @@ window.Navigation = (function() {
         currentFocusedElement = element;
         currentFocusedElement.classList.add('focused');
         currentFocusedElement.focus();
+
+        // If a navigation tab is focused, always scroll the underlying active view to the top
+        if (currentFocusedElement.classList.contains('nav-tab') || currentFocusedElement.closest('.app-nav')) {
+            if (window.App && window.App.scrollActiveViewToTop) {
+                window.App.scrollActiveViewToTop();
+            }
+        }
         
         // Only scroll internal list containers (e.g. downloads list, carousel, dialog list, file grid)
         // Never allow the outer window or document body to scroll or drift off-axis!
-        const scrollContainer = currentFocusedElement.closest('.amnis-downloads-list, .player-downloads-list, .media-carousel-container, .transfer-list, .storage-dialog-list, .settings-panel, .episodes-dialog-list, .file-grid');
+        const scrollContainer = currentFocusedElement.closest('#view-home, .home-container, .amnis-downloads-list, .player-downloads-list, .media-carousel-container, .transfer-list, .storage-dialog-list, .settings-panel, .episodes-dialog-list, .file-grid');
         if (scrollContainer) {
             const cRect = scrollContainer.getBoundingClientRect();
             const eRect = currentFocusedElement.getBoundingClientRect();
@@ -313,6 +284,9 @@ window.Navigation = (function() {
                         if (window.App && window.App.switchView) {
                             window.App.switchView(vName, false);
                         }
+                        if (window.App && window.App.scrollActiveViewToTop) {
+                            window.App.scrollActiveViewToTop();
+                        }
                     }
                     return;
                 } else if (direction === 'right') {
@@ -323,9 +297,9 @@ window.Navigation = (function() {
                         if (window.App && window.App.switchView) {
                             window.App.switchView(vName, false);
                         }
-                    } else if (tabIdx === tabs.length - 1) {
-                        const boostBtn = document.getElementById('header-boost-btn');
-                        if (boostBtn) setFocus(boostBtn);
+                        if (window.App && window.App.scrollActiveViewToTop) {
+                            window.App.scrollActiveViewToTop();
+                        }
                     }
                     return;
                 } else if (direction === 'down') {
@@ -336,7 +310,7 @@ window.Navigation = (function() {
                     }
 
                     if (currentFocusedElement.id === 'tab-home') {
-                        const target = document.getElementById('hero-btn-play') || document.getElementById('home-tile-player');
+                        const target = document.getElementById('hero-btn-play') || document.querySelector('#continue-watching-carousel .media-poster-card.focusable') || document.getElementById('home-tile-player');
                         if (target) { setFocus(target); return; }
                     } else if (currentFocusedElement.id === 'tab-player') {
                         const target = document.querySelector('.player-subtab.active') || document.getElementById('subtab-available');
@@ -355,19 +329,6 @@ window.Navigation = (function() {
             }
         }
 
-        // Header Boost button
-        if (currentFocusedElement.id === 'header-boost-btn') {
-            if (direction === 'left') {
-                const tabFm = document.getElementById('tab-filemanager');
-                if (tabFm) { setFocus(tabFm); return; }
-            } else if (direction === 'down') {
-                focusInitialElement();
-                return;
-            } else if (direction === 'up' || direction === 'right') {
-                return;
-            }
-        }
-
         // 2. HOME VIEW: Hero primary/secondary action buttons
         if (currentFocusedElement.id === 'hero-btn-play' || currentFocusedElement.id === 'hero-btn-secondary') {
             if (direction === 'up') {
@@ -375,19 +336,46 @@ window.Navigation = (function() {
                 if (tabHome) { setFocus(tabHome); return; }
             } else if (direction === 'right' && currentFocusedElement.id === 'hero-btn-play') {
                 const sec = document.getElementById('hero-btn-secondary');
-                if (sec) { setFocus(sec); return; }
+                if (sec && sec.style.display !== 'none') { setFocus(sec); return; }
             } else if (direction === 'left' && currentFocusedElement.id === 'hero-btn-secondary') {
                 const pri = document.getElementById('hero-btn-play');
                 if (pri) { setFocus(pri); return; }
             } else if (direction === 'down') {
-                const tile = (currentFocusedElement.id === 'hero-btn-play')
-                    ? document.getElementById('home-tile-player')
-                    : document.getElementById('home-tile-receiver');
+                // Navigate DOWN to Continue Watching Carousel directly below hero
+                const carouselCard = document.querySelector('#continue-watching-carousel .media-poster-card.focusable') ||
+                                     document.querySelector('#continue-watching-carousel .carousel-card.focusable');
+                if (carouselCard) { setFocus(carouselCard); return; }
+                const tile = document.getElementById('home-tile-player');
                 if (tile) { setFocus(tile); return; }
             }
         }
 
-        // 3. HOME VIEW: Quick Launch Tiles (Player, Receiver, FileManager, Boost)
+        // 3. HOME VIEW: Continue Watching & Recent Media Carousel (Directly below Hero)
+        if (currentFocusedElement.classList.contains('media-poster-card') || currentFocusedElement.classList.contains('carousel-card')) {
+            const carousel = currentFocusedElement.closest('.media-carousel-container');
+            if (carousel) {
+                const cards = Array.from(carousel.querySelectorAll('.media-poster-card.focusable, .carousel-card.focusable'));
+                const cIdx = cards.indexOf(currentFocusedElement);
+                if (direction === 'left' && cIdx > 0) {
+                    setFocus(cards[cIdx - 1]);
+                    return;
+                } else if (direction === 'right' && cIdx < cards.length - 1) {
+                    setFocus(cards[cIdx + 1]);
+                    return;
+                } else if (direction === 'up') {
+                    const heroBtn = document.getElementById('hero-btn-play') || document.getElementById('tab-home');
+                    if (heroBtn) { setFocus(heroBtn); return; }
+                } else if (direction === 'down') {
+                    // Navigate DOWN to Quick Launch tiles
+                    const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
+                    if (tile) { setFocus(tile); return; }
+                    const widget = document.getElementById('widget-storage') || document.querySelector('.dashboard-widget.focusable');
+                    if (widget) { setFocus(widget); return; }
+                }
+            }
+        }
+
+        // 4. HOME VIEW: Quick Launch Tiles (Player, Receiver, FileManager) (Moved down below media)
         if (currentFocusedElement.classList.contains('home-tile')) {
             const tileGrid = currentFocusedElement.closest('.home-tiles-grid');
             if (tileGrid) {
@@ -400,33 +388,13 @@ window.Navigation = (function() {
                     setFocus(tiles[tIdx + 1]);
                     return;
                 } else if (direction === 'up') {
-                    const heroBtn = (tIdx === 0) ? document.getElementById('hero-btn-play') : document.getElementById('hero-btn-secondary');
-                    if (heroBtn) { setFocus(heroBtn); return; }
-                } else if (direction === 'down') {
-                    const carouselCard = document.querySelector('#continue-watching-carousel .carousel-card.focusable');
+                    // Navigate UP to Continue Watching Carousel
+                    const carouselCard = document.querySelector('#continue-watching-carousel .media-poster-card.focusable') ||
+                                         document.querySelector('#continue-watching-carousel .carousel-card.focusable') ||
+                                         document.getElementById('hero-btn-play');
                     if (carouselCard) { setFocus(carouselCard); return; }
-                    const widget = document.getElementById('widget-storage') || document.querySelector('.dashboard-widget.focusable');
-                    if (widget) { setFocus(widget); return; }
-                }
-            }
-        }
-
-        // 4. HOME VIEW: Continue Watching Carousel Cards
-        if (currentFocusedElement.classList.contains('carousel-card')) {
-            const carousel = currentFocusedElement.closest('.media-carousel-container');
-            if (carousel) {
-                const cards = Array.from(carousel.querySelectorAll('.carousel-card.focusable'));
-                const cIdx = cards.indexOf(currentFocusedElement);
-                if (direction === 'left' && cIdx > 0) {
-                    setFocus(cards[cIdx - 1]);
-                    return;
-                } else if (direction === 'right' && cIdx < cards.length - 1) {
-                    setFocus(cards[cIdx + 1]);
-                    return;
-                } else if (direction === 'up') {
-                    const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
-                    if (tile) { setFocus(tile); return; }
                 } else if (direction === 'down') {
+                    // Navigate DOWN to Dashboard Widgets
                     const widget = document.getElementById('widget-storage') || document.querySelector('.dashboard-widget.focusable');
                     if (widget) { setFocus(widget); return; }
                 }
@@ -446,8 +414,7 @@ window.Navigation = (function() {
                     setFocus(widgets[wIdx + 1]);
                     return;
                 } else if (direction === 'up') {
-                    const carouselCard = document.querySelector('#continue-watching-carousel .carousel-card.focusable');
-                    if (carouselCard) { setFocus(carouselCard); return; }
+                    // Navigate UP to Quick Launch tiles
                     const tile = document.getElementById('home-tile-player') || document.querySelector('.home-tile.focusable');
                     if (tile) { setFocus(tile); return; }
                 } else if (direction === 'down') {
@@ -823,6 +790,17 @@ window.Navigation = (function() {
             case KEY_CODES.ENTER:
                 e.preventDefault();
                 if (currentFocusedElement) {
+                    if (currentFocusedElement.classList.contains('nav-tab') || currentFocusedElement.closest('.app-nav')) {
+                        const vName = currentFocusedElement.id.replace('tab-', '');
+                        if (window.App && window.App.switchView) {
+                            window.App.switchView(vName, false);
+                        }
+                        if (window.App && window.App.scrollActiveViewToTop) {
+                            window.App.scrollActiveViewToTop();
+                        }
+                        setFocus(currentFocusedElement);
+                        return;
+                    }
                     currentFocusedElement.click();
                 }
                 break;
@@ -923,18 +901,13 @@ window.Navigation = (function() {
         }
 
         // Directional and action keys (D-pad UP/DOWN/LEFT/RIGHT, ENTER)
-        const playBtn = document.getElementById('osd-play-btn');
         const timelineBox = document.getElementById('osd-timeline-box');
         const osdVisible = window.Player.isOsdVisible ? window.Player.isOsdVisible() : true;
 
-        // If OSD is currently hidden, any D-pad key shows OSD and focuses appropriate control
+        // If OSD is currently hidden, any D-pad key shows OSD and focuses the timeline
         if (!osdVisible) {
             window.Player.showOSD();
-            if (keyCode === KEY_CODES.DOWN) {
-                if (timelineBox) setFocus(timelineBox);
-            } else {
-                if (playBtn) setFocus(playBtn);
-            }
+            if (timelineBox) setFocus(timelineBox);
             e.preventDefault();
             return true;
         }
@@ -942,7 +915,7 @@ window.Navigation = (function() {
         // Always keep OSD visible on any user interaction
         window.Player.showOSD();
 
-        // 1. Focus is on TIMELINE BOX
+        // 1. Focus is on TIMELINE BOX (Bottom)
         if (currentFocusedElement && (currentFocusedElement.id === 'osd-timeline-box' || currentFocusedElement.classList.contains('osd-timeline-box'))) {
             switch (keyCode) {
                 case KEY_CODES.LEFT:
@@ -955,7 +928,10 @@ window.Navigation = (function() {
                     return true;
                 case KEY_CODES.UP:
                     e.preventDefault();
-                    if (playBtn) setFocus(playBtn);
+                    const topBtn = document.getElementById('osd-subs-btn') || 
+                                   document.getElementById('osd-aspect-btn') || 
+                                   document.getElementById('osd-close-btn');
+                    if (topBtn) setFocus(topBtn);
                     return true;
                 case KEY_CODES.DOWN:
                     e.preventDefault();
@@ -967,40 +943,13 @@ window.Navigation = (function() {
             }
         }
 
-        // 2. Focus is on CENTER PLAY/PAUSE BUTTON
-        if (currentFocusedElement && currentFocusedElement.id === 'osd-play-btn') {
-            switch (keyCode) {
-                case KEY_CODES.DOWN:
-                    e.preventDefault();
-                    if (timelineBox) setFocus(timelineBox);
-                    return true;
-                case KEY_CODES.UP:
-                    e.preventDefault();
-                    const topBtn = document.getElementById('osd-info-btn') || document.getElementById('osd-close-btn');
-                    if (topBtn) setFocus(topBtn);
-                    return true;
-                case KEY_CODES.LEFT:
-                    e.preventDefault();
-                    window.Player.seekRelative(-10);
-                    return true;
-                case KEY_CODES.RIGHT:
-                    e.preventDefault();
-                    window.Player.seekRelative(10);
-                    return true;
-                case KEY_CODES.ENTER:
-                    e.preventDefault();
-                    window.Player.togglePlayPause();
-                    return true;
-            }
-        }
-
-        // 3. Focus is on TOP ACTION BUTTONS (Stream Info, Subs, Aspect, Exit)
+        // 2. Focus is on TOP ACTION BUTTONS (Subtitles, Aspect, Exit)
         const isTopAction = currentFocusedElement && currentFocusedElement.closest('.osd-top-actions');
         if (isTopAction) {
             switch (keyCode) {
                 case KEY_CODES.DOWN:
                     e.preventDefault();
-                    if (playBtn) setFocus(playBtn);
+                    if (timelineBox) setFocus(timelineBox);
                     return true;
                 case KEY_CODES.UP:
                     e.preventDefault();
@@ -1020,7 +969,7 @@ window.Navigation = (function() {
             }
         }
 
-        // 4. Default fallback inside player
+        // 3. Default fallback inside player
         switch (keyCode) {
             case KEY_CODES.DOWN:
                 e.preventDefault();
@@ -1028,7 +977,8 @@ window.Navigation = (function() {
                 return true;
             case KEY_CODES.UP:
                 e.preventDefault();
-                if (playBtn) setFocus(playBtn);
+                const fallbackTop = document.getElementById('osd-subs-btn') || document.getElementById('osd-close-btn');
+                if (fallbackTop) setFocus(fallbackTop);
                 return true;
             case KEY_CODES.LEFT:
                 e.preventDefault();
@@ -1048,22 +998,7 @@ window.Navigation = (function() {
     }
 
     function handleReturnKey() {
-        // 1. If Torrent Info HUD is open, close it cleanly
-        const hudBackdrop = document.getElementById('amnis-hud-backdrop') || document.getElementById('player-hud-backdrop');
-        if (hudBackdrop && (hudBackdrop.classList.contains('dialog-open') || hudBackdrop.classList.contains('hud-visible'))) {
-            const playerModule = window.VideoPlayer || window.Amnis;
-            if (playerModule && playerModule.toggleTorrentInfoHud) {
-                playerModule.toggleTorrentInfoHud(false);
-            } else {
-                hudBackdrop.classList.remove('dialog-open', 'hud-visible');
-                const overlay = document.getElementById('amnis-hud-overlay');
-                if (overlay) overlay.classList.remove('hud-visible');
-                focusInitialElement();
-            }
-            return;
-        }
-
-        // 2. If any other dialog is open, close it
+        // 1. If any modal dialog is open, close it cleanly
         const openDialog = document.querySelector('.app-dialog-backdrop.dialog-open, .app-dialog-backdrop.hud-visible');
         if (openDialog) {
             openDialog.classList.remove('dialog-open', 'hud-visible');
@@ -1096,6 +1031,7 @@ window.Navigation = (function() {
     return {
         init: init,
         setFocus: setFocus,
+        getCurrentFocusedElement: function() { return currentFocusedElement; },
         focusInitialElement: focusInitialElement,
         enable: function() { isNavigationEnabled = true; },
         disable: function() { isNavigationEnabled = false; },

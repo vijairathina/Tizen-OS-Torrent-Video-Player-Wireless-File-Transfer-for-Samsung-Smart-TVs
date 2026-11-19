@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TV File Hub Server Companion API Contract",
+  "version": "1.1.6",
+  "endpoints": {
+    "/status": {
+      "method": "GET",
+      "description": "Health check and service status",
+      "response": {
+        "status": "string",
+        "service": "string"
+      }
+    },
+    "/api/downloads": {
+      "method": "GET",
+      "description": "Downloads dashboard state, available movies, queue and system status",
+      "response": {
+        "system_status": {
+          "mode": "string",
+          "mode_label": "string",
+          "active_stream": "string | null",
+          "active_bg_download": "string | null",
+          "total_available": "integer",
+          "total_downloading": "integer",
+          "seeding_status": "string",
+          "api_endpoint": "string",
+          "host_ip": "string",
+          "port": "integer"
+        },
+        "available_movies": [
+          {
+            "id": "string",
+            "name": "string",
+            "clean_title": "string",
+            "size": "integer",
+            "size_formatted": "string",
+            "status": "string",
+            "progress": "number",
+            "speed": "string",
+            "seeding": "string",
+            "completed": "boolean",
+            "stream_url": "string"
+          }
+        ],
+        "currently_downloading": [
+          {
+            "id": "string",
+            "name": "string",
+            "clean_title": "string",
+            "priority": "string",
+            "priority_badge": "string",
+            "is_active_stream": "boolean",
+            "status": "string",
+            "progress": "number",
+            "speed": "string",
+            "upload_speed": "string",
+            "downloaded": "string",
+            "total": "string",
+            "peers": "integer",
+            "time_remaining": "string",
+            "completed": "boolean",
+            "stream_url": "string | null"
+          }
+        ]
+      }
+    },
+    "/start_torrent": {
+      "method": "GET",
+      "parameters": {
+        "file": "string (optional)",
+        "magnet": "string (optional)",
+        "downloadOnly": "boolean (optional)",
+        "fileIdx": "integer (optional)",
+        "episode": "string (optional)"
+      },
+      "response": {
+        "status": "string",
+        "streamUrl": "string (optional)",
+        "filename": "string (optional)",
+        "isDownloaded": "boolean (optional)"
+      }
+    },
+    "/stop_torrent": {
+      "method": "GET",
+      "response": {
+        "status": "string"
+      }
+    },
+    "/torrent_stats": {
+      "method": "GET",
+      "parameters": {
+        "file": "string (optional)"
+      },
+      "response": {
+        "name": "string",
+        "progress": "number",
+        "speed": "string",
+        "upload_speed": "string",
+        "completedMB": "number",
+        "totalMB": "number",
+        "peers": "integer",
+        "pieces": "string",
+        "status": "string"
+      }
+    },
+    "/api/prioritize": {
+      "method": "GET",
+      "parameters": { "file": "string" },
+      "response": { "status": "string", "streamUrl": "string", "file": "string" }
+    },
+    "/api/low_priority": {
+      "method": "GET",
+      "parameters": { "file": "string" },
+      "response": { "status": "string", "success": "boolean", "file": "string" }
+    },
+    "/api/normal_priority": {
+      "method": "GET",
+      "parameters": { "file": "string" },
+      "response": { "status": "string", "success": "boolean", "file": "string" }
+    },
+    "/media_info": {
+      "method": "GET",
+      "parameters": { "file": "string" },
+      "response": {
+        "filename": "string",
+        "hasMultipleAudio": "boolean",
+        "audioTracks": [
+          {
+            "index": "integer",
+            "language": "string",
+            "codec": "string",
+            "title": "string"
+          }
+        ]
+      }
+    },
+    "/upload": {
+      "method": "POST",
+      "contentType": "multipart/form-data",
+      "parameters": { "file": "binary file" },
+      "response": { "ok": "boolean", "filename": "string", "size": "integer" }
+    },
+    "/files/{filename}": {
+      "method": "GET",
+      "description": "HTTP 1.1 Range streaming (206 Partial Content) with auto MKV seek cues",
+      "headers": {
+        "Range": "bytes=start-end"
+      }
+    },
+    "/ws": {
+      "protocol": "RFC 6455 WebSocket",
+      "description": "Real-time client telemetry, file transfer events, and remote logging"
+    }
+  }
+}

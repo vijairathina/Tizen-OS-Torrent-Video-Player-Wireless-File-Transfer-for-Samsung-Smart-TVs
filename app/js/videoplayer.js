@@ -7,52 +7,12 @@
 window.VideoPlayer = (function() {
     'use strict';
 
-    // Curated high quality media stream presets for immediate TV testing
-    const SAMPLE_STREAMS = [
-        {
-            title: 'Local Hub High Speed Demo (1080p)',
-            url: (window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080') + '/files/sample.mp4',
-            subtitleUrl: ''
-        },
-        {
-            title: 'Big Buck Bunny (1080p 60fps)',
-            url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_5MB.mp4',
-            subtitleUrl: ''
-        },
-        {
-            title: 'Jellyfish Ultra Master (1080p)',
-            url: 'https://test-videos.co.uk/vids/jellyfish/mp4/h264/1080/Jellyfish_1080_10s_5MB.mp4',
-            subtitleUrl: ''
-        },
-        {
-            title: 'Sintel Open Movie 4K',
-            url: (window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080') + '/files/sample.mp4',
-            subtitleUrl: ''
-        }
-    ];
-
-    let torrentStats = {
-        name: 'Stream',
-        progress: 18,
-        speed: '4.8 MB/s',
-        completedMB: 312.4,
-        totalMB: 1720.0,
-        peers: 38,
-        pieces: '840 / 2400',
-        status: 'Downloading & Streaming'
-    };
-
-    let hudTimer = null;
     let activeDownloads = [];
     const PLAYER_STORAGE_KEY = 'videoplayer_active_downloads_v2';
-    const OLD_STORAGE_KEY = 'amnis_active_downloads_v1';
     let statsPollInterval = null;
-    let currentTheme = 'night';
     let currentFontSize = 'normal';
     let isUserInitiatedPlay = false;
     let pendingPlayTarget = null;
-    let hudRefreshInterval = null;
-    let currentHudTorrentTarget = null;
     let rpiAvailableMovies = [];
     let rpiDownloadingItems = [];
     let activeSubtab = 'available';
@@ -533,7 +493,6 @@ window.VideoPlayer = (function() {
                         ` : `
                         <button class="action-btn-info focusable" id="player-low-${itemId}" tabindex="0" title="Set to Low Priority (Downloads Last)" style="background:rgba(148,163,184,0.18); border-color:#94a3b8; color:#cbd5e1;">⬇️ Low Priority</button>
                         `}
-                        <button class="action-btn-info focusable" id="player-info-${itemId}" tabindex="0" title="Torrent Details">ℹ️ Torrent Info</button>
                         <button class="action-btn-delete focusable" id="player-del-${itemId}" tabindex="0" title="Cancel Download">🗑️ Cancel</button>
                     </div>
                 </div>
@@ -543,7 +502,6 @@ window.VideoPlayer = (function() {
             const priBtn = card.querySelector(`#player-pri-${itemId}`);
             const lowBtn = card.querySelector(`#player-low-${itemId}`);
             const normBtn = card.querySelector(`#player-norm-${itemId}`);
-            const infoBtn = card.querySelector(`#player-info-${itemId}`);
             const delBtn = card.querySelector('.action-btn-delete');
 
             const playAction = () => {
@@ -624,19 +582,6 @@ window.VideoPlayer = (function() {
                     .catch(() => {});
             });
 
-            if (infoBtn) infoBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                torrentStats.name = title;
-                if (item.speed) torrentStats.speed = item.speed;
-                if (item.progress !== undefined) torrentStats.progress = item.progress;
-                if (item.downloaded) torrentStats.completedMB = item.downloaded;
-                if (item.total) torrentStats.totalMB = item.total;
-                if (item.peers !== undefined) torrentStats.peers = item.peers;
-                if (item.status) torrentStats.status = item.status;
-                if (item.stream_url) torrentStats.streamUrl = item.stream_url;
-                toggleTorrentInfoHud(true, item.name || title);
-            });
-
             if (delBtn) delBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 deleteDownload(item);
@@ -682,9 +627,6 @@ window.VideoPlayer = (function() {
     }
 
     function setupCardEvents() {
-        const loadFileCard = document.getElementById('player-card-load-file') || document.getElementById('amnis-card-load-file');
-        const loadUrlCard = document.getElementById('player-card-load-url') || document.getElementById('amnis-card-load-url');
-        const addonsCard = document.getElementById('player-card-addons') || document.getElementById('amnis-card-addons');
         const settingsCard = document.getElementById('player-card-settings') || document.getElementById('amnis-card-settings');
         const refreshCard = document.getElementById('player-card-refresh');
 
@@ -722,165 +664,8 @@ window.VideoPlayer = (function() {
             });
         }
 
-        if (loadFileCard) {
-            loadFileCard.addEventListener('click', openStorageDialog);
-        }
-
-        if (loadUrlCard) {
-            loadUrlCard.addEventListener('click', openUrlDialog);
-        }
-
-        if (addonsCard) {
-            addonsCard.addEventListener('click', openSubtitleSearchModal);
-        }
-
         if (settingsCard) {
             settingsCard.addEventListener('click', openSettingsDialog);
-        }
-    }
-
-    /* Storage Browser Dialog */
-    function openStorageDialog() {
-        const dialog = document.getElementById('storage-dialog-backdrop');
-        if (!dialog) return;
-        renderStorageDialogList();
-        dialog.classList.add('dialog-open');
-        setTimeout(function() {
-            const firstFocusable = dialog.querySelector('.focusable');
-            if (firstFocusable && window.Navigation) {
-                window.Navigation.setFocus(firstFocusable);
-            }
-        }, 80);
-    }
-
-    function closeStorageDialog() {
-        const dialog = document.getElementById('storage-dialog-backdrop');
-        if (dialog) dialog.classList.remove('dialog-open');
-        if (window.Navigation) window.Navigation.focusInitialElement();
-    }
-
-    function renderStorageDialogList() {
-        const listEl = document.getElementById('storage-dialog-list');
-        if (!listEl) return;
-        listEl.innerHTML = '<div style="color:var(--text-muted); padding:24px; text-align:center;">Scanning connected storage devices...</div>';
-
-        if (window.TVFilesystem && window.TVFilesystem.listStorages) {
-            window.TVFilesystem.listStorages(function(storages) {
-                if (!storages || storages.length === 0) {
-                    listEl.innerHTML = '<div style="color:var(--text-muted); padding:24px; text-align:center;">No storage devices detected.</div>';
-                    return;
-                }
-
-                listEl.innerHTML = '';
-                storages.forEach(s => {
-                    const card = document.createElement('div');
-                    card.className = 'transfer-card focusable';
-                    card.tabIndex = 0;
-                    card.style.display = 'flex';
-                    card.style.justifyContent = 'space-between';
-                    card.style.alignItems = 'center';
-                    card.style.padding = '18px 22px';
-                    card.style.borderRadius = '14px';
-                    card.style.background = 'rgba(255,255,255,0.06)';
-                    card.style.border = '1.5px solid rgba(255,255,255,0.12)';
-                    card.style.cursor = 'pointer';
-
-                    const icon = s.isUsb ? '🔌' : '📺';
-                    const avail = s.availableSize ? window.TVFilesystem.formatBytes(s.availableSize) : 'Available';
-                    const total = s.totalSize ? window.TVFilesystem.formatBytes(s.totalSize) : '';
-                    const sizeInfo = total ? `${avail} free of ${total}` : avail;
-
-                    card.innerHTML = `
-                        <div style="display:flex; align-items:center; gap:16px;">
-                            <span style="font-size:32px;">${icon}</span>
-                            <div>
-                                <div style="font-size:18px; font-weight:700; color:#fff;">${s.displayName}</div>
-                                <div style="font-size:14px; color:var(--text-muted); font-family:Consolas, monospace;">${s.label} • ${sizeInfo}</div>
-                            </div>
-                        </div>
-                        <button class="action-btn-play focusable" tabindex="0" style="padding:8px 20px; font-size:14px; border-radius:10px;">Browse</button>
-                    `;
-
-                    card.addEventListener('click', function() {
-                        closeStorageDialog();
-                        if (window.FileManager && window.FileManager.loadFolder) {
-                            if (window.App) window.App.switchView('filemanager');
-                            window.FileManager.loadFolder(s.label);
-                        } else if (window.App) {
-                            window.App.switchView('filemanager');
-                        }
-                    });
-
-                    listEl.appendChild(card);
-                });
-            });
-        }
-    }
-
-    function openUrlDialog() {
-        const dialog = document.getElementById('url-dialog-backdrop');
-        const input = document.getElementById('stream-url-input');
-        if (!dialog) return;
-
-        dialog.classList.add('dialog-open');
-        if (input) {
-            input.value = SAMPLE_STREAMS[0].url;
-            if (window.Navigation) window.Navigation.setFocus(input);
-        }
-    }
-
-    function closeUrlDialog() {
-        const dialog = document.getElementById('url-dialog-backdrop');
-        if (dialog) dialog.classList.remove('dialog-open');
-        if (window.Navigation) window.Navigation.focusInitialElement();
-    }
-
-    function playEnteredUrl() {
-        const input = document.getElementById('stream-url-input');
-        const url = input ? input.value.trim() : '';
-
-        if (!url) {
-            window.FileReceiver.showToast('Please enter a valid stream, video, or magnet URL');
-            return;
-        }
-
-        closeUrlDialog();
-
-        if (url.startsWith('magnet:')) {
-            isUserInitiatedPlay = true;
-            pendingPlayTarget = 'Magnet Stream';
-            window.FileReceiver.showToast('Connecting to magnet swarm...');
-            if (window.FileReceiver && window.FileReceiver.sendSocketMessage) {
-                window.FileReceiver.sendSocketMessage({
-                    type: 'start_torrent',
-                    magnet: url
-                });
-            }
-            const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
-            fetch(`${srvUrl}/start_torrent?magnet=${encodeURIComponent(url)}`)
-                .catch(() => {});
-            return;
-        }
-
-        let title = 'Network Stream';
-        const preset = SAMPLE_STREAMS.find(s => s.url === url);
-        if (preset) {
-            title = preset.title;
-        } else {
-            const parts = url.split('/');
-            title = decodeURIComponent(parts[parts.length - 1].split('?')[0]) || 'Video Stream';
-        }
-
-        startTorrentStream(title, 1720 * 1024 * 1024, url);
-    }
-
-    function playPreset(index) {
-        if (index >= 0 && index < SAMPLE_STREAMS.length) {
-            isUserInitiatedPlay = true;
-            const preset = SAMPLE_STREAMS[index];
-            pendingPlayTarget = preset.title;
-            closeUrlDialog();
-            startTorrentStream(preset.title, 1720 * 1024 * 1024, preset.url);
         }
     }
 
@@ -1076,68 +861,7 @@ window.VideoPlayer = (function() {
         }
     }
 
-    /* Subtitle Search Modal */
-    function openSubtitleSearchModal() {
-        const dialog = document.getElementById('subtitles-dialog-backdrop');
-        if (!dialog) return;
-
-        dialog.classList.add('dialog-open');
-        const searchInput = document.getElementById('subtitles-search-input');
-        if (searchInput) {
-            searchInput.value = window.Player.getCurrentTitle() || 'Sample Video';
-            if (window.Navigation) window.Navigation.setFocus(searchInput);
-        }
-        renderSubtitleList();
-    }
-
-    function closeSubtitleSearchModal() {
-        const dialog = document.getElementById('subtitles-dialog-backdrop');
-        if (dialog) dialog.classList.remove('dialog-open');
-        if (window.Navigation) window.Navigation.focusInitialElement();
-    }
-
-    function renderSubtitleList() {
-        const listEl = document.getElementById('subtitles-results-list');
-        if (!listEl) return;
-
-        const results = [
-            { id: 1, title: 'English [OpenSubtitles]', lang: 'ENG', url: 'sample.srt' },
-            { id: 2, title: 'Tamil [CC Subtitles]', lang: 'TAM', url: 'sample.srt' },
-            { id: 3, title: 'English [SDH Subtitles]', lang: 'ENG', url: 'sample.srt' },
-            { id: 4, title: 'Hindi [CC Subtitles]', lang: 'HIN', url: 'sample.srt' }
-        ];
-
-        listEl.innerHTML = '';
-        results.forEach(sub => {
-            const row = document.createElement('div');
-            row.className = 'transfer-card focusable';
-            row.style.cursor = 'pointer';
-            row.innerHTML = `
-                <div class="transfer-top">
-                    <span class="transfer-filename">${sub.title}</span>
-                    <span class="transfer-status-badge status-completed">${sub.lang}</span>
-                </div>
-            `;
-            row.addEventListener('click', function() {
-                window.FileReceiver.showToast(`Selected Subtitle: ${sub.title}`);
-                closeSubtitleSearchModal();
-            });
-            listEl.appendChild(row);
-        });
-    }
-
-    /* Theme & Font Size Settings Engine */
-    function applyTheme(theme) {
-        currentTheme = theme;
-        try { localStorage.setItem('tvhub_theme', theme); } catch (e) {}
-        if (theme === 'day') {
-            document.body.classList.add('theme-day');
-        } else {
-            document.body.classList.remove('theme-day');
-        }
-        updateSettingsButtonsUI();
-    }
-
+    /* Font Size Settings Engine */
     function applyFontSize(size) {
         currentFontSize = size;
         try { localStorage.setItem('tvhub_fontsize', size); } catch (e) {}
@@ -1151,14 +875,9 @@ window.VideoPlayer = (function() {
     }
 
     function updateSettingsButtonsUI() {
-        const btnNight = document.getElementById('btn-theme-night');
-        const btnDay = document.getElementById('btn-theme-day');
         const btnNorm = document.getElementById('btn-font-normal');
         const btnLarge = document.getElementById('btn-font-large');
         const btnXlarge = document.getElementById('btn-font-xlarge');
-
-        if (btnNight) btnNight.classList.toggle('active', currentTheme === 'night');
-        if (btnDay) btnDay.classList.toggle('active', currentTheme === 'day');
 
         if (btnNorm) btnNorm.classList.toggle('active', currentFontSize === 'normal');
         if (btnLarge) btnLarge.classList.toggle('active', currentFontSize === 'large');
@@ -1336,36 +1055,8 @@ window.VideoPlayer = (function() {
         if (window.Navigation) window.Navigation.focusInitialElement();
     }
 
-    let lastFocusedBeforeHud = null;
-
-    function fetchTorrentHudStats(targetName) {
-        const query = targetName || currentHudTorrentTarget || torrentStats.name || '';
-        const srvUrl = window.getServerBaseUrl ? window.getServerBaseUrl() : 'http://192.168.0.14:8080';
-        fetch(`${srvUrl}/torrent_stats?file=${encodeURIComponent(query)}`)
-            .then(res => res.json())
-            .then(data => {
-                if (!data) return;
-                if (data.title && (!torrentStats.name || torrentStats.name === 'Stream')) {
-                    torrentStats.name = cleanTorrentTitle(data.title);
-                }
-                if (data.stats) {
-                    const st = data.stats;
-                    if (st.speed) torrentStats.speed = st.speed;
-                    if (st.downloaded) torrentStats.completedMB = st.downloaded;
-                    if (st.total) torrentStats.totalMB = st.total;
-                    if (st.peers !== undefined) torrentStats.peers = st.peers;
-                    if (st.progress !== undefined) torrentStats.progress = st.progress;
-                    if (st.timeRemaining) torrentStats.pieces = `${st.timeRemaining} left`;
-                    if (st.status) torrentStats.status = st.status;
-                }
-                updateTorrentHudValues();
-            })
-            .catch(() => {});
-    }
-
     let currentlyPlayingSeriesItem = null;
     let currentlyPlayingEpisode = null;
-    let hudOpenedTimestamp = 0;
 
     function checkTorrentEpisodes(item) {
         if (!item || item.episodesChecked) return;
@@ -1539,105 +1230,13 @@ window.VideoPlayer = (function() {
         return Boolean(matched && matched.episodes && matched.episodes.length > 1);
     }
 
-    /* BitTorrent / Stream Information HUD */
-    function toggleTorrentInfoHud(forceShow, targetFilenameOrTitle) {
-        const backdrop = document.getElementById('player-hud-backdrop') || document.getElementById('amnis-hud-backdrop');
-        if (!backdrop) return;
-
-        const isCurrentlyOpen = backdrop.classList.contains('dialog-open') || 
-                                backdrop.classList.contains('hud-visible') || 
-                                backdrop.style.display === 'flex';
-        const shouldShow = (typeof forceShow === 'boolean') ? forceShow : !isCurrentlyOpen;
-
-        if (shouldShow) {
-            hudOpenedTimestamp = Date.now();
-            lastFocusedBeforeHud = document.activeElement;
-            currentHudTorrentTarget = targetFilenameOrTitle || torrentStats.name || '';
-            if (targetFilenameOrTitle) {
-                torrentStats.name = cleanTorrentTitle(targetFilenameOrTitle);
-            }
-
-            // If player is currently open, hide the "Play Stream" button inside HUD since video is ALREADY playing!
-            const hudPlayBtn = document.getElementById('hud-play-btn');
-            if (hudPlayBtn) {
-                const isPlayerActive = window.Player && window.Player.isActive && window.Player.isActive();
-                hudPlayBtn.style.display = isPlayerActive ? 'none' : 'inline-block';
-            }
-
-            updateTorrentHudValues();
-            backdrop.style.display = 'flex';
-            backdrop.style.zIndex = '2500';
-            backdrop.classList.add('dialog-open', 'hud-visible');
-            const overlay = document.getElementById('amnis-hud-overlay');
-            if (overlay) overlay.classList.add('hud-visible');
-
-            // Immediately poll server stats for this torrent
-            fetchTorrentHudStats(currentHudTorrentTarget);
-            clearInterval(hudRefreshInterval);
-            hudRefreshInterval = setInterval(() => {
-                fetchTorrentHudStats(currentHudTorrentTarget);
-            }, 1000);
-
-            // Delay focusing Close button slightly so the initial Enter key event does not trigger an immediate close!
-            setTimeout(() => {
-                const closeBtn = document.getElementById('hud-close-btn');
-                if (closeBtn && window.Navigation) {
-                    window.Navigation.setFocus(closeBtn);
-                }
-            }, 150);
-        } else {
-            clearInterval(hudRefreshInterval);
-            hudRefreshInterval = null;
-            currentHudTorrentTarget = null;
-            backdrop.style.display = 'none';
-            backdrop.classList.remove('dialog-open', 'hud-visible');
-            const overlay = document.getElementById('amnis-hud-overlay');
-            if (overlay) overlay.classList.remove('hud-visible');
-            if (lastFocusedBeforeHud && document.body.contains(lastFocusedBeforeHud) && window.Navigation) {
-                window.Navigation.setFocus(lastFocusedBeforeHud);
-            } else if (window.Navigation) {
-                window.Navigation.focusInitialElement();
-            }
-        }
-    }
-
-    function updateTorrentHudValues() {
-        const nameEl = document.getElementById('hud-stream-name');
-        const speedEl = document.getElementById('hud-speed');
-        const progressEl = document.getElementById('hud-progress-bar');
-        const progressPctEl = document.getElementById('hud-progress-pct');
-        const compEl = document.getElementById('hud-completed');
-        const peersEl = document.getElementById('hud-peers');
-        const piecesEl = document.getElementById('hud-pieces');
-        const statusEl = document.getElementById('hud-status');
-
-        if (nameEl) nameEl.textContent = torrentStats.name;
-        if (speedEl) speedEl.textContent = torrentStats.speed;
-        if (progressPctEl) progressPctEl.textContent = `${torrentStats.progress}%`;
-        if (progressEl) progressEl.style.width = `${torrentStats.progress}%`;
-        if (compEl) compEl.textContent = `${torrentStats.completedMB} / ${torrentStats.totalMB} (${torrentStats.progress}%)`;
-        if (peersEl) peersEl.textContent = `${torrentStats.peers} active peers`;
-        if (piecesEl) piecesEl.textContent = torrentStats.pieces;
-        if (statusEl) statusEl.textContent = torrentStats.status;
-    }
-
     function setupDialogEvents() {
-        const urlPlayBtn = document.getElementById('url-dialog-play-btn');
-        const urlCancelBtn = document.getElementById('url-dialog-cancel-btn');
-        const hudPlayBtn = document.getElementById('hud-play-btn');
-        const hudCloseBtn = document.getElementById('hud-close-btn');
         const episodesCloseBtn = document.getElementById('episodes-close-btn');
-        const subsCloseBtn = document.getElementById('subtitles-close-btn');
         const settingsCloseBtn = document.getElementById('settings-close-btn');
 
-        const btnNight = document.getElementById('btn-theme-night');
-        const btnDay = document.getElementById('btn-theme-day');
         const btnNorm = document.getElementById('btn-font-normal');
         const btnLarge = document.getElementById('btn-font-large');
         const btnXlarge = document.getElementById('btn-font-xlarge');
-
-        if (btnNight) btnNight.addEventListener('click', () => applyTheme('night'));
-        if (btnDay) btnDay.addEventListener('click', () => applyTheme('day'));
 
         if (btnNorm) btnNorm.addEventListener('click', () => applyFontSize('normal'));
         if (btnLarge) btnLarge.addEventListener('click', () => applyFontSize('large'));
@@ -1648,31 +1247,6 @@ window.VideoPlayer = (function() {
         if (btnAutoOn) btnAutoOn.addEventListener('click', () => setAutoTorrentDownload(true));
         if (btnAutoOff) btnAutoOff.addEventListener('click', () => setAutoTorrentDownload(false));
 
-        if (urlPlayBtn) urlPlayBtn.addEventListener('click', playEnteredUrl);
-        if (urlCancelBtn) urlCancelBtn.addEventListener('click', closeUrlDialog);
-        if (hudPlayBtn) hudPlayBtn.addEventListener('click', function() {
-            isUserInitiatedPlay = true;
-            pendingPlayTarget = torrentStats.name;
-            toggleTorrentInfoHud(false);
-            let streamUrl = torrentStats.streamUrl;
-            if (!streamUrl && activeDownloads.length > 0 && activeDownloads[0].streamUrl) {
-                streamUrl = activeDownloads[0].streamUrl;
-            }
-            if (!streamUrl) {
-                const streamBase = window.getTorrentStreamBaseUrl ? window.getTorrentStreamBaseUrl() : 'http://192.168.0.14:8889';
-                streamUrl = `${streamBase}/`;
-            }
-            window.Player.openMedia(streamUrl, torrentStats.name);
-        });
-        if (hudCloseBtn) {
-            hudCloseBtn.addEventListener('click', () => {
-                if (Date.now() - hudOpenedTimestamp < 350) {
-                    console.log('[VideoPlayer] Debounced rapid close on HUD');
-                    return;
-                }
-                toggleTorrentInfoHud(false);
-            });
-        }
         if (episodesCloseBtn) {
             episodesCloseBtn.addEventListener('click', () => {
                 const dialog = document.getElementById('episodes-dialog-backdrop');
@@ -1680,34 +1254,12 @@ window.VideoPlayer = (function() {
                 if (window.Navigation) window.Navigation.focusInitialElement();
             });
         }
-        if (subsCloseBtn) subsCloseBtn.addEventListener('click', closeSubtitleSearchModal);
         if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', closeSettingsDialog);
-
-        const storageCloseBtn = document.getElementById('storage-dialog-close-btn');
-        if (storageCloseBtn) storageCloseBtn.addEventListener('click', closeStorageDialog);
-
-        const storageFmBtn = document.getElementById('storage-dialog-filemanager-btn');
-        if (storageFmBtn) {
-            storageFmBtn.addEventListener('click', function() {
-                closeStorageDialog();
-                if (window.App) window.App.switchView('filemanager');
-            });
-        }
-
-        // Preset stream buttons in URL modal
-        const presetButtons = document.querySelectorAll('.preset-stream-btn');
-        presetButtons.forEach((btn, idx) => {
-            btn.addEventListener('click', () => playPreset(idx));
-        });
     }
 
     return {
         init: init,
-        openStorageDialog: openStorageDialog,
-        openUrlDialog: openUrlDialog,
-        openSubtitleSearchModal: openSubtitleSearchModal,
         openSettingsDialog: openSettingsDialog,
-        toggleTorrentInfoHud: toggleTorrentInfoHud,
         startTorrentStream: startTorrentStream,
         onTorrentStreamStarted: onTorrentStreamStarted,
         onTorrentStatsUpdate: onTorrentStatsUpdate,
@@ -1719,7 +1271,6 @@ window.VideoPlayer = (function() {
         isAutoTorrentDownloadEnabled: isAutoTorrentDownloadEnabled,
         setAutoTorrentDownload: setAutoTorrentDownload,
         cleanTorrentTitle: cleanTorrentTitle,
-        playPreset: playPreset,
         openEpisodesDialog: openEpisodesDialog,
         openEpisodesDialogForCurrent: openEpisodesDialogForCurrent,
         hasMultipleEpisodes: hasMultipleEpisodes

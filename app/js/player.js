@@ -101,6 +101,18 @@ window.Player = (function() {
                 };
             }
             localStorage.setItem('tvhub_resume_points', JSON.stringify(map));
+
+            // Also keep tvhub_last_played progress updated
+            const lpRaw = localStorage.getItem('tvhub_last_played');
+            if (lpRaw) {
+                const lp = JSON.parse(lpRaw);
+                if (lp && (lp.name === currentTitle || lp.streamUrl === currentMediaUrl)) {
+                    lp.time = currentTimeSec;
+                    lp.duration = durationSec;
+                    lp.updatedAt = now;
+                    localStorage.setItem('tvhub_last_played', JSON.stringify(lp));
+                }
+            }
         } catch (e) {}
     }
 
@@ -288,13 +300,25 @@ window.Player = (function() {
 
     let currentSubtitleUrl = '';
 
-    function openMedia(mediaUrl, title, subtitleUrl) {
+    function openMedia(mediaUrl, title, subtitleUrl, options) {
         checkAVPlaySupport();
         currentMediaUrl = mediaUrl;
         currentTitle = title || 'Video Stream';
         currentSubtitleUrl = subtitleUrl || '';
         videoResumeKey = (title || mediaUrl).trim();
         isPlayerOpen = true;
+
+        // Save last played movie
+        try {
+            const lp = {
+                name: currentTitle,
+                title: currentTitle,
+                streamUrl: mediaUrl,
+                subtitleUrl: subtitleUrl || '',
+                playedAt: Date.now()
+            };
+            localStorage.setItem('tvhub_last_played', JSON.stringify(lp));
+        } catch (e) {}
 
         // Reset all seek and scrubbing states to prevent carrying over frozen state
         isScrubbing = false;
@@ -310,8 +334,12 @@ window.Player = (function() {
         clearTimeout(seekFeedbackTimeout);
 
         // Check for saved resume point
-        const savedTime = getSavedResumePosition(videoResumeKey);
-        pendingResumeTime = (savedTime > 8) ? savedTime : 0;
+        if (options && options.restartFromBeginning) {
+            pendingResumeTime = 0;
+        } else {
+            const savedTime = getSavedResumePosition(videoResumeKey);
+            pendingResumeTime = (savedTime > 8) ? savedTime : 0;
+        }
 
         // Ensure both documentElement and body are 100% transparent so AVPlay hardware video plane is visible!
         document.documentElement.classList.add('media-playing-mode');
@@ -344,8 +372,8 @@ window.Player = (function() {
 
         if (window.Navigation) {
             setTimeout(function() {
-                const playBtn = document.getElementById('osd-play-btn');
-                if (playBtn) window.Navigation.setFocus(playBtn);
+                const timelineBox = document.getElementById('osd-timeline-box');
+                if (timelineBox) window.Navigation.setFocus(timelineBox);
             }, 120);
         }
 
@@ -1055,10 +1083,7 @@ window.Player = (function() {
     }
 
     function updatePlayPauseIcon() {
-        const btn = document.getElementById('osd-play-btn');
-        if (btn) {
-            btn.innerHTML = isPlaying ? '❚❚' : '▶';
-        }
+        // Status tag reflects Play / Pause state
     }
 
     function updateStatusTag(status) {
@@ -1251,18 +1276,15 @@ window.Player = (function() {
     }
 
     function setupOsdEvents() {
-        const playBtn = document.getElementById('osd-play-btn');
         const episodesBtn = document.getElementById('osd-episodes-btn');
         const audioBtn = document.getElementById('osd-audio-btn');
         const audioCloseBtn = document.getElementById('audio-dialog-close-btn');
         const aspectBtn = document.getElementById('osd-aspect-btn');
-        const infoBtn = document.getElementById('osd-info-btn');
         const subsBtn = document.getElementById('osd-subs-btn');
         const closeBtn = document.getElementById('osd-close-btn');
         const timelineBox = document.getElementById('osd-timeline-box');
         const scrubberTrack = document.querySelector('.osd-scrubber-track');
 
-        if (playBtn) playBtn.addEventListener('click', togglePlayPause);
         if (episodesBtn) episodesBtn.addEventListener('click', function() {
             if (window.VideoPlayer && window.VideoPlayer.openEpisodesDialogForCurrent) {
                 window.VideoPlayer.openEpisodesDialogForCurrent();
@@ -1271,16 +1293,7 @@ window.Player = (function() {
         if (audioBtn) audioBtn.addEventListener('click', openAudioSelectionDialog);
         if (audioCloseBtn) audioCloseBtn.addEventListener('click', closeAudioSelectionDialog);
         if (aspectBtn) aspectBtn.addEventListener('click', toggleAspectRatio);
-        if (infoBtn) infoBtn.addEventListener('click', function() {
-            if (window.VideoPlayer && window.VideoPlayer.toggleTorrentInfoHud) {
-                window.VideoPlayer.toggleTorrentInfoHud(true, currentTitle || currentMediaUrl);
-            }
-        });
-        if (subsBtn) subsBtn.addEventListener('click', function() {
-            if (window.VideoPlayer && window.VideoPlayer.openSubtitleSearchModal) {
-                window.VideoPlayer.openSubtitleSearchModal();
-            }
-        });
+        if (subsBtn) subsBtn.addEventListener('click', toggleSubtitlesVisibility);
         if (closeBtn) closeBtn.addEventListener('click', close);
 
         if (timelineBox && scrubberTrack) {
@@ -1346,9 +1359,27 @@ window.Player = (function() {
                parseInt(parts[3], 10) / 1000;
     }
 
+    let isSubtitlesEnabled = true;
+
+    function toggleSubtitlesVisibility() {
+        isSubtitlesEnabled = !isSubtitlesEnabled;
+        const layer = document.getElementById('subtitles-layer');
+        if (layer) {
+            layer.style.display = isSubtitlesEnabled ? 'block' : 'none';
+            if (!isSubtitlesEnabled) layer.innerHTML = '';
+        }
+        const subsBtn = document.getElementById('osd-subs-btn');
+        if (subsBtn) {
+            subsBtn.style.opacity = isSubtitlesEnabled ? '1' : '0.5';
+        }
+        if (window.FileReceiver && window.FileReceiver.showToast) {
+            window.FileReceiver.showToast(isSubtitlesEnabled ? 'Subtitles: ON' : 'Subtitles: OFF');
+        }
+    }
+
     function checkSubtitles(timeSec) {
         const layer = document.getElementById('subtitles-layer');
-        if (!layer || subtitles.length === 0) return;
+        if (!layer || !isSubtitlesEnabled || subtitles.length === 0) return;
 
         const currentCue = subtitles.find(c => timeSec >= c.start && timeSec <= c.end);
         if (currentCue) {

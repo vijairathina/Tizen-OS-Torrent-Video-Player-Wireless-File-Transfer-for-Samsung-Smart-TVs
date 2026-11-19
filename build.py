@@ -26,6 +26,7 @@ REQUIRED_FILES = [
     os.path.join('js', 'videoplayer.js'),
     os.path.join('js', 'filemanager.js'),
     os.path.join('js', 'receiver.js'),
+    os.path.join('js', 'home.js'),
     os.path.join('js', 'app.js'),
     os.path.join('js', 'qrcode.min.js')
 ]
@@ -79,7 +80,7 @@ def verify_package():
 
 def main():
     print("=" * 64)
-    print(" Samsung Tizen TV Application Builder: TV File Hub & Amnis")
+    print(" Samsung Tizen TV Application Builder: LinkPlay")
     print("=" * 64)
 
     if not validate_project():

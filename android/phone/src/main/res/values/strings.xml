@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">LinkPlay</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_player">Player</string>
+    <string name="nav_transfer">Transfer</string>
+    <string name="nav_manager">Files</string>
+    <string name="nav_settings">Settings</string>
+</resources>

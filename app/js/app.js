@@ -17,27 +17,56 @@ window.App = (function() {
         return false;
     };
 
-    function init() {
-        console.log('[App] Initializing TV File Hub & Video Player...');
+    function scrollActiveViewToTop() {
+        try {
+            window.scrollTo(0, 0);
+            if (document.documentElement) document.documentElement.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
 
-        // Setup tab navigation clicks
+            const appMain = document.querySelector('.app-main');
+            if (appMain) appMain.scrollTop = 0;
+
+            const allViews = document.querySelectorAll('.app-view');
+            allViews.forEach(function(v) {
+                v.scrollTop = 0;
+            });
+
+            const scrollables = document.querySelectorAll(
+                '#view-home, .home-container, .file-grid, .queue-list, .transfer-list, ' +
+                '.player-downloads-list, .amnis-downloads-list, .media-carousel-container'
+            );
+            scrollables.forEach(function(el) {
+                el.scrollTop = 0;
+            });
+        } catch (e) {
+            console.warn('[App] scrollActiveViewToTop error:', e);
+        }
+    }
+
+    function init() {
+        console.log('[App] Initializing LinkPlay...');
+
+        // Setup tab navigation clicks - keep focus on tab and scroll to top
         const tabHome = document.getElementById('tab-home');
         const tabReceiver = document.getElementById('tab-receiver');
         const tabFileManager = document.getElementById('tab-filemanager');
         const tabPlayer = document.getElementById('tab-player') || document.getElementById('tab-amnis');
 
-        if (tabHome) {
-            tabHome.addEventListener('click', () => switchView('home', false));
+        function bindNavTab(tabEl, viewName) {
+            if (!tabEl) return;
+            tabEl.addEventListener('click', function(e) {
+                switchView(viewName, false);
+                scrollActiveViewToTop();
+                if (window.Navigation) {
+                    window.Navigation.setFocus(tabEl);
+                }
+            });
         }
-        if (tabReceiver) {
-            tabReceiver.addEventListener('click', () => switchView('receiver', false));
-        }
-        if (tabFileManager) {
-            tabFileManager.addEventListener('click', () => switchView('filemanager', false));
-        }
-        if (tabPlayer) {
-            tabPlayer.addEventListener('click', () => switchView('player', false));
-        }
+
+        bindNavTab(tabHome, 'home');
+        bindNavTab(tabPlayer, 'player');
+        bindNavTab(tabReceiver, 'receiver');
+        bindNavTab(tabFileManager, 'filemanager');
 
         // Initialize modules
         window.Navigation.init();
@@ -47,6 +76,11 @@ window.App = (function() {
         if (playerModule && playerModule.init) playerModule.init();
         window.FileReceiver.init();
         if (window.HomeLauncher && window.HomeLauncher.init) window.HomeLauncher.init();
+
+        // Render Home QR Code initially
+        if (window.FileReceiver && window.FileReceiver.renderQRCode) {
+            window.FileReceiver.renderQRCode('home-qrcode-container');
+        }
 
         // Initialize Filesystem with storage listener
         window.TVFilesystem.init(function(storages, selected) {
@@ -62,7 +96,19 @@ window.App = (function() {
 
     function switchView(viewName, shouldFocusView = false) {
         if (viewName === 'amnis') viewName = 'player';
-        if (currentView === viewName) return;
+
+        // Always reset scrolling to top when switching views or clicking any tab
+        scrollActiveViewToTop();
+
+        if (currentView === viewName) {
+            if (viewName === 'home') {
+                if (window.HomeLauncher && window.HomeLauncher.refresh) window.HomeLauncher.refresh();
+                if (window.FileReceiver && window.FileReceiver.renderQRCode) window.FileReceiver.renderQRCode('home-qrcode-container');
+            } else if (viewName === 'receiver') {
+                if (window.FileReceiver && window.FileReceiver.renderQRCode) window.FileReceiver.renderQRCode('qrcode-container');
+            }
+            return;
+        }
 
         // Hide current view
         const currentViewEl = document.getElementById(`view-${currentView}`) || (currentView === 'player' ? document.getElementById('view-amnis') : null);
@@ -82,9 +128,17 @@ window.App = (function() {
             if (window.HomeLauncher && window.HomeLauncher.refresh) {
                 window.HomeLauncher.refresh();
             }
+            if (window.FileReceiver && window.FileReceiver.renderQRCode) {
+                window.FileReceiver.renderQRCode('home-qrcode-container');
+            }
         } else if (viewName === 'filemanager' || viewName === 'receiver') {
-            if (viewName === 'receiver' && window.FileReceiver && window.FileReceiver.clearReceiverTabAlert) {
-                window.FileReceiver.clearReceiverTabAlert();
+            if (viewName === 'receiver') {
+                if (window.FileReceiver && window.FileReceiver.clearReceiverTabAlert) {
+                    window.FileReceiver.clearReceiverTabAlert();
+                }
+                if (window.FileReceiver && window.FileReceiver.renderQRCode) {
+                    window.FileReceiver.renderQRCode('qrcode-container');
+                }
             }
             window.TVFilesystem.refreshStorages(function(storages, selected) {
                 window.FileManager.onStorageUpdated(storages, selected);
@@ -157,6 +211,7 @@ window.App = (function() {
     return {
         init: init,
         switchView: switchView,
+        scrollActiveViewToTop: scrollActiveViewToTop,
         getCurrentView: function() { return currentView; },
         updateTargetUsbBadge: updateTargetUsbBadge
     };

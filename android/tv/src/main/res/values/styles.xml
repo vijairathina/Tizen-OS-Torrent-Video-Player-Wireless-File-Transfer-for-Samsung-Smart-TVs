@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.TVFileHubTv" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0F0C13</item>
+        <item name="android:statusBarColor">#0F0C13</item>
+        <item name="android:navigationBarColor">#0F0C13</item>
+    </style>
+
+    <style name="Theme.TVFileHubTv.FullScreen" parent="Theme.TVFileHubTv">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>

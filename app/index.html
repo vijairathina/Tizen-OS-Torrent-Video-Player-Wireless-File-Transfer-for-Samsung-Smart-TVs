@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TV File Hub &amp; Video Player</title>
-    <link rel="stylesheet" href="css/style.css?v=1.0.9">
+    <title>LinkPlay</title>
+    <link rel="stylesheet" href="css/style.css?v=1.1.8">
 </head>
 <body>
     <div id="app-container">
@@ -13,8 +13,7 @@
             <div class="brand-section">
                 <img src="icon.png" alt="Logo" class="brand-logo">
                 <div>
-                    <div class="brand-title">TV FILE HUB</div>
-                    <div class="brand-subtitle">&amp; Video Player</div>
+                    <div class="brand-title">LINKPLAY</div>
                 </div>
             </div>
 
@@ -39,9 +38,6 @@
             </nav>
 
             <div class="header-status">
-                <button class="osd-btn focusable" id="header-boost-btn" tabindex="0" title="Boost TV Memory & Performance" style="padding: 6px 14px; font-size: 13px; font-weight: 600; background: rgba(0, 242, 254, 0.15); border: 1px solid rgba(0, 242, 254, 0.4); border-radius: 8px; color: #00f2fe; cursor: pointer;">
-                    <span>⚡ Boost TV</span>
-                </button>
                 <div class="status-badge" id="usb-status-badge">
                     <span class="status-dot"></span>
                     <span>Checking USB...</span>
@@ -66,28 +62,37 @@
                         <div class="hero-overlay-gradient"></div>
                         <div class="hero-content">
                             <div class="hero-badges" id="hero-badges">
-                                <span class="hero-badge badge-accent">★ FEATURED STREAM</span>
-                                <span class="hero-badge">AVPLAY 4K</span>
-                                <span class="hero-badge">AD-FREE HUB</span>
+                                <span class="hero-badge badge-accent" id="hero-badge-featured">★ LAST PLAYED</span>
+                                <span class="hero-badge" id="hero-badge-type">AVPLAY 4K</span>
+                                <span class="hero-badge badge-resume" id="hero-badge-resume" style="display:none;">RESUME READY</span>
                             </div>
-                            <h1 class="hero-title" id="hero-title">TV File Hub &amp; Video Player</h1>
+                            <h1 class="hero-title" id="hero-title">LinkPlay</h1>
                             <p class="hero-desc" id="hero-desc">
-                                Ad-Free High-Performance Media Hub • Wireless Phone Transfer • Seamless Torrent Streaming
+                                High-Performance Media Hub • Wireless Phone Transfer • Seamless Video Streaming
                             </p>
                             <div class="hero-actions-row">
                                 <button class="hero-btn-primary focusable" id="hero-btn-play" tabindex="0">
-                                    <span class="hero-btn-icon">▶</span>
-                                    <span id="hero-play-text">Stream in Video Player</span>
+                                    <span class="hero-btn-icon" id="hero-play-icon">▶</span>
+                                    <span id="hero-play-text">Play Video</span>
                                 </button>
                                 <button class="hero-btn-secondary focusable" id="hero-btn-secondary" tabindex="0">
-                                    <span class="hero-btn-icon">📥</span>
-                                    <span>Send from Phone</span>
+                                    <span class="hero-btn-icon" id="hero-secondary-icon">↺</span>
+                                    <span id="hero-secondary-text">Play from Start</span>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Quick Launcher Grid (Apple TV / Google TV Style) -->
+                    <!-- Continue Watching / Recent Media Section (BELOW HERO) -->
+                    <div class="home-section-header">
+                        <span class="section-icon">🎬</span>
+                        <span class="section-title">Continue Watching &amp; Recent Media</span>
+                    </div>
+                    <div class="media-carousel-container" id="continue-watching-carousel">
+                        <!-- Populated dynamically by HomeLauncher -->
+                    </div>
+
+                    <!-- Quick Launcher Grid (MOVED DOWN BELOW CONTINUE WATCHING) -->
                     <div class="home-section-header">
                         <span class="section-icon">🚀</span>
                         <span class="section-title">Quick Launch</span>
@@ -128,33 +133,12 @@
                             </div>
                             <div class="tile-badge">Mounted</div>
                         </div>
-
-                        <div class="home-tile focusable" id="home-tile-boost" tabindex="0">
-                            <div class="tile-glow" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(245, 158, 11, 0.4));"></div>
-                            <div class="tile-icon-box" style="background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);">
-                                <span>⚡</span>
-                            </div>
-                            <div class="tile-info">
-                                <div class="tile-title">TV Boost &amp; Ad-Block</div>
-                                <div class="tile-sub">Stop TV Ads • Clean RAM • Zero Lag</div>
-                            </div>
-                            <div class="tile-badge" style="background: rgba(245,158,11,0.2); color:#fbbf24; border-color: rgba(245,158,11,0.4);">Shield</div>
-                        </div>
-                    </div>
-
-                    <!-- Continue Watching / Recent Media Section -->
-                    <div class="home-section-header">
-                        <span class="section-icon">🎬</span>
-                        <span class="section-title">Continue Watching &amp; Recent Media</span>
-                    </div>
-                    <div class="media-carousel-container" id="continue-watching-carousel">
-                        <!-- Populated dynamically by HomeLauncher -->
                     </div>
 
                     <!-- System Dashboard & Storage Health Widgets -->
                     <div class="home-section-header">
                         <span class="section-icon">📊</span>
-                        <span class="section-title">TV Hub Status &amp; Storage Health</span>
+                        <span class="section-title">LinkPlay Status &amp; Storage Health</span>
                     </div>
                     <div class="home-widgets-grid">
                         <div class="dashboard-widget focusable" id="widget-storage" tabindex="0">
@@ -171,31 +155,22 @@
                         </div>
 
                         <div class="dashboard-widget focusable" id="widget-network" tabindex="0">
-                            <div class="widget-header">
-                                <span class="widget-icon">📡</span>
-                                <span class="widget-title">Companion Bridge Network</span>
+                            <div class="widget-network-layout">
+                                <div class="widget-network-info">
+                                    <div class="widget-header">
+                                        <span class="widget-icon">📡</span>
+                                        <span class="widget-title">Companion Bridge Network</span>
+                                    </div>
+                                    <div class="widget-main-stat" id="home-tv-ip">192.168.0.12</div>
+                                    <div class="widget-desc" id="home-server-url">http://192.168.0.14:8080</div>
+                                    <div class="widget-pill-row">
+                                        <span class="widget-pill">Wi-Fi: Connected</span>
+                                        <span class="widget-pill">WebSocket: Online</span>
+                                    </div>
+                                    <div class="widget-meta">Companion transfer ready for mobile &amp; PC</div>
+                                </div>
+                                <div id="home-qrcode-container" title="Scan with Phone to open Web Sender"></div>
                             </div>
-                            <div class="widget-main-stat" id="home-tv-ip">192.168.0.12</div>
-                            <div class="widget-desc" id="home-server-url">http://192.168.0.14:8080</div>
-                            <div class="widget-pill-row">
-                                <span class="widget-pill">Wi-Fi: Connected</span>
-                                <span class="widget-pill">WebSocket: Online</span>
-                            </div>
-                            <div class="widget-meta">Companion transfer ready for mobile &amp; PC</div>
-                        </div>
-
-                        <div class="dashboard-widget focusable" id="widget-adblock" tabindex="0">
-                            <div class="widget-header">
-                                <span class="widget-icon">🛡️</span>
-                                <span class="widget-title">Ad-Free &amp; Performance Shield</span>
-                            </div>
-                            <div class="widget-main-stat" style="color: #10b981;">Clean TV Active</div>
-                            <div class="widget-desc">Smart Hub Ad Blocking &amp; Memory Optimizer</div>
-                            <div class="widget-pill-row" id="home-adshield-status">
-                                <span class="status-dot active"></span>
-                                <span>Zero Ads In Hub</span>
-                            </div>
-                            <div class="widget-meta" style="color: #38bdf8; cursor: pointer;">Click to view TV ad-block setup guide →</div>
                         </div>
                     </div>
                 </div>
@@ -336,19 +311,7 @@
                                 <span class="btn-icon">🔄</span>
                                 <span class="btn-text">Refresh</span>
                             </button>
-                            <button class="player-header-btn focusable" id="player-card-load-file" tabindex="0" title="Browse Storage">
-                                <span class="btn-icon">📁</span>
-                                <span class="btn-text">Storage</span>
-                            </button>
-                            <button class="player-header-btn focusable" id="player-card-load-url" tabindex="0" title="From URL / Magnet">
-                                <span class="btn-icon">🔗</span>
-                                <span class="btn-text">URL / Magnet</span>
-                            </button>
-                            <button class="player-header-btn focusable" id="player-card-addons" tabindex="0" title="Addons &amp; Subtitles">
-                                <span class="btn-icon">🧩</span>
-                                <span class="btn-text">Subtitles</span>
-                            </button>
-                            <button class="player-header-btn focusable" id="player-card-settings" tabindex="0" title="Settings &amp; Theme">
+                            <button class="player-header-btn focusable" id="player-card-settings" tabindex="0" title="Settings &amp; Preferences">
                                 <span class="btn-icon">⚙️</span>
                                 <span class="btn-text">Settings</span>
                             </button>
@@ -452,10 +415,6 @@
                         <span>🌐</span>
                         <span>Audio Language</span>
                     </button>
-                    <button class="osd-btn focusable" id="osd-info-btn" tabindex="0">
-                        <span>ℹ️</span>
-                        <span>Torrent Info</span>
-                    </button>
                     <button class="osd-btn focusable" id="osd-subs-btn" tabindex="0">
                         <span>💬</span>
                         <span>Subtitles</span>
@@ -469,11 +428,6 @@
                         <span>Exit</span>
                     </button>
                 </div>
-            </div>
-
-            <!-- Center Big Play Button -->
-            <div class="osd-center">
-                <button class="osd-play-btn focusable" id="osd-play-btn" tabindex="0">▶</button>
             </div>
 
             <!-- Bottom Scrubber & Status -->
@@ -503,114 +457,6 @@
     <!-- ================================================================
          DIALOGS & MODALS
          ================================================================ -->
-
-    <!-- Video Player Torrent Information Modal -->
-    <div class="app-dialog-backdrop" id="amnis-hud-backdrop">
-        <div class="hud-overlay" id="amnis-hud-overlay">
-            <div class="hud-title">Torrent Information</div>
-            
-            <div class="hud-stat-row">
-                <span class="hud-label">File:</span>
-                <span class="hud-value" id="hud-stream-name" style="font-weight:700; color:#fff;">Stream Name</span>
-            </div>
-
-            <div class="hud-stat-row">
-                <span class="hud-label">Download Progress:</span>
-                <span class="hud-value" style="display:flex; gap:12px;">
-                    <span id="hud-progress-pct" style="color:var(--color-success); font-weight:700;">0%</span>
-                    <span id="hud-speed" style="color:var(--primary-cyan);">0 B/s</span>
-                </span>
-            </div>
-
-            <div class="progress-track" style="height:14px; margin: 4px 0;">
-                <div class="progress-fill" id="hud-progress-bar" style="width: 0%; background: linear-gradient(90deg, #10b981 0%, #00f2fe 100%);"></div>
-            </div>
-
-            <div class="hud-stat-row">
-                <span class="hud-label">Completed:</span>
-                <span class="hud-value" id="hud-completed">0 MB / 0 MB</span>
-            </div>
-
-            <div class="hud-stat-row">
-                <span class="hud-label">Active peers number:</span>
-                <span class="hud-value" id="hud-peers">0 peers</span>
-            </div>
-
-            <div class="hud-stat-row">
-                <span class="hud-label">Pieces:</span>
-                <span class="hud-value" id="hud-pieces">Buffering sequential pieces...</span>
-            </div>
-
-            <div class="hud-stat-row">
-                <span class="hud-label">Status:</span>
-                <span class="hud-value" id="hud-status" style="color:var(--primary-cyan); font-weight:600;">Connecting to Swarm...</span>
-            </div>
-
-            <div class="dialog-actions" style="margin-top:16px; display:flex; gap:12px; justify-content:flex-end;">
-                <button class="btn-primary focusable" id="hud-play-btn" tabindex="0">▶️ Play Video Stream</button>
-                <button class="btn-secondary focusable" id="hud-close-btn" tabindex="0">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Storage Browser Dialog -->
-    <div class="app-dialog-backdrop" id="storage-dialog-backdrop">
-        <div class="dialog-window" style="width: 760px;">
-            <div class="dialog-title">📁 Browse Storage Devices</div>
-            <div class="dialog-body" style="margin-bottom: 14px; color: var(--text-muted); font-size: 15px;">
-                Select a connected storage device to browse and stream videos or torrents:
-            </div>
-            <div id="storage-dialog-list" style="max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
-                <!-- Dynamically populated storage drives -->
-            </div>
-            <div class="dialog-actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
-                <button class="btn-primary focusable" id="storage-dialog-filemanager-btn" tabindex="0">📂 Open Full File Manager</button>
-                <button class="btn-secondary focusable" id="storage-dialog-close-btn" tabindex="0">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- URL Input Dialog -->
-    <div class="app-dialog-backdrop" id="url-dialog-backdrop">
-        <div class="dialog-window">
-            <div class="dialog-title">Stream from URL or Magnet</div>
-            <div class="dialog-body">
-                Enter an HTTP, HTTPS, HLS (.m3u8), or direct video stream URL:
-            </div>
-            <input type="text" class="dialog-input focusable" id="stream-url-input" tabindex="0" placeholder="https://example.com/stream.mp4">
-            
-            <div style="font-size:14px; color:var(--text-muted); margin-top:-8px;">Quick Test Presets:</div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Big Buck Bunny 4K</button>
-                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Tears of Steel 1080p</button>
-                <button class="osd-btn focusable preset-stream-btn" tabindex="0" style="font-size:13px; padding:6px 14px;">Elephants Dream 4K</button>
-            </div>
-
-            <div class="dialog-actions">
-                <button class="btn-secondary focusable" id="url-dialog-cancel-btn" tabindex="0">Cancel</button>
-                <button class="btn-primary focusable" id="url-dialog-play-btn" tabindex="0">Play Stream</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Subtitles Search Dialog -->
-    <div class="app-dialog-backdrop" id="subtitles-dialog-backdrop">
-        <div class="dialog-window" style="width:800px;">
-            <div class="dialog-title">Video Player Subtitles Search</div>
-            <div class="dialog-body">
-                Search OpenSubtitles and BSPlayer for matched subtitles:
-            </div>
-            <input type="text" class="dialog-input focusable" id="subtitles-search-input" tabindex="0" placeholder="Movie title or release name...">
-            
-            <div id="subtitles-results-list" style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; margin-top:10px;">
-                <!-- Subtitle items -->
-            </div>
-
-            <div class="dialog-actions">
-                <button class="btn-secondary focusable" id="subtitles-close-btn" tabindex="0">Close</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Episodes / Multi-file Selector Dialog -->
     <div class="app-dialog-backdrop" id="episodes-dialog-backdrop">
@@ -663,7 +509,7 @@
                         </button>
                         <button class="settings-pill focusable" id="btn-storage-server" tabindex="0">
                             <span>🖥️</span>
-                            <span>Server (Pi / Host)</span>
+                            <span>Server Storage</span>
                         </button>
                     </div>
                     <div style="font-size:13px; color:var(--text-muted); margin-top:6px;" id="settings-storage-desc">
@@ -686,21 +532,6 @@
                     </div>
                     <div style="font-size:13px; color:var(--text-muted); margin-top:6px;">
                         When ON, receiving a .torrent file immediately adds it to Video Player and starts downloading in the background.
-                    </div>
-                </div>
-
-                <!-- Theme Option: Day / Night -->
-                <div class="settings-group">
-                    <div class="settings-label" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:8px;">🎨 App Theme Mode:</div>
-                    <div class="settings-options-row" style="display:flex; gap:12px;">
-                        <button class="settings-pill focusable active" id="btn-theme-night" tabindex="0">
-                            <span>🌙</span>
-                            <span>Night Mode (Dark)</span>
-                        </button>
-                        <button class="settings-pill focusable" id="btn-theme-day" tabindex="0">
-                            <span>☀️</span>
-                            <span>Day Mode (Light)</span>
-                        </button>
                     </div>
                 </div>
 
@@ -744,68 +575,20 @@
         </div>
     </div>
 
-    <!-- ================================================================
-         TV BOOST & AD-BLOCKER SETUP GUIDE MODAL
-         ================================================================ -->
-    <div class="app-dialog-backdrop" id="adblock-modal-backdrop" style="display:none;">
-        <div class="app-dialog-box" style="max-width: 780px;">
-            <div class="dialog-header">
-                <div class="dialog-title" style="display:flex; align-items:center; gap:10px;">
-                    <span style="color:#00f2fe; font-size:26px;">🛡️</span>
-                    <span>Samsung TV Ad-Block &amp; Performance Guide</span>
-                </div>
-                <button class="dialog-close-btn focusable" id="adblock-modal-close-btn" tabindex="0">✕</button>
-            </div>
 
-            <div class="dialog-content-body">
-                <p style="font-size:15px; color:var(--text-muted); margin-bottom:16px;">
-                    Follow these 3 simple TV settings steps to permanently stop home screen banner ads, disable telemetry tracking, and make your Samsung Smart TV run at peak speed:
-                </p>
-
-                <div class="guide-step-card" style="display:flex; gap:16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:12px;">
-                    <div class="step-num" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #7b2cbf, #00f2fe); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0;">1</div>
-                    <div class="step-content">
-                        <div class="step-title" style="font-weight:600; font-size:16px; color:#fff; margin-bottom:4px;">Turn Off "Autorun Smart Hub" (Stop Lag on Startup)</div>
-                        <div class="step-desc" style="font-size:14px; color:var(--text-muted); line-height:1.4;">Go to <strong>Settings → General &amp; Privacy → Smart Features</strong> and turn <strong>OFF</strong> <em>Autorun Smart Hub</em> and <em>Autorun Last App</em>. Your TV will boot instantly without loading heavy ad ribbons!</div>
-                    </div>
-                </div>
-
-                <div class="guide-step-card" style="display:flex; gap:16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:12px;">
-                    <div class="step-num" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #7b2cbf, #00f2fe); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0;">2</div>
-                    <div class="step-content">
-                        <div class="step-title" style="font-weight:600; font-size:16px; color:#fff; margin-bottom:4px;">Disable IBA &amp; ACR Viewing Data Tracking</div>
-                        <div class="step-desc" style="font-size:14px; color:var(--text-muted); line-height:1.4;">Go to <strong>Settings → General &amp; Privacy → Terms &amp; Privacy → Privacy Choices</strong>. Uncheck <em>Interest-Based Advertisements (IBA)</em> and <em>Viewing Information Services</em>. This stops background video scanning and profile tracking.</div>
-                    </div>
-                </div>
-
-                <div class="guide-step-card" style="display:flex; gap:16px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:12px;">
-                    <div class="step-num" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #7b2cbf, #00f2fe); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0;">3</div>
-                    <div class="step-content">
-                        <div class="step-title" style="font-weight:600; font-size:16px; color:#fff; margin-bottom:4px;">Set AdGuard Ad-Blocking DNS on TV</div>
-                        <div class="step-desc" style="font-size:14px; color:var(--text-muted); line-height:1.4;">Go to <strong>Settings → Network → Network Status → IP Settings → DNS Setting → Enter Manually</strong>.<br>Enter DNS: <strong style="color:#00f2fe;">94.140.14.14</strong> (Secondary: <strong>94.140.15.15</strong>). This blocks 100% of Samsung Smart Hub ads and TV Plus video ads!</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="dialog-actions" style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
-                <button class="btn-primary focusable" id="adblock-modal-boost-btn" tabindex="0" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">⚡ Run TV Memory Boost Now</button>
-                <button class="btn-secondary focusable" id="adblock-modal-done-btn" tabindex="0">Close</button>
-            </div>
-        </div>
-    </div>
 
     <!-- On-screen Toast Notifications -->
     <div id="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="js/qrcode.min.js?v=1.0.9"></script>
-    <script src="js/navigation.js?v=1.0.9"></script>
-    <script src="js/filesystem.js?v=1.0.9"></script>
-    <script src="js/player.js?v=1.0.9"></script>
-    <script src="js/videoplayer.js?v=1.0.9"></script>
-    <script src="js/filemanager.js?v=1.0.9"></script>
-    <script src="js/receiver.js?v=1.0.9"></script>
-    <script src="js/home.js?v=1.0.9"></script>
-    <script src="js/app.js?v=1.0.9"></script>
+    <script src="js/qrcode.min.js?v=1.1.8"></script>
+    <script src="js/navigation.js?v=1.1.8"></script>
+    <script src="js/filesystem.js?v=1.1.8"></script>
+    <script src="js/player.js?v=1.1.8"></script>
+    <script src="js/videoplayer.js?v=1.1.8"></script>
+    <script src="js/filemanager.js?v=1.1.8"></script>
+    <script src="js/receiver.js?v=1.1.8"></script>
+    <script src="js/home.js?v=1.1.8"></script>
+    <script src="js/app.js?v=1.1.8"></script>
 </body>
 </html>

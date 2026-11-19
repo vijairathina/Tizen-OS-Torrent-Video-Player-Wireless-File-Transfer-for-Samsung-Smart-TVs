@@ -1,280 +1,339 @@
-# 🎬 Samsung Tizen Smart TV: TV File Hub & Video Player
+# 🎬 LinkPlay (Multi-Platform Media & File Ecosystem)
 
 [![Tizen OS](https://img.shields.io/badge/Tizen_OS-3.0_to_10.0+-1428a0?style=for-the-badge&logo=samsung&logoColor=white)](https://developer.samsung.com/smarttv)
-[![Samsung AVPlay](https://img.shields.io/badge/AVPlay-Hardware_Accelerated-00f2fe?style=for-the-badge&logo=media&logoColor=black)](https://developer.samsung.com/smarttv/develop/api-references/samsung-product-api-references/avplay.html)
-[![WebTorrent](https://img.shields.io/badge/BitTorrent-Sequential_Streaming-7b2cbf?style=for-the-badge&logo=bittorrent&logoColor=white)](https://webtorrent.io)
-[![License](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
+[![Android TV](https://img.shields.io/badge/Android_TV-Google_TV-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/tv)
+[![Android Phone](https://img.shields.io/badge/Android_Phone-Material_3-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
+[![Android Auto](https://img.shields.io/badge/Android_Auto-Car_App_Library-3ddc84?style=for-the-badge&logo=androidauto&logoColor=white)](https://developer.android.com/training/cars/apps)
+[![Samsung AVPlay](https://img.shields.io/badge/AVPlay-Hardware_Accelerated_4K-00f2fe?style=for-the-badge&logo=samsung&logoColor=black)](https://developer.samsung.com/smarttv)
+[![Media3 ExoPlayer](https://img.shields.io/badge/Media3-ExoPlayer_4K-ff007f?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/media/media3)
+[![BitTorrent](https://img.shields.io/badge/WebTorrent-Sequential_Streaming-7b2cbf?style=for-the-badge&logo=bittorrent&logoColor=white)](https://webtorrent.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 
-An all-in-one, high-performance multimedia suite designed exclusively for the 10-foot living room experience on **Samsung Crystal UHD, QLED, Neo QLED, and OLED Smart TVs** running **Tizen OS (3.0 through 10.0+)**.
+**LinkPlay** is an all-in-one, high-performance multimedia and file synchronization ecosystem unifying **Samsung Smart TVs (Tizen OS 3.0 to 10.0+)**, **Android TV & Google TV**, **Android Smartphones & Tablets**, and **Android Auto** into one private, high-speed local network media hub.
 
-Combines **Sequential BitTorrent video streaming**, **zero-buffer hardware-accelerated playback with Samsung AVPlay**, **ultra-fast peer-to-peer wireless file transfer from smartphones and computers**, **multi-drive USB file explorer**, and an **integrated TV performance booster & ad-blocker dashboard**.
+All clients connect to a lightweight, zero-dependency **Companion Server** running inside your home network. LinkPlay provides instant sequential BitTorrent video streaming, real-time wireless file transfers with offline vector SVG QR codes, multi-drive USB storage exploration, automatic MKV Cues index repair for instant TV seeking, and deterministic 10-foot remote control navigation.
 
 ---
 
-## 📸 Screenshots Showcase
+## 📱 Supported Platforms & Ecosystem
 
-### 1. 🏠 Modern Cinematic Home Launcher
-*Apple TV / Google TV-inspired dashboard featuring hero spotlight banners, quick-launch application modules, and a live Continue Watching carousel.*
+| Platform | Technology Stack | UI / Experience | Key Capabilities | Package ID / Target |
+| :--- | :--- | :--- | :--- | :--- |
+| **Samsung Smart TV** | Tizen Web API + Samsung AVPlay | 10-foot Cinematic Living Room UI, D-pad remote navigation | Hardware-accelerated 4K decoders, multi-drive USB explorer, live torrent streaming, TV ad-block & memory boost. | `YGDS1qv5fm.TVFileHub`<br>`build/TVFileHub.wgt` |
+| **Android TV / Google TV** | Kotlin + Jetpack Compose for TV / Leanback | Native 10-foot TV UI, D-pad spatial focus | ExoPlayer Media3 4K playback, dynamic LAN server discovery, torrent streaming, TV launcher banner. | `com.tvfilehub.tv`<br>`android/tv/` |
+| **Android Phone / Tablet** | Kotlin + Jetpack Compose Material 3 | Responsive touch UI, portrait & landscape auto-rotation | Mobile player, episode selection dialog, drag-and-drop transfer, background sync with WorkManager. | `com.tvfilehub.phone`<br>`android/phone/` |
+| **Android Auto** | Android for Cars App Library + MediaLibraryService | Driver-safety compliant in-car media interface | Audio media browsing, playlist queues, high-fidelity car head unit streaming via MediaSession. | `com.tvfilehub.auto`<br>`android/auto/` |
+| **Web Sender & Dashboard** | HTML5, CSS3 Glassmorphism, Vanilla JS, WebSockets | Responsive web portal for desktop, tablet, and mobile | Zero-install drag-and-drop uploader, live download speeds, pause/resume, stream first, low priority toggle. | `http://<SERVER_IP>:8080/`<br>`server/public/` |
+
+---
+
+## 📸 Screenshots & Visual Tour
+
+### 1. 🏠 Cinematic TV Home Launcher
+*Apple TV & Google TV-inspired dashboard featuring hero spotlight banners with 1-click play/resume, live Continue Watching carousel with progress bars, and the Companion Bridge Network widget with an instant vector SVG QR code.*
 
 ![TV Home Launcher](docs/images/01_home_launcher.png)
 
 ---
 
-### 2. 🎬 Video Player & Sequential Torrent Streamer
-*Hardware-accelerated media hub with live BitTorrent swarm telemetry (peers, download speed, verified progress bar, remaining time) and direct subtitle search.*
+### 2. 🎬 Video Player Hub & Sequential Torrent Streamer
+*Hardware-accelerated media hub with live BitTorrent swarm metrics (peer count, download speed, uploaded bytes, verified piece progress, ETA), episode selector dialog, and subtitle search.*
 
 ![Video Player Hub](docs/images/02_video_player.png)
 
 ---
 
 ### 3. 📡 Wireless LAN File Receiver
-*High-contrast offline QR code for instant smartphone camera pairing, local network IP resolver, and real-time multi-file transfer queue.*
+*High-contrast offline vector SVG QR code for instant smartphone camera pairing, local network IP resolver, target storage toggle, and real-time multi-file transfer queue.*
 
 ![Wireless File Receiver](docs/images/03_file_receiver.png)
 
 ---
 
 ### 4. 📁 Multi-Drive USB Storage & Media Browser
-*Independent selectable storage tabs for Internal Flash and multiple attached USB drives (`USB 1: sda1`, `USB 2: sdb1`, `USB 3: sdc1`), live disk capacity indicators, and breadcrumb folder navigation.*
+*Multi-mount partition selector (`USB 1: sda1`, `USB 2: sdb1`, `USB 3: sdc1`), local TV flash storage, capacity gauges, breadcrumb directory traversal, and 1-click playback.*
 
 ![USB File Manager](docs/images/04_file_manager.png)
 
 ---
 
-### 5. 🛡️ Samsung TV Ad-Blocker & Memory Booster Guide
-*Step-by-step guide to stop Smart Hub startup lag, disable background telemetry tracking, configure AdGuard ad-blocking DNS, and purge TV RAM with a single click.*
+### 5. 🛡️ TV Performance Booster & Ad-Blocker Guide
+*Interactive walkthrough to stop Smart Hub startup lag, disable background telemetry tracking, configure AdGuard ad-blocking DNS, and purge TV RAM with a single click.*
 
 ![TV Ad-Blocker Guide](docs/images/05_tv_booster_modal.png)
 
 ---
 
 ### 6. 📱 Responsive Mobile & PC Web Sender Interface
-*Zero-install drag-and-drop web uploader that opens instantly in any browser when scanning the TV screen QR code.*
+*Zero-install drag-and-drop web uploader that opens automatically when scanning the TV screen QR code with your mobile camera or entering the local server IP.*
 
 ![Mobile Web Sender](docs/images/06_mobile_sender_web.png)
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features & Innovations
 
 ### 🎬 Sequential BitTorrent Streaming Engine
-- **Stream as You Download:** Sequential piece prioritization streams video in real time while downloading the remainder of the file in the background.
-- **Hardware Acceleration:** Feeds live streams directly into the native Samsung `webapis.avplay` hardware decoder, providing 4K/1080p playback with zero frame drops.
-- **Cryptographic `.done` Verification:** Automatically validates SHA-1 piece checksums upon completion and transitions seamlessly to direct high-speed HTTP streaming.
-- **Resilient Timeline Seeking:** Seek forward or backward by ±10 seconds or scrub anywhere along the timeline with RFC 7233 byte-range serving.
+- **Stream as You Download:** Piece prioritization downloads the beginning and end of the video first, enabling instant 4K playback while the remainder downloads sequentially in the background.
+- **Hardware Acceleration:** Feeds streams directly into Samsung's native AVPlay decoder pipeline on Tizen and Media3 ExoPlayer on Android TV for butter-smooth 60 FPS playback.
+- **Automatic MKV Cues Repair:** In-flight MKV indexer parses and patches missing EBML Cues on the fly, unlocking instant timeline seeking across TVs and media players without waiting for downloads to finish.
+- **Real-Time Swarm Telemetry:** Displays peer count, download speed, upload speed, progress percentage, downloaded/total MB, and remaining ETA.
 
-### 📡 Wireless Local Wi-Fi File Transfer
-- **Zero Mobile App Required:** Phone and laptop users simply scan the QR code displayed on the TV to open the mobile web sender.
-- **High-Speed LAN Transfer:** Direct local network streaming with multi-gigabyte video support (MKV, MP4, AVI, WEBM, MOV, FLAC, MP3, Torrent files).
-- **Auto-Versioning & Storage Safety:** Prevents accidental overwrites by automatically numbering duplicate filenames (`movie (1).mkv`).
-- **Queue Management:** Top-bar action buttons allow clearing the queue list or deleting all received files from physical disk in one click.
+### 📺 Multi-Episode Series Support & Queue Priority
+- **Embedded Episode Selector:** Multi-file torrents (e.g. TV seasons, anime series) display an interactive episode modal so you can choose and stream individual episodes immediately while downloading.
+- **Priority Queue Scheduling:** Three-tier scheduling:
+  - **Highest Priority (⚡ Streaming):** Allocates full network bandwidth to the video currently playing.
+  - **Normal Priority:** Standard background downloading queue.
+  - **Low Priority:** Defers bulk torrents to download only after all other active items complete.
+- **Download Controls:** Pause, resume, restart, and delete downloads directly from the TV app or mobile web dashboard.
 
-### 📁 Multi-Drive USB Storage Manager
-- **Multi-USB Support:** Automatically detects and displays individual tabs for every plugged-in USB storage partition alongside TV Internal memory.
-- **Live Disk Capacity Gauges:** Displays free and total gigabytes for every connected drive in real time.
-- **Deep File Tree Traversal:** Instant breadcrumbs navigation, parent folder jump (`Up Level`), root directory return (`Storage Root`), and quick jump to `Received Files`.
+### 🎮 Deterministic 10-Foot Remote Navigation
+- **Header Tab Focus Retention:** Pressing **ENTER** or clicking any navigation tab (Home, Video Player, File Receiver, File Manager) activates the view, resets the scroll position to the top, and strictly preserves focus on that tab. Focus moves down into view contents only when the user explicitly presses the **DOWN** arrow key on the remote.
+- **Universal Top Scrolling:** Switching tabs or re-selecting the active tab automatically scrolls `window`, `document`, and scrollable list containers (`#view-home`, `.queue-list`, `.player-downloads-list`, `.file-grid`) to `scrollTop = 0`.
+- **Zero Off-Axis Drift:** Rigid boundary clamps keep coordinates locked at (0, 0), eliminating screen jumping.
 
-### 🛡️ Smart Hub Ad-Blocker & Performance Optimization
-- **Startup Lag Elimination:** Disables heavy Smart Hub ad ribbon preloading to enable instantaneous TV boot times.
-- **Telemetry & IBA Shield:** Guides users to disable Interest-Based Ads (IBA) and ACR profile tracking.
-- **Network-Level Ad Blocking:** Simple setup for AdGuard DNS (`94.140.14.14` / `94.140.15.15`) to eliminate 100% of TV banner and video ads.
-- **One-Click RAM Purge:** Frees TV memory buffers and restarts UI rendering pipelines on demand.
+### 📡 Offline Vector SVG QR Code Engine
+- **Crisp Vector Rendering:** Generates vector `<svg>` elements directly in the DOM, eliminating legacy canvas blank-image issues inside hidden containers on Tizen WebKit.
+- **Dual Placement:** Displays in full 140x140px on the **File Receiver** tab and in 76x76px directly inside the **Home Dashboard Companion Bridge Network widget** for instant phone camera scanning.
 
-### 🎨 10-Foot Living Room Design
-- **Day & Night Themes:** High-contrast Dark (OLED glassmorphism) and Day (Clean Light) color palettes.
-- **Customizable Font Scaling:** Standard (100%), Large (115%), and Extra Large (130%) for comfortable reading across living rooms.
-- **Samsung Remote Optimization:** 2D spatial navigation designed for physical D-pad remotes (Samsung Smart Remote and traditional infrared remotes).
+### 💾 Storage Target Flexibility
+- **Save Anywhere:** Toggle received file targets between:
+  - **Attached USB Storage:** Saves directly to connected flash drives (`<label>/TVFileHub/Received/`).
+  - **Local TV Flash:** Stores locally on internal TV storage (`downloads/TVFileHub/Received/`).
+  - **Server Storage (Zero TV Space):** Keeps all heavy media on the Companion Server (`/app/uploads/`), consuming 0 MB of TV memory while streaming seamlessly.
 
 ---
 
-## 📦 Repository Structure
+## 📦 Project Architecture
 
 ```text
-├── app/                                 # Samsung Tizen Web Application
+LinkPlay/
+├── app/                                 # Samsung Tizen Web Application (v1.1.8)
 │   ├── config.xml                       # Tizen application manifest & privileges
 │   ├── index.html                       # 10-foot TV user interface layout
 │   ├── icon.png                         # High-res 512x512 TV launcher icon
-│   ├── assets/                          # UI backdrop graphics and artwork
+│   ├── assets/                          # Backdrop artwork & graphics
 │   ├── css/
-│   │   └── style.css                    # Day/Night themes, spatial focus glow states
+│   │   └── style.css                    # Day/Night themes, focus glow states, responsive layouts
 │   └── js/
-│       ├── navigation.js                # 2D spatial navigation & TV remote key handling
-│       ├── filesystem.js                # Multi-USB detection & storage preference engine
-│       ├── player.js                    # Samsung AVPlay hardware decoding pipeline
-│       ├── videoplayer.js               # BitTorrent download tracking & player HUD
-│       ├── receiver.js                  # File receiver queue, QR generator & actions
-│       ├── filemanager.js               # USB storage browser & breadcrumb navigator
-│       ├── home.js                      # Spotlight banner & continue watching carousel
-│       └── qrcode.min.js                # Offline QR code generator for TV screen
-├── build/
-│   └── TVFileHub.wgt                    # Pre-compiled, production-ready Tizen TV package (v1.0.9)
+│       ├── app.js                       # Main orchestrator, view lifecycle & scroll manager
+│       ├── navigation.js                # Remote D-pad spatial navigation & key bindings
+│       ├── home.js                      # Home dashboard, Hero banner & continue watching
+│       ├── videoplayer.js               # Video Player hub, priority queue & torrent metrics
+│       ├── player.js                    # AVPlay hardware decoder & HTML5 fallback engine
+│       ├── receiver.js                  # File Receiver, WebSocket listener & SVG QR code
+│       ├── filesystem.js                # Tizen filesystem abstraction & USB mount monitor
+│       ├── filemanager.js               # Multi-drive USB storage explorer & directory grid
+│       └── qrcode.min.js                # Vector SVG-enabled QR code generator
+│
+├── android/                             # Android Multi-Module Gradle Project
+│   ├── core/                            # Shared Android Core Library
+│   │   ├── common/                      # ByteFormatter, NetworkUtils, Result monad, QrCode
+│   │   ├── network/                     # Retrofit REST API, OkHttp, WebSocket listener
+│   │   ├── database/                    # Room DB, MediaDao, ResumePoint & Cache entities
+│   │   ├── models/                      # DownloadItem, TorrentStats, SystemStatus, FileNode
+│   │   ├── repository/                  # MediaRepository, TorrentRepository, TransferRepository
+│   │   └── services/                    # MediaPlaybackManager (Shared ExoPlayer state holder)
+│   ├── tv/                              # Native Android TV & Google TV Application
+│   │   ├── navigation/                  # TvNavHost, TvDestination
+│   │   └── ui/                          # 10-foot Compose UI, D-pad focus cards, TV OSD player
+│   ├── phone/                           # Native Android Phone Application
+│   │   ├── navigation/                  # PhoneNavHost, Screen definitions
+│   │   ├── ui/                          # Material 3 UI, Home, Video Player, Explorer, Transfer
+│   │   └── workers/                     # WorkManager background download sync
+│   ├── auto/                            # Android Auto Automotive Media Experience
+│   │   ├── service/                     # CarMediaLibraryService (MediaLibraryService / MediaSession)
+│   │   └── car/                         # CarMediaScreen (Android for Cars App Library)
+│   ├── build.gradle.kts                 # Root Gradle Kotlin DSL build script
+│   └── settings.gradle.kts              # Multi-module inclusion (:core, :tv, :phone, :auto)
+│
 ├── server/                              # Companion Host Bridge Server
-│   ├── server.py                        # Lightweight HTTP & WebSocket transfer server
-│   ├── torrent_engine.mjs               # WebTorrent sequential streaming daemon
+│   ├── server.py                        # Python 3 HTTP/WebSocket daemon & priority scheduler
+│   ├── torrent_engine.mjs               # Node.js sequential BitTorrent streaming engine
+│   ├── Dockerfile                       # Container definition with Python 3 & Node.js
+│   ├── docker-compose.yml               # Production deployment specification
+│   ├── requirements.txt                 # Python dependencies
+│   ├── package.json                     # Node.js dependencies (webtorrent, etc.)
 │   └── public/
-│       └── sender.html                  # Responsive mobile & desktop drag-and-drop web uploader
-├── tools/                               # Packaging & deployment utilities
-│   ├── apps2samsung/                    # CLI tool for deploying .wgt to Samsung TVs
-│   └── generate_screenshots.py          # Automated Playwright documentation screenshot script
+│       ├── dashboard.html               # Real-time Web Download Dashboard
+│       └── sender.html                  # Mobile & Desktop Web Sender UI
+│
+├── shared/                              # Shared Specifications & Configurations
+│   ├── api-contracts/                   # JSON Schema API contract (server-api-v1.json)
+│   ├── configurations/                  # Default ports, timeouts, buffer sizes (default_config.json)
+│   └── documentation/                   # Complete API_SPECIFICATION.md
+│
+├── docs/                                # Multi-Platform Engineering Documentation
+│   ├── EXISTING_ARCHITECTURE.md         # Exhaustive analysis of Tizen & Server internals
+│   ├── FEATURE_INVENTORY.md             # Complete catalog of features, models & actions
+│   ├── PLATFORM_COMPATIBILITY.md        # Feature parity & automotive policy feasibility analysis
+│   └── images/                          # High-resolution screenshots
+│
+├── scripts/                             # Multi-Platform Build & Verification Automation
+│   ├── build_tizen.ps1                  # Packages Tizen TV application (build/TVFileHub.wgt)
+│   ├── deploy_tizen.ps1                 # Automated signing, installation & launch on Samsung TV
+│   ├── build_android.ps1                # Builds Phone, TV, and Auto APKs via Gradle
+│   ├── install_device.ps1               # ADB deployment helper for Android phones & TVs
+│   ├── install_tablet.ps1               # Remote deployment helper for Android tablets
+│   ├── build_all.ps1                    # Master multi-platform build pipeline
+│   └── test_all.ps1                     # Test runner executing unit & integration suites
+│
 ├── build.py                             # Tizen widget packaging & validation script
-├── deploy.ps1                           # Automated PowerShell deployment script
-├── .gitignore                           # Git exclusion rules (no test movies or media files)
-└── README.md                            # Comprehensive technical documentation & user manual
+└── build/
+    └── TVFileHub.wgt                    # Pre-built, verified Samsung Tizen package (v1.1.8)
 ```
 
 ---
 
-## 🛠️ Installation Guide
+## 🚀 Quick Start Guide
 
-### Prerequisites
-1. **Samsung Smart TV** (2017+ model running Tizen OS 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, or 10.0+).
-2. **Computer** (Windows, macOS, or Linux) connected to the **same Wi-Fi or Ethernet network** as your TV.
-3. **Python 3.10+** & **Node.js 18+** installed on your computer.
+### Step 1: Start the Companion Server
+Run the companion bridge on any local machine (PC, Server, Laptop, NAS, or HomeLab).
 
----
-
-### Step 1: Enable Developer Mode on your Samsung TV
-1. Turn on your TV and press the **Home** button on your remote.
-2. Navigate to the **Apps** panel.
-3. On your remote control, press the number sequence: **`1` `2` `3` `4` `5`** in order.
-4. A **Developer Mode Configuration** dialog will appear:
-   - Toggle **Developer Mode** to **ON**.
-   - In **Host PC IP**, enter your computer's local IP address (e.g. `192.168.0.13`).
-5. Select **OK**.
-6. **Reboot your TV**: Press and hold the **Power** button on your remote for 5 seconds until the Samsung logo appears (or unplug the TV power cord for 10 seconds).
-
----
-
-### Step 2: Install the Pre-Built App onto your TV
-
-This repository comes with the pre-compiled widget: [`build/TVFileHub.wgt`](build/TVFileHub.wgt).
-
-#### Option A: Quick Install via `apps2samsung-cli` (Windows)
-Open PowerShell in the project directory and run:
-```powershell
-.\tools\apps2samsung\apps2samsung-cli.exe install build\TVFileHub.wgt --tv <YOUR_TV_IP> --launch --plain
-```
-*(Replace `<YOUR_TV_IP>` with your TV's IP, e.g. `192.168.0.12`)*
-
-#### Option B: Install via Samsung Tizen SDB (All Platforms)
-```bash
-# 1. Connect to your TV
-sdb connect <YOUR_TV_IP>:26101
-
-# 2. Install the package
-sdb install build/TVFileHub.wgt
-```
-
----
-
-### Step 3: Start the Companion Transfer & Streaming Bridge
-
-#### Option A: Docker Deployment (Recommended for Raspberry Pi, Linux, NAS & HomeLab)
+#### Option A: Docker Deployment (Recommended)
 ```bash
 cd server
 docker compose up -d
 ```
-The containerized service automatically sets up the Node.js WebTorrent sequential streaming daemon, Python 3 companion bridge, persistent volume mounts (`uploads/` and `downloads/`), and health checks on port 8080.
 
-#### Option B: Direct Python & Node.js Execution
-In your terminal or command prompt, navigate to the project directory and run:
+#### Option B: Standalone Execution
 ```bash
-python server/server.py
+# Install Python & Node.js dependencies
+cd server
+pip install -r requirements.txt
+npm install
+
+# Start the bridge server
+python server.py
 ```
 
-The bridge server will initialize:
+The server initializes on port `8080` (HTTP/WebSocket) and port `8889` (Sequential Streaming):
 ```text
 ================================================================
-   TV FILE HUB & BITTORRENT STREAMING BRIDGE
-================================================================
-  Server Host IP: 192.168.0.13
-  HTTP File Port: 8080
-  Streaming Port: 8889 (BitTorrent Sequential Streamer)
-  Web Sender UI:  http://192.168.0.13:8080/
+ LinkPlay - Companion Transfer Bridge
+ Bound Interface:       0.0.0.0:8080
+ Web Sender running at: http://localhost:8080/
+ Network Sender URL:    http://192.168.0.14:8080/
+ Torrent Stream Port:   8889
+ Storage Directory:     D:\PY\SamsungTV\server\uploads
 ================================================================
 ```
 
 ---
 
-### Step 4 (Optional): Building from Source
-If you make code modifications or wish to rebuild the package:
+### Step 2: Deploy to Samsung Smart TV
+Make sure your Samsung TV and computer are connected to the same Wi-Fi network and Developer Mode is enabled on the TV.
+
+#### One-Click Automated Deployment
+```powershell
+.\scripts\deploy_tizen.ps1 -TV_IP 192.168.0.12
+```
+
+#### Manual Installation via Apps2Samsung CLI
 ```bash
+# 1. Package the widget
 python build.py
+
+# 2. Install and launch on TV
+tools\apps2samsung\apps2samsung-cli.exe install build\TVFileHub.wgt --tv 192.168.0.12 --launch --plain -y
 ```
-This validates all required files and builds a fresh `build/TVFileHub.wgt`.
 
 ---
 
-## 📖 User Guide & Daily Usage
+### Step 3: Run Android Applications
 
-### 1. Transferring Videos and Torrents from Smartphone or PC
-1. Launch **TV File Hub** on your Samsung TV.
-2. Navigate to the **File Receiver** tab.
-3. Point your smartphone's camera at the **QR Code** on screen (or type the displayed IP into any web browser on your Wi-Fi).
-4. Tap **Select Files to Send** or drag and drop any file:
-   - Video files (`.mkv`, `.mp4`, `.avi`, `.mov`, `.webm`)
-   - BitTorrent files (`.torrent`)
-   - Subtitles (`.srt`, `.vtt`)
-   - Music & Photos
-5. The TV screen displays a live progress bar. Files are saved directly to your default storage location (e.g. attached USB drive).
+#### Build All Android Targets
+```bash
+cd android
+./gradlew assembleDebug
+```
 
----
+#### Build Specific Targets
+```bash
+# Android TV & Google TV
+./gradlew :tv:assembleDebug
 
-### 2. Streaming BitTorrent Movies
-- **Instant Playback:** When a `.torrent` file is received or selected from storage, select **Play Stream**.
-- The companion engine immediately starts sequential buffering and streams video directly to the TV's AVPlay hardware player.
-- Watch movies instantly from the start without waiting for gigabytes of data to finish downloading.
-- The player displays live torrent health (peer count, download speed, percentage completed).
-- When the torrent completes, it verifies all data hashes and saves the completed media file permanently to your storage.
+# Android Phone
+./gradlew :phone:assembleDebug
 
----
+# Android Auto Module
+./gradlew :auto:assembleDebug
+```
 
-### 3. Playing Videos from Connected USB Drives
-1. Plug any USB flash drive or external hard drive into the USB port of your Samsung TV.
-2. Open the **File Manager** tab.
-3. Select your drive pill (`USB 1: sda1`, `USB 2: sdb1`, etc.).
-4. Browse folders using the remote D-pad.
-5. Press **Enter** on any video file to enjoy hardware-accelerated playback with full timeline scrub support.
+#### Deploy to Connected Android Device via ADB
+```powershell
+.\scripts\install_device.ps1 -Target phone
+# or
+.\scripts\install_device.ps1 -Target tv -DeviceIP 192.168.0.25
+```
 
 ---
 
-### 4. Customizing Themes & Font Size
-1. Navigate to the **Video Player** tab.
-2. Click on **Settings & Theme**.
-3. Customize:
-   - **Default Storage Location:** Choose between `Auto (Prefer USB)`, `Internal TV Storage`, or a specific USB drive.
-   - **Auto Background Downloads:** Toggle whether received torrent files automatically begin downloading in the background.
-   - **Theme:** Switch between **Night Mode** (Dark violet glassmorphism) and **Day Mode** (Crisp clean light).
-   - **Font Scaling:** Standard (100%), Large (115%), or Extra Large (130%).
+### Step 4: Access Web Sender & Download Dashboard
+Open any browser on your phone, tablet, or PC:
+- **Web Sender:** `http://<SERVER_IP>:8080/` — Drag and drop `.torrent`, `.mkv`, `.mp4`, or subtitle files.
+- **Web Dashboard:** `http://<SERVER_IP>:8080/downloads` — Monitor live downloads, select episodes, pause/resume, and stream.
+
+---
+
+## 🛠️ Build & Verification Automation
+
+| Task | Command | Description |
+| :--- | :--- | :--- |
+| **Build Tizen Package** | `python build.py` or `.\scripts\build_tizen.ps1` | Validates package integrity and outputs `build/TVFileHub.wgt`. |
+| **Deploy to TV** | `.\scripts\deploy_tizen.ps1 -TV_IP <IP>` | Connects to TV, signs package, installs, and launches. |
+| **Build Android** | `.\scripts\build_android.ps1 -Target all` | Compiles Android Phone, TV, and Auto APKs. |
+| **Build All Platforms** | `.\scripts\build_all.ps1` | Master pipeline building both Tizen and Android deliverables. |
+| **Run Test Suites** | `.\scripts\test_all.ps1` | Executes package checks and Android `:core` unit tests. |
 
 ---
 
 ## 🎮 Samsung TV Remote Control Reference
 
-| Button | Function |
-| :--- | :--- |
-| **D-Pad (Up / Down / Left / Right)** | Move focus across navigation tabs, feature cards, storage pills, and buttons |
-| **Enter / OK (Center Button)** | Activate selected item, open folder, start video stream, or confirm dialogs |
-| **Return / Back** | Close active modals, navigate to parent folder, or exit video player |
-| **Play / Pause** | Toggle video playback during streaming |
-| **Left / Right (During Playback)** | Seek backward / forward by 10 seconds |
-| **Fast Forward / Rewind** | Continuous fast seeking along the timeline |
-| **Color Keys (Red / Green / Yellow / Blue)** | Quick actions inside player and file explorer |
+| Remote Button | Normal Navigation | Video Playback Mode |
+| :--- | :--- | :--- |
+| **D-Pad Up / Down** | Move vertical focus across tabs, cards, and buttons | Show OSD / Focus timeline controls |
+| **D-Pad Left / Right** | Switch navigation tabs / Horizontal carousel cards | Seek backward / forward 10 seconds |
+| **Enter / OK (Center)** | Activate selected item (Enter on tab keeps tab focused) | Toggle Play / Pause |
+| **Return / Back** | Close open modals / Return to previous view | Exit video playback and return to hub |
+| **Play (Hardware)** | — | Resume playback |
+| **Pause (Hardware)** | — | Pause playback |
+| **Stop (Hardware)** | — | Stop video and exit player |
+| **Fast Forward / Rewind** | — | Scrub along timeline |
+| **Red Key** | Refresh active list / Rescan storage | Aspect ratio cycle (Fit, Zoom, Full, 4:3, 21:9) |
+| **Green Key** | Open Storage Selector dialog | Open Audio Track selector modal |
+| **Yellow Key** | Open Direct URL / Stream dialog | Toggle Subtitles on / off |
+| **Blue Key** | Open TV Performance & Ad-Block Guide | Open Subtitle Search modal |
+
+---
+
+## 🌐 Companion Server API Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/downloads` or `/downloads` | `GET` | Returns list of active downloads, completed movies, and swarm stats. |
+| `/upload` | `POST` | Multipart upload for video files, torrents, and subtitles. |
+| `/play_torrent?file=<name>` | `GET` | Starts sequential torrent stream and returns streaming status. |
+| `/torrent_files?file=<name>` | `GET` | Returns individual file/episode list within multi-file torrents. |
+| `/stream_torrent_file?torrent=<t>&file=<i>` | `GET` | Streams specific episode by index over HTTP 1.1 Partial Content. |
+| `/pause_download?file=<name>` | `GET` | Pauses active torrent download. |
+| `/resume_download?file=<name>` | `GET` | Resumes paused torrent download. |
+| `/restart_download?file=<name>` | `GET` | Restarts stalled download. |
+| `/set_torrent_priority?file=<name>&priority=<p>` | `GET` | Sets priority: `highest` (stream), `normal`, or `low`. |
+| `/delete_file?file=<name>` | `GET` | Deletes file or torrent entry from server. |
+| `/files/<filename>` | `GET` | HTTP 1.1 Partial Content range stream with MKV Cues repair. |
+| `/ws` | `WebSocket` | Real-time RFC 6455 push events (`torrent_progress`, `upload_status`). |
 
 ---
 
 ## 🔒 Privacy & Security
 
-- **100% Local Network Communication:** All file transfers and video streams occur strictly within your private home Wi-Fi network (`LAN`).
-- **Zero Cloud Relay:** Files never touch external servers or third-party cloud intermediaries.
-- **Zero Advertising & Telemetry:** Built from the ground up to give Samsung Smart TV owners an ad-free, private, high-performance media environment.
+- **100% Local Network Communication:** All media streams, WebSocket telemetry, and file transfers operate strictly within your local home network (`LAN`).
+- **Zero Cloud Intermediaries:** Files and playback tokens never touch external servers or third-party cloud infrastructure.
+- **Zero Advertising & Telemetry:** Built from the ground up to provide an ad-free, private, high-performance entertainment experience.
 
 ---
 
 ## 📄 License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
-*Created for Samsung Smart TV & Tizen OS enthusiasts.*
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.

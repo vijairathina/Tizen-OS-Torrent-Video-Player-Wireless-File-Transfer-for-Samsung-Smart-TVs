@@ -8,6 +8,8 @@ build/*
 !build/TVFileHub.wgt
 *.wgt
 !build/TVFileHub.wgt
+*.apk
+*.aab
 
 # Server downloads & uploads (no test movies or media)
 server/downloads/

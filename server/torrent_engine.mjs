@@ -117,13 +117,33 @@ client.add(torrentInput, {
 
     const targetFile = torrent.files[fileIdx];
 
-    // Select ALL files in the torrent swarm.
-    // CRITICAL: Do NOT deselect .pad files or small files!
-    // BitTorrent pieces span file boundaries; deselecting padding files deselects the shared
-    // boundary piece at the end of the video, which drops the MKV Cues (seek index table).
+    // Select ALL files in the torrent swarm so boundary and seek pieces are included
     torrent.files.forEach((f) => {
         try { f.select(); } catch (e) {}
     });
+
+    // Function to give a specific file HIGHEST piece priority (priority 3)
+    // and mark initial + seek pieces as critical for immediate streaming start!
+    function prioritizeFilePieces(file) {
+        if (!file) return;
+        try {
+            file.select(3);
+            const startP = Math.floor(file._startPiece || 0);
+            const endP = Math.floor(file._endPiece || startP);
+            // Critical: first 35 pieces (video header, EBML container, keyframes)
+            for (let p = startP; p <= Math.min(startP + 35, endP); p++) {
+                try { torrent.critical(p); } catch (e) {}
+            }
+            // Critical: last 15 pieces (MKV Cues / seek index table)
+            for (let p = Math.max(startP, endP - 15); p <= endP; p++) {
+                try { torrent.critical(p); } catch (e) {}
+            }
+        } catch (e) {}
+    }
+
+    if (targetFile) {
+        prioritizeFilePieces(targetFile);
+    }
 
     console.log(`[TorrentEngine] High-speed swarm downloading enabled for all media files in: ${torrent.name}`);
 
@@ -152,9 +172,17 @@ client.add(torrentInput, {
                 }
                 if (reqIdx >= 0 && reqIdx < torrent.files.length) {
                     reqFile = torrent.files[reqIdx];
-                    try { reqFile.select(); } catch (e) {}
                 }
             } catch (e) {}
+
+            prioritizeFilePieces(reqFile);
+
+            if (req.socket) {
+                try {
+                    req.socket.setKeepAlive(true, 5000);
+                    req.socket.setTimeout(120000);
+                } catch (e) {}
+            }
 
             const total = reqFile.length;
             const mimeType = reqFile.name.endsWith('.mkv') ? 'video/x-matroska' : 'video/mp4';
@@ -162,6 +190,8 @@ client.add(torrentInput, {
 
             res.setHeader('Accept-Ranges', 'bytes');
             res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('Keep-Alive', 'timeout=120, max=1000');
             res.setHeader('transferMode.dlna.org', 'Streaming');
             res.setHeader('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000');
 
