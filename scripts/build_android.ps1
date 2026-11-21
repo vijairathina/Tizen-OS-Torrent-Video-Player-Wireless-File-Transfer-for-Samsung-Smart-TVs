@@ -27,9 +27,7 @@ if (-not $env:ANDROID_HOME -or -not (Test-Path $env:ANDROID_HOME)) {
     }
 }
 if (-not $env:GRADLE_USER_HOME) {
-    if (Test-Path "D:\Android") {
-        $env:GRADLE_USER_HOME = "D:\Android\.gradle"
-    }
+    $env:GRADLE_USER_HOME = "d:\PY\.gradle_home"
 }
 
 $gradleCmd = if ($IsWindows -or $env:OS -like "*Windows*") { ".\gradlew.bat" } else { "./gradlew" }

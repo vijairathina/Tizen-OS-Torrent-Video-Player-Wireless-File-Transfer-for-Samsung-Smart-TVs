@@ -26,8 +26,11 @@ if (-not $env:JAVA_HOME -or -not (Test-Path $env:JAVA_HOME)) {
         $env:Path = "$env:JAVA_HOME\bin;$env:Path"
     }
 }
+if (-not $env:GRADLE_USER_HOME) {
+    $env:GRADLE_USER_HOME = "d:\PY\.gradle_home"
+}
 $gradleCmd = if ($IsWindows -or $env:OS -like "*Windows*") { ".\gradlew.bat" } else { "./gradlew" }
-& $gradleCmd ":core:testDebugUnitTest"
+& $gradleCmd -g $env:GRADLE_USER_HOME ":core:testDebugUnitTest"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Android unit tests failed!" -ForegroundColor Red
     exit 1

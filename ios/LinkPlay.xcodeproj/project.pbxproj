@@ -1,0 +1,314 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA01000129B0000100000001 /* LinkPlayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000229B0000100000001 /* LinkPlayApp.swift */; };
+		AA01000329B0000100000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000429B0000100000002 /* ContentView.swift */; };
+		AA01000529B0000100000003 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000629B0000100000003 /* Models.swift */; };
+		AA01000729B0000100000004 /* ServerAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000829B0000100000004 /* ServerAPI.swift */; };
+		AA01000929B0000100000005 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000A29B0000100000005 /* VideoPlayerView.swift */; };
+		AA01000B29B0000100000006 /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000C29B0000100000006 /* HomeScreen.swift */; };
+		AA01000D29B0000100000007 /* PlayerHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000E29B0000100000007 /* PlayerHubView.swift */; };
+		AA01000F29B0000100000008 /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01001029B0000100000008 /* DownloadsView.swift */; };
+		AA01001129B0000100000009 /* TransferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01001229B0000100000009 /* TransferView.swift */; };
+		AA01001329B000010000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01001429B000010000000A /* SettingsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA01000029B0000100000000 /* LinkPlay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LinkPlay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA01000229B0000100000001 /* LinkPlayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPlayApp.swift; sourceTree = "<group>"; };
+		AA01000429B0000100000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AA01000629B0000100000003 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		AA01000829B0000100000004 /* ServerAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerAPI.swift; sourceTree = "<group>"; };
+		AA01000A29B0000100000005 /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		AA01000C29B0000100000006 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
+		AA01000E29B0000100000007 /* PlayerHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerHubView.swift; sourceTree = "<group>"; };
+		AA01001029B0000100000008 /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
+		AA01001229B0000100000009 /* TransferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferView.swift; sourceTree = "<group>"; };
+		AA01001429B000010000000A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AA01001529B000010000000B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA01001629B000010000000C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA01001729B000010000000D = {
+			isa = PBXGroup;
+			children = (
+				AA01001829B000010000000E /* LinkPlay */,
+				AA01001929B000010000000F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA01001829B000010000000E /* LinkPlay */ = {
+			isa = PBXGroup;
+			children = (
+				AA01002029B0000100000010 /* App */,
+				AA01002129B0000100000011 /* Models */,
+				AA01002229B0000100000012 /* Services */,
+				AA01002329B0000100000013 /* Views */,
+				AA01001529B000010000000B /* Info.plist */,
+			);
+			path = LinkPlay;
+			sourceTree = "<group>";
+		};
+		AA01002029B0000100000010 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				AA01000229B0000100000001 /* LinkPlayApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		AA01002129B0000100000011 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA01000629B0000100000003 /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AA01002229B0000100000012 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AA01000829B0000100000004 /* ServerAPI.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA01002329B0000100000013 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA01000429B0000100000002 /* ContentView.swift */,
+				AA01000A29B0000100000005 /* VideoPlayerView.swift */,
+				AA01000C29B0000100000006 /* HomeScreen.swift */,
+				AA01000E29B0000100000007 /* PlayerHubView.swift */,
+				AA01001029B0000100000008 /* DownloadsView.swift */,
+				AA01001229B0000100000009 /* TransferView.swift */,
+				AA01001429B000010000000A /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA01001929B000010000000F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA01000029B0000100000000 /* LinkPlay.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA01002429B0000100000014 /* LinkPlay */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA01002529B0000100000015 /* Build configuration list for PBXNativeTarget "LinkPlay" */;
+			buildPhases = (
+				AA01002629B0000100000016 /* Sources */,
+				AA01001629B000010000000C /* Frameworks */,
+				AA01002729B0000100000017 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LinkPlay;
+			productName = LinkPlay;
+			productReference = AA01000029B0000100000000 /* LinkPlay.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA01002829B0000100000018 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					AA01002429B0000100000014 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AA01002929B0000100000019 /* Build configuration list for PBXProject "LinkPlay" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA01001729B000010000000D;
+			productRefGroup = AA01001929B000010000000F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA01002429B0000100000014 /* LinkPlay */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA01002729B0000100000017 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA01002629B0000100000016 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA01000129B0000100000001 /* LinkPlayApp.swift in Sources */,
+				AA01000329B0000100000002 /* ContentView.swift in Sources */,
+				AA01000529B0000100000003 /* Models.swift in Sources */,
+				AA01000729B0000100000004 /* ServerAPI.swift in Sources */,
+				AA01000929B0000100000005 /* VideoPlayerView.swift in Sources */,
+				AA01000B29B0000100000006 /* HomeScreen.swift in Sources */,
+				AA01000D29B0000100000007 /* PlayerHubView.swift in Sources */,
+				AA01000F29B0000100000008 /* DownloadsView.swift in Sources */,
+				AA01001129B0000100000009 /* TransferView.swift in Sources */,
+				AA01001329B000010000000A /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA01002A29B000010000001A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AA01002B29B000010000001B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA01002C29B000010000001C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LinkPlay/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tvfilehub.linkplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA01002D29B000010000001D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LinkPlay/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1.8;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tvfilehub.linkplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA01002529B0000100000015 /* Build configuration list for PBXNativeTarget "LinkPlay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA01002C29B000010000001C /* Debug */,
+				AA01002D29B000010000001D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA01002929B0000100000019 /* Build configuration list for PBXProject "LinkPlay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA01002A29B000010000001A /* Debug */,
+				AA01002B29B000010000001B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA01002829B0000100000018 /* Project object */;
+}

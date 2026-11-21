@@ -1,11 +1,20 @@
 package com.tvfilehub.auto.service
 
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -28,9 +37,69 @@ class CarMediaLibraryService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
-        player = ExoPlayer.Builder(this).build()
+        // 1. AudioAttributes with strict handleAudioFocus = true
+        // Android Auto requires this to obtain audio focus through the car head unit!
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
 
+        // 2. High-resilience HTTP data source for local LAN & streaming
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(30000)
+            .setReadTimeoutMs(60000)
+            .setDefaultRequestProperties(mapOf(
+                "transferMode.dlna.org" to "Streaming",
+                "contentFeatures.dlna.org" to "DLNA.ORG_OP=11;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"
+            ))
+
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
+        // 3. Fast initial buffering (1000ms) so car head unit does not time out
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 2500,
+                /* maxBufferMs = */ 60000,
+                /* bufferForPlaybackMs = */ 1000,
+                /* bufferForPlaybackAfterRebufferMs = */ 2000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        val exo = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setSeekBackIncrementMs(10000)
+            .setSeekForwardIncrementMs(10000)
+            .build()
+
+        exo.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "ExoPlayer playback error in car: ${error.errorCodeName} - ${error.message}", error)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateStr = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "$playbackState"
+                }
+                Log.d(TAG, "Car playback state: $stateStr, playWhenReady=${exo.playWhenReady}")
+            }
+        })
+
+        player = exo
+
+        // 4. MediaLibrarySession Callback
         val callback = object : MediaLibrarySession.Callback {
+
             override fun onGetLibraryRoot(
                 session: MediaLibrarySession,
                 browser: MediaSession.ControllerInfo,
@@ -43,6 +112,7 @@ class CarMediaLibraryService : MediaLibraryService() {
                             .setIsBrowsable(true)
                             .setIsPlayable(false)
                             .setTitle("LinkPlay")
+                            .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
                             .build()
                     )
                     .build()
@@ -119,19 +189,60 @@ class CarMediaLibraryService : MediaLibraryService() {
                 }
             }
 
+            override fun onSetMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: MutableList<MediaItem>,
+                startIndex: Int,
+                startPositionMs: Long
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val updatedItems = resolveMediaItems(mediaItems)
+                serviceScope.launch(Dispatchers.Main) {
+                    player?.let { p ->
+                        p.setMediaItems(updatedItems, startIndex, startPositionMs)
+                        p.prepare()
+                        p.playWhenReady = true
+                    }
+                }
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(updatedItems, startIndex, startPositionMs)
+                )
+            }
+
             override fun onAddMediaItems(
                 mediaSession: MediaSession,
                 controller: MediaSession.ControllerInfo,
                 mediaItems: MutableList<MediaItem>
             ): ListenableFuture<MutableList<MediaItem>> {
-                val updatedItems = mediaItems.map { item ->
-                    val uri = item.requestMetadata.mediaUri ?: Uri.parse(item.mediaId)
-                    item.buildUpon()
-                        .setUri(uri)
-                        .setMediaMetadata(item.mediaMetadata)
-                        .build()
-                }.toMutableList()
+                val updatedItems = resolveMediaItems(mediaItems)
+                serviceScope.launch(Dispatchers.Main) {
+                    player?.let { p ->
+                        if (p.playbackState == Player.STATE_IDLE) {
+                            p.setMediaItems(updatedItems)
+                            p.prepare()
+                            p.playWhenReady = true
+                        }
+                    }
+                }
                 return Futures.immediateFuture(updatedItems)
+            }
+
+            override fun onPlaybackResumption(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val current = player?.currentMediaItem
+                return if (current != null) {
+                    Futures.immediateFuture(
+                        MediaSession.MediaItemsWithStartPosition(
+                            listOf(current),
+                            player?.currentMediaItemIndex ?: 0,
+                            player?.currentPosition ?: 0L
+                        )
+                    )
+                } else {
+                    super.onPlaybackResumption(mediaSession, controller)
+                }
             }
         }
 
@@ -143,11 +254,32 @@ class CarMediaLibraryService : MediaLibraryService() {
         return mediaLibrarySession
     }
 
+    private fun resolveMediaItems(mediaItems: List<MediaItem>): MutableList<MediaItem> {
+        return mediaItems.map { item ->
+            val uri = item.requestMetadata.mediaUri
+                ?: item.localConfiguration?.uri
+                ?: Uri.parse(item.mediaId)
+
+            item.buildUpon()
+                .setUri(uri)
+                .setMediaMetadata(
+                    item.mediaMetadata.buildUpon()
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                        .build()
+                )
+                .build()
+        }.toMutableList()
+    }
+
     private fun fetchLocalMediaItems(): List<MediaItem> {
         return try {
             val localItems = LocalMediaScanner.scanAllMedia(applicationContext)
             localItems.map { item ->
-                val playUrl = if (item.effectivePlayUrl.startsWith("file://") || item.effectivePlayUrl.startsWith("http://")) {
+                val playUrl = if (item.effectivePlayUrl.startsWith("file://") ||
+                    item.effectivePlayUrl.startsWith("http://") ||
+                    item.effectivePlayUrl.startsWith("content://")) {
                     item.effectivePlayUrl
                 } else {
                     "file://${item.effectivePlayUrl}"
@@ -159,19 +291,35 @@ class CarMediaLibraryService : MediaLibraryService() {
                 )
             }
         } catch (e: Exception) {
+            Log.w(TAG, "Error fetching local media items: ${e.message}")
             emptyList()
         }
     }
 
     private suspend fun fetchCompletedMediaItems(): List<MediaItem> {
         return try {
+            val localItems = LocalMediaScanner.scanAllMedia(applicationContext)
             val response = ApiClient.serverApi.getDownloads()
             val serverItems = response.availableMovies.map { movie ->
-                val streamUrl = movie.streamUrl ?: "http://${ApiClient.hostInterceptor.getServerHost()}:8080/files/${movie.name}"
+                // Check if this server movie was already downloaded to phone storage
+                val localMatch = localItems.find {
+                    it.name.equals(movie.name, ignoreCase = true) ||
+                    it.cleanTitle.equals(movie.cleanTitle, ignoreCase = true)
+                }
+                val rawUrl = localMatch?.effectivePlayUrl
+                    ?: movie.streamUrl
+                    ?: "http://${ApiClient.hostInterceptor.getServerHost()}:8080/files/${movie.name}"
+
+                val playUri = if (rawUrl.startsWith("file://") || rawUrl.startsWith("http://") || rawUrl.startsWith("content://")) {
+                    rawUrl
+                } else {
+                    "file://$rawUrl"
+                }
+
                 buildPlayableItem(
-                    id = streamUrl,
+                    id = playUri,
                     title = movie.cleanTitle,
-                    subtitle = "${movie.sizeFormatted} • Server Media"
+                    subtitle = if (localMatch != null) "${movie.sizeFormatted} • Phone Storage (Offline)" else "${movie.sizeFormatted} • Server Media"
                 )
             }
             if (serverItems.isEmpty()) {
@@ -180,6 +328,7 @@ class CarMediaLibraryService : MediaLibraryService() {
                 serverItems
             }
         } catch (e: Exception) {
+            Log.w(TAG, "Server media unreachable (${e.message}); falling back to local files")
             fetchLocalMediaItems()
         }
     }
@@ -189,8 +338,14 @@ class CarMediaLibraryService : MediaLibraryService() {
             val database = AppDatabase.getInstance(applicationContext)
             val entities = database.mediaDao().getAllResumePoints().firstOrNull() ?: emptyList()
             entities.map { resume ->
+                val uriStr = resume.streamUrl.ifBlank { resume.mediaKey }
+                val playUri = if (uriStr.startsWith("file://") || uriStr.startsWith("http://") || uriStr.startsWith("content://")) {
+                    uriStr
+                } else {
+                    "file://$uriStr"
+                }
                 buildPlayableItem(
-                    id = resume.streamUrl.ifBlank { resume.mediaKey },
+                    id = playUri,
                     title = resume.title.ifBlank { resume.mediaKey.substringAfterLast("/").substringBeforeLast(".") },
                     subtitle = "Resume at ${formatSeconds(resume.positionSeconds)}"
                 )
@@ -222,11 +377,13 @@ class CarMediaLibraryService : MediaLibraryService() {
     }
 
     private fun buildPlayableItem(id: String, title: String, subtitle: String): MediaItem {
+        val uri = Uri.parse(id)
         return MediaItem.Builder()
             .setMediaId(id)
+            .setUri(uri)
             .setRequestMetadata(
                 MediaItem.RequestMetadata.Builder()
-                    .setMediaUri(Uri.parse(id))
+                    .setMediaUri(uri)
                     .build()
             )
             .setMediaMetadata(
@@ -236,7 +393,7 @@ class CarMediaLibraryService : MediaLibraryService() {
                     .setTitle(title)
                     .setArtist("LinkPlay")
                     .setSubtitle(subtitle)
-                    .setMediaType(MediaMetadata.MEDIA_TYPE_VIDEO)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
                     .build()
             )
             .build()
@@ -253,6 +410,7 @@ class CarMediaLibraryService : MediaLibraryService() {
     }
 
     companion object {
+        private const val TAG = "CarMediaLibraryService"
         const val ROOT_ID = "root_linkplay"
         const val CATEGORY_LOCAL = "category_local"
         const val CATEGORY_COMPLETED = "category_completed"

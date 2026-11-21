@@ -4,12 +4,13 @@
 [![Android TV](https://img.shields.io/badge/Android_TV-Google_TV-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/tv)
 [![Android Phone](https://img.shields.io/badge/Android_Phone-Material_3-3ddc84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
 [![Android Auto](https://img.shields.io/badge/Android_Auto-Car_App_Library-3ddc84?style=for-the-badge&logo=androidauto&logoColor=white)](https://developer.android.com/training/cars/apps)
+[![iOS / iPhone](https://img.shields.io/badge/iOS_16+-SwiftUI_AVKit-000000?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
 [![Samsung AVPlay](https://img.shields.io/badge/AVPlay-Hardware_Accelerated_4K-00f2fe?style=for-the-badge&logo=samsung&logoColor=black)](https://developer.samsung.com/smarttv)
 [![Media3 ExoPlayer](https://img.shields.io/badge/Media3-ExoPlayer_4K-ff007f?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com/media/media3)
 [![BitTorrent](https://img.shields.io/badge/WebTorrent-Sequential_Streaming-7b2cbf?style=for-the-badge&logo=bittorrent&logoColor=white)](https://webtorrent.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge)](LICENSE)
 
-**LinkPlay** is an all-in-one, high-performance multimedia and file synchronization ecosystem unifying **Samsung Smart TVs (Tizen OS 3.0 to 10.0+)**, **Android TV & Google TV**, **Android Smartphones & Tablets**, and **Android Auto** into one private, high-speed local network media hub.
+**LinkPlay** is an all-in-one, high-performance multimedia and file synchronization ecosystem unifying **Samsung Smart TVs (Tizen OS 3.0 to 10.0+)**, **Android TV & Google TV**, **Android Smartphones & Tablets**, **Apple iPhone & iPad (iOS)**, and **Android Auto** into one private, high-speed local network media hub.
 
 All clients connect to a lightweight, zero-dependency **Companion Server** running inside your home network. LinkPlay provides instant sequential BitTorrent video streaming, real-time wireless file transfers with offline vector SVG QR codes, multi-drive USB storage exploration, automatic MKV Cues index repair for instant TV seeking, and deterministic 10-foot remote control navigation.
 
@@ -22,7 +23,8 @@ All clients connect to a lightweight, zero-dependency **Companion Server** runni
 | **Samsung Smart TV** | Tizen Web API + Samsung AVPlay | 10-foot Cinematic Living Room UI, D-pad remote navigation | Hardware-accelerated 4K decoders, multi-drive USB explorer, live torrent streaming, TV ad-block & memory boost. | `YGDS1qv5fm.TVFileHub`<br>`build/TVFileHub.wgt` |
 | **Android TV / Google TV** | Kotlin + Jetpack Compose for TV / Leanback | Native 10-foot TV UI, D-pad spatial focus | ExoPlayer Media3 4K playback, dynamic LAN server discovery, torrent streaming, TV launcher banner. | `com.tvfilehub.tv`<br>`android/tv/` |
 | **Android Phone / Tablet** | Kotlin + Jetpack Compose Material 3 | Responsive touch UI, portrait & landscape auto-rotation | Mobile player, episode selection dialog, drag-and-drop transfer, background sync with WorkManager. | `com.tvfilehub.phone`<br>`android/phone/` |
-| **Android Auto** | Android for Cars App Library + MediaLibraryService | Driver-safety compliant in-car media interface | Audio media browsing, playlist queues, high-fidelity car head unit streaming via MediaSession. | `com.tvfilehub.auto`<br>`android/auto/` |
+| **Apple iPhone / iPad** | Swift 5.0 + SwiftUI + AVKit / AVPlayer | Native iOS touch UI, Picture-in-Picture, AirPlay | Native AVPlayer streaming, document uploader, episode picker, offline PWA Web Clip support. | `com.tvfilehub.linkplay`<br>`ios/LinkPlay.xcodeproj` |
+| **Android Auto** | Android for Cars App Library + MediaLibraryService | Driver-safety compliant in-car media interface | Audio media browsing, playlist queues, high-fidelity car head unit streaming via MediaSession with auto focus. | `com.tvfilehub.auto`<br>`android/auto/` |
 | **Web Sender & Dashboard** | HTML5, CSS3 Glassmorphism, Vanilla JS, WebSockets | Responsive web portal for desktop, tablet, and mobile | Zero-install drag-and-drop uploader, live download speeds, pause/resume, stream first, low priority toggle. | `http://<SERVER_IP>:8080/`<br>`server/public/` |
 
 ---
@@ -133,7 +135,7 @@ LinkPlay/
 │   │   ├── database/                    # Room DB, MediaDao, ResumePoint & Cache entities
 │   │   ├── models/                      # DownloadItem, TorrentStats, SystemStatus, FileNode
 │   │   ├── repository/                  # MediaRepository, TorrentRepository, TransferRepository
-│   │   └── services/                    # MediaPlaybackManager (Shared ExoPlayer state holder)
+│   │   └── services/                    # MediaPlaybackManager, LocalMediaScanner
 │   ├── tv/                              # Native Android TV & Google TV Application
 │   │   ├── navigation/                  # TvNavHost, TvDestination
 │   │   └── ui/                          # 10-foot Compose UI, D-pad focus cards, TV OSD player
@@ -146,6 +148,22 @@ LinkPlay/
 │   │   └── car/                         # CarMediaScreen (Android for Cars App Library)
 │   ├── build.gradle.kts                 # Root Gradle Kotlin DSL build script
 │   └── settings.gradle.kts              # Multi-module inclusion (:core, :tv, :phone, :auto)
+│
+├── ios/                                 # Apple iPhone & iPad Native iOS Project (iOS 16+)
+│   ├── LinkPlay.xcodeproj               # Xcode project file
+│   └── LinkPlay/
+│       ├── App/LinkPlayApp.swift        # SwiftUI application entry point
+│       ├── Models/Models.swift          # Codable data models matching Server API
+│       ├── Services/ServerAPI.swift     # Async/await URLSession networking engine
+│       ├── Views/
+│       │   ├── ContentView.swift        # Main bottom tab navigation
+│       │   ├── HomeScreen.swift         # Cinematic dashboard with hero spotlight
+│       │   ├── PlayerHubView.swift      # Searchable movie library with 1-click streaming
+│       │   ├── VideoPlayerView.swift    # Hardware AVPlayer with Picture-in-Picture & AirPlay
+│       │   ├── DownloadsView.swift      # Live BitTorrent queue & series episode picker
+│       │   ├── TransferView.swift       # Wireless LAN document & photo uploader
+│       │   └── SettingsView.swift       # Companion server connection & latency tester
+│       └── Info.plist                   # Local network & background audio configuration
 │
 ├── server/                              # Companion Host Bridge Server
 │   ├── server.py                        # Python 3 HTTP/WebSocket daemon & priority scheduler
@@ -269,7 +287,22 @@ cd android
 
 ---
 
-### Step 4: Access Web Sender & Download Dashboard
+### Step 4: Run Apple iPhone & iPad App
+
+#### Option A: Native iOS Project (Xcode)
+1. Open `ios/LinkPlay.xcodeproj` in Xcode on macOS.
+2. Select your target device (iPhone or iPad running iOS 16.0+).
+3. Press **Cmd + R** to run on Simulator or your physical iPhone.
+- Includes native hardware AVPlayer, Picture-in-Picture, AirPlay to Apple TV, wireless file transfer, and series episode selection.
+
+#### Option B: Zero-Install Instant iPhone Web App (PWA)
+1. Point your iPhone camera at the QR code on the TV screen (or open `http://<SERVER_IP>:8080/` in Safari).
+2. Tap the **Share** button in Safari and select **Add to Home Screen**.
+3. LinkPlay launches as a standalone, full-screen app icon directly on your iPhone home screen with offline caching!
+
+---
+
+### Step 5: Access Web Sender & Download Dashboard
 Open any browser on your phone, tablet, or PC:
 - **Web Sender:** `http://<SERVER_IP>:8080/` — Drag and drop `.torrent`, `.mkv`, `.mp4`, or subtitle files.
 - **Web Dashboard:** `http://<SERVER_IP>:8080/downloads` — Monitor live downloads, select episodes, pause/resume, and stream.
